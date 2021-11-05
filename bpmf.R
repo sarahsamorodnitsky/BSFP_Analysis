@@ -2,17 +2,20 @@
 # Helper functions for Bayesian PMF
 # -----------------------------------------------------------------------------
 
+# Packages
+library(Matrix)
+
 # -----------------------------------------------------------------------------
 # Bayesian PMF functions
 # -----------------------------------------------------------------------------
 
-bpmf <- function(data, response, nninit = TRUE, model_params, ranks = NULL, nsample, progress = TRUE) {
+bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, progress = TRUE) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
   # 
   # Arguments: 
   # data = matrix with list entries corresponding to each data source
-  # response = column vector with outcome or NULL
+  # Y = column vector with outcome or NULL
   # nninit = should the model be initialized with a nuclear norm penalized objective? if FALSE, provide ranks
   # model_params = (error_vars, joint_vars, indiv_vars, beta_vars = NULL, response_vars)
   
@@ -34,15 +37,14 @@ bpmf <- function(data, response, nninit = TRUE, model_params, ranks = NULL, nsam
   response_vars <- model_params$response_vars; a <- response_vars$a; b <- response_vars$b
   
   # ---------------------------------------------------------------------------
-  # Is there any missingness in X1 or X2?
+  # Check for missingness in data
   # ---------------------------------------------------------------------------
   
-  missingness_in_data <- any(is.na(X1)) | any(is.na(X2))
+  missingness_in_data <- any(apply(data, 1, function(source) any(is.na(source[[1]])))) # Consider changing
   
   # If so, which entries are missing?
   if (missingness_in_data) {
-    missing_obs_data <- list(X1 = which(is.na(X1)),
-                             X2 = which(is.na(X2)))
+    missing_obs <- apply(data, 1, function(source) list(which(is.na(source[[1]]))))
   }
   
   # ---------------------------------------------------------------------------
@@ -53,11 +55,9 @@ bpmf <- function(data, response, nninit = TRUE, model_params, ranks = NULL, nsam
   
   # If so, what kind of response is it?
   if (response_given) {
-    response_type <- if (all(unique(Y) %in% c(0,1,NA))) "binary" else "continuous"
-  }
-  
-  # If there is a response, is there missingness in the outcome?
-  if (response_given) {
+    response_type <- if (all(unique(Y) %in% c(0, 1, NA))) "binary" else "continuous"
+    
+    # If there is a response, is there missingness in the outcome?
     missingness_in_response <- any(is.na(Y))
     
     # If there is missingness, which entries are missing?
@@ -70,43 +70,39 @@ bpmf <- function(data, response, nninit = TRUE, model_params, ranks = NULL, nsam
   # Obtaining the ranks 
   # ---------------------------------------------------------------------------
   
-  if (nuclear_norm_init) {
-    # Preparing the data 
-    data <- matrix(list(), nrow = 2, ncol = 1)
-    data[1,1][[1]] <- X1
-    data[2,1][[1]] <- X2
-    nuclear_norm_res <- BIDIFAC(data, rmt = TRUE, pbar = FALSE)
+  if (nninit) {
+    rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE)
     
     # Print when finished
     print("posterior mode obtained")
     
     # Saving the results
-    sigma.mat <- nuclear_norm_res$sigma.mat
-    C <- nuclear_norm_res$C
-    r <- rankMatrix(C[1,1][[1]]/sigma.mat[1,1]) 
-    I <- nuclear_norm_res$I
-    r1 <- rankMatrix(I[1,1][[1]]/sigma.mat[1,1])
-    r2 <- rankMatrix(I[2,1][[1]]/sigma.mat[2,1])
+    sigma.mat <- rank_init$sigma.mat
+    C <- rank_init$C
+    r <- rankMatrix(C[[1,1]]) # Joint rank
+    I <- rank_init$I
+    r_indivs <- sapply(1:q, function(i) rankMatrix(I[[i,1]])) # Individual ranks
+    r_total <- sum(r_indivs)
     
-    dims$r <- r
-    dims$r1 <- r1
-    dims$r2 <- r2
-    
-    # Scaling X1 and X2 appropriately
-    X1 <- X1/sigma.mat[1,1]
-    X2 <- X2/sigma.mat[2,1]
+    # Scaling the data
+    for (i in 1:q) {
+      data[[i,1]] <- data[[i,1]]/sigma.mat[i,]
+    }
   }
   
-  if (!nuclear_norm_init) {
-    r <- dims$r # number latent components of J1, J2
-    r1 <- dims$r1 # number latent components of individual structure A1
-    r2 <- dims$r2 # number of latent components of individual structure A2
-    n_beta <- 1 + r + r1 + r2 # total number of coefficients
+  if (!nninit) {
+    r <- ranks$r 
+    r_indivs <- unlist(ranks[!(names(ranks) %in% "r")])
   }
   
   # ---------------------------------------------------------------------------
-  # Initialize V, Ui, Vi, Wi, i=1,2.
+  # Initialize V, U, V, W
   # ---------------------------------------------------------------------------
+  
+  V0 <- matrix(list(), nrow = 1, ncol = 1)
+  U0 <- matrix(list(), nrow = q, ncol = 1)
+  Vi0 <- matrix(list(), nrow = 1, ncol = q)
+  W0 <- matrix(list(), nrow = )
   
   V0 <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
   
@@ -850,9 +846,6 @@ bpmf <- function(data, response, nninit = TRUE, model_params, ranks = NULL, nsam
 # -----------------------------------------------------------------------------
 # Helper functions for initializing with BIDIFAC
 # -----------------------------------------------------------------------------
-
-# packages
-library(Matrix)
 
 # functions
 frob <- function(X){ sum(X^2,na.rm=T) }
