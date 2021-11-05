@@ -4,6 +4,7 @@
 
 # Packages
 library(Matrix)
+library(MASS)
 
 # -----------------------------------------------------------------------------
 # Bayesian PMF functions
@@ -83,11 +84,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     C <- rank_init$C
     r <- rankMatrix(C[[1,1]]) # Joint rank
     I <- rank_init$I
-    r_indivs <- sapply(1:q, function(i) rankMatrix(I[[i,1]])) # Individual ranks
+    r_indivs <- sapply(1:q, function(s) rankMatrix(I[[s,1]])) # Individual ranks
     
     # Scaling the data
-    for (i in 1:q) {
-      data[[i,1]] <- data[[i,1]]/sigma.mat[i,]
+    for (s in 1:q) {
+      data[[s,1]] <- data[[s,1]]/sigma.mat[s,]
     }
   }
   
@@ -107,34 +108,34 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   V0[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
   
   U0 <- matrix(list(), nrow = q, ncol = 1)
-  Vi0 <- matrix(list(), nrow = 1, ncol = q)
+  Vs0 <- matrix(list(), nrow = 1, ncol = q)
   W0 <- matrix(list(), nrow = q, ncol = q)
   
-  for (i in 1:q) {
-    U0[[i,1]] <- matrix(rnorm(p.vec[i]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[i], ncol = r)
+  for (s in 1:q) {
+    U0[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
     
-    Vi0[[1,i]] <- matrix(rnorm(n*r_indivs[i], mean = 0, sd = sqrt(sigma2_indiv[i])), nrow = n, ncol = indiv_vars[i])
+    Vs0[[1,s]] <- matrix(rnorm(n*r_indivs[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r_indivs[s])
     
-    W0[[i,i]] <- matrix(rnorm(p.vec[i]*r_indivs[i], mean = 0, sd = sqrt(sigma2_indiv[i])), nrow = p.vec[i], ncol = r_indivs[i])
+    W0[[s,s]] <- matrix(rnorm(p.vec[s]*r_indivs[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r_indivs[s])
   }
   
-  V.star0 <- cbind(1, V0, V10, V20)
-  beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
-  Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
-  tau20 <- 1/rgamma(1, shape = shape, rate = rate)
+  if (response_given) {
+    # Combining the scores together
+    VStar0 <- cbind(1, do.call(cbind, V0), do.call(cbind, Vs0))
+    
+    beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
+    Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+    tau20 <- 1/rgamma(1, shape = shape, rate = rate)
+  }
   
-  # If there is missingness in X1 or X2, generate starting values for the missing entries
+  # If there is missingness in the data, generate starting values for the missing entries
   if (missingness_in_data) {
-    Xm0 <- list(Xm10 = list(U10 %*% t(V0) + W10 %*% t(V10)),
-                Xm20 = list(U20 %*% t(V0) + W20 %*% t(V20)))
+    Xm0 <- matrix(list(), ncol = 1, nrow = q)
   }
   
   # If there is missingness in Y, generate starting values for the missing entries
   if (response_given) {
     if (missingness_in_response) {
-      # Combine initial values
-      VStar0 <- cbind(1, V0, V10, V20)
-      
       if (response_type == "continuous") {
         # Generate starting values for the missing data
         Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))
@@ -151,69 +152,57 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # Storing the posterior samples
   # ---------------------------------------------------------------------------
   
-  V.draw <- lapply(1:nsample, function(i) matrix(nrow = n, ncol = r))
-  U1.draw <- lapply(1:nsample, function(i) matrix(nrow = p1, ncol = r))
-  U2.draw <- lapply(1:nsample, function(i) matrix(nrow = p2, ncol = r))
-  V1.draw <- lapply(1:nsample, function(i) matrix(nrow = n, ncol = r1))
-  V2.draw <- lapply(1:nsample, function(i) matrix(nrow = n, ncol = r2))
-  W1.draw <- lapply(1:nsample, function(i) matrix(nrow = p1, ncol = r1))
-  W2.draw <- lapply(1:nsample, function(i) matrix(nrow = p2, ncol = r2))
-  
+  V.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+  U.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  Vs.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = q))
+  W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
+
   if (response_given) {
-    beta.draw <- lapply(1:nsample, function(i) matrix(nrow = n_beta, ncol = 1))
+    beta.draw <- matrix(nrow = nsample, ncol = n_beta)
     
     if (response_type == "binary") {
-      Z.draw <- lapply(1:nsample, function(i) matrix(nrow = n, ncol = 1))
+      Z.draw <- matrix(nrow = nsample, ncol = n)
     }
     
     if (response_type == "continuous") {
-      tau2.draw <- lapply(1:nsample, function(i) matrix(nrow = 1, ncol = 1))
+      tau2.draw <- c()
     }
     
     if (missingness_in_response) {
-      Ym.draw <- lapply(1:nsample, function(i) matrix(nrow = n, ncol = 1)) 
+      Ym.draw <- matrix(nrow = nsample, ncol = n)
     }
   }
   
   if (missingness_in_data) {
-    Xm.draw <- list(Xm1.draw = lapply(1:nsample, function(i) matrix(nrow = p1, ncol = n)),
-                    Xm2.draw = lapply(1:nsample, function(i) matrix(nrow = p2, ncol = n)))
+    Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   }
   
   # ---------------------------------------------------------------------------
   # Storing the initial values 
   # ---------------------------------------------------------------------------
   
-  V.draw[[1]] <- V0
-  U1.draw[[1]] <- U10
-  U2.draw[[1]] <- U20
-  V1.draw[[1]] <- V10
-  V2.draw[[1]] <- V20
-  W1.draw[[1]] <- W10
-  W2.draw[[1]] <- W20
+  V.draw[[1]][[1,1]] <- V0[[1,1]]
+  
+  for (s in 1:q) {
+    U.draw[[1]][[s,1]] <- U0[[s,1]]
+    Vs.draw[[1]][[1,s]] <- Vs0[[1,s]]
+    W.draw[[1]][[s,s]] <- W0[[s,s]]
+  }
   
   if (response_given) {
-    beta.draw[[1]] <- beta0
-    
-    if (response_type == "binary") {
-      Z.draw[[1]] <- Z0
-    }
-    
-    if (response_type == "continuous") {
-      tau2.draw[[1]] <- tau20
-    }
-    
+    beta.draw[1,] <- beta0
+    Z.draw[1,] <- Z0
+    tau2.draw[1] <- tau20
+
     if (missingness_in_response) {
       Ym.draw[[1]] <- Ym0
     }
   }
   
   if (missingness_in_data) {
-    Xm10 <- U10 %*% t(V0) + W10 %*% t(V10)
-    Xm.draw$Xm1.draw[[1]] <- Xm10
-    
-    Xm20 <- U20 %*% t(V0) + W20 %*% t(V20)
-    Xm.draw$Xm2.draw[[1]] <- Xm20
+    for (s in 1:q) {
+      Xm.draw[[1]][[s,1]] <- U.draw[[1]][[s,1]] %*% t(V.draw[[1]][[1,1]]) + W.draw[[1]][[s,s]] %*% t(Vs.draw[[1]][[1,s]])
+    }
   }
   
   # ---------------------------------------------------------------------------
