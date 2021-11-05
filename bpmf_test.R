@@ -9,6 +9,8 @@ dat2 <- matrix(rnorm(1500), nrow = 150, ncol = 10)
 data[1,1][[1]] <- dat1
 data[2,1][[1]] <- dat2
 
+Y <- NULL
+
 # Setting up the model parameters
 model_params <- list(error_vars = c(1,1),
                      joint_var = 1,
