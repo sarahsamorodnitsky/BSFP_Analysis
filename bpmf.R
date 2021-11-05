@@ -33,7 +33,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # Extracting the model parameters
   # ---------------------------------------------------------------------------
   
-  errors_vars <- model_params$error_vars
+  error_vars <- model_params$error_vars
   sigma2_joint <- joint_var <- model_params$joint_var
   sigma2_indiv <- indiv_vars <- model_params$indiv_vars
   beta_vars <- model_params$beta_vars; Sigma_beta <- diag(beta_vars)
@@ -210,14 +210,20 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # ---------------------------------------------------------------------------
   
   if (!response_given) {
-    # For V - Combined error variances between X1, X2
-    Sigma_V_Inv <- diag(1/c(rep(sigma21, p1), rep(sigma22, p2)))
+    # Error variance for X. 
+    SigmaInv <- matrix(list(), nrow = q, ncol = q)
     
-    # For V1 - Combined error variances between X1 
-    Sigma_V1_Inv <- diag(1/c(rep(sigma21, p1)))
+    for (s in 1:q) {
+      SigmaInv[[s,s]] <- diag(rep(1/error_vars[s], p.vec[s]))
+      
+      # Fill in the off-diagonal entries
+      for (ss in 1:q) {
+        if (ss != s) {
+          SigmaInv[[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = p.vec[ss])
+        }
+      }
+    }
     
-    # For V2 - Combined error variances between X2 
-    Sigma_V2_Inv <- diag(1/c(rep(sigma22, p2)))
   }
   
   if (response_given) {
@@ -233,7 +239,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     } 
     
     # For beta - Combined error variances between intercept and all betas
-    Sigma_beta_Inv <- solve(Sigma_beta)
+    SigmaBetaInv <- solve(Sigma_beta)
   }
   
   # ---------------------------------------------------------------------------
@@ -248,8 +254,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     # ---------------------------------------------------------------------------
     
     V.iter <- V.draw[[iter]]
-    U1.iter <- U1.draw[[iter]]
-    U2.iter <- U2.draw[[iter]]
+    U.iter <- U1.draw[[iter]]
     V1.iter <- V1.draw[[iter]]
     V2.iter <- V2.draw[[iter]]
     W1.iter <- W1.draw[[iter]]
