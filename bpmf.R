@@ -308,35 +308,6 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
               sigma.mat=sigma.mat, n.vec=nvec,m.vec=mvec))
 }
 
-summary.BIDIFAC=function(fit){
-  X00=fit$X
-  dimm=dim(X00)
-  p=dimm[1]; q=dimm[2]
-  out=NULL
-  rnames=NULL
-  for (i in 1:p){
-    for (j in 1:q){
-      vec=rep(NA,8)
-      rnames=c(rnames, paste0("X",i,",",j))      
-      frob.Xij=frob(fit$X[[i,j]])
-      vec[1]=1-frob(fit$G[[i,j]]-fit$X[[i,j]])/frob.Xij
-      vec[2]=1-frob(fit$R[[i,j]]-fit$X[[i,j]])/frob.Xij
-      vec[3]=1-frob(fit$C[[i,j]]-fit$X[[i,j]])/frob.Xij
-      vec[4]=1-frob(fit$I[[i,j]]-fit$X[[i,j]])/frob.Xij
-      vec[5]=1-frob(fit$G[[i,j]]+fit$R[[i,j]]-fit$X[[i,j]])/frob.Xij
-      vec[6]=1-frob(fit$G[[i,j]]+fit$C[[i,j]]-fit$X[[i,j]])/frob.Xij
-      vec[7]=1-frob(fit$G[[i,j]]+fit$R[[i,j]]+fit$C[[i,j]]-fit$X[[i,j]])/frob.Xij
-      vec[8]=1-frob(fit$S[[i,j]]-fit$X[[i,j]])/frob.Xij
-      out=rbind(out, vec)
-    }
-  }
-  
-  rownames(out)=  rnames
-  colnames(out)= c("G","R","C","I","GR","GC", "GRC", "GRCI")
-  return(out)
-}
-
-
 # -----------------------------------------------------------------------------
 # Helper functions for simulations
 # -----------------------------------------------------------------------------
