@@ -6,42 +6,32 @@
 # Bayesian PMF functions
 # -----------------------------------------------------------------------------
 
-bpmf <- function(X1, X2, Y = NULL, nuclear_norm_init = TRUE, dims, hyperparameters, nsample = 5000, progress = TRUE) {
+bpmf <- function(data, response, nninit = TRUE, model_params, ranks = NULL, nsample, progress = TRUE) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
   # 
   # Arguments: 
-  # X1, X2 = data matrices 
-  # Y = observed response vector. If none provided, set as NULL. Otherwise
-  #     binary or normally distributed. 
-  # if (nuclear_norm_init) dims = list(p1, p2, n)
-  # if (!nuclear_norm_init) dims = list(p1, p2, n, r, r1, r2)
-  # dims = all important dimensions: pi x n is the 
-  #        dimension of Ri, i=1,2. r is the rank of the joint structure. 
-  #        ri is rank of the individual structure of Ri, i=1,2. 
-  # hyperparameters = list(sigma21, sigma22, sigma2_joint, sigma2_indiv) list of 
-  #             all the variances and other hyperparameters. 
+  # data = matrix with list entries corresponding to each data source
+  # response = column vector with outcome or NULL
+  # nninit = should the model be initialized with a nuclear norm penalized objective? if FALSE, provide ranks
+  # model_params = (error_vars, joint_vars, indiv_vars, beta_vars = NULL, response_vars)
   
   # ---------------------------------------------------------------------------
   # Extracting the dimensions
   # ---------------------------------------------------------------------------
   
-  p1 <- dims$p1 # number rows X1
-  p2 <- dims$p2 # number rows X2
-  n <- dims$n # number cols X1 and X2
+  q <- nrow(data)
+  p.vec <- apply(data, 1, function(source) nrow(source[[1]]))
   
   # ---------------------------------------------------------------------------
-  # Extracting the variances and hyperparameters
+  # Extracting the model parameters
   # ---------------------------------------------------------------------------
   
-  sigma21 <- hyperparameters$sigma21 # error variance for X1
-  sigma22 <- hyperparameters$sigma22 # error variance for X2
-  sigma2_joint <- hyperparameters$sigma2_joint # variance for joint structure
-  sigma2_indiv1 <- hyperparameters$sigma2_indiv1 # variance for individual structure of X1
-  sigma2_indiv2 <- hyperparameters$sigma2_indiv2 # variance for individual structure of X2
-  Sigma_beta <- hyperparameters$Sigma_beta # variance for coefficients
-  shape <- hyperparameters$shape
-  rate <- hyperparameters$rate
+  errors_vars <- model_params$error_vars
+  joint_var <- model_params$joint_var
+  indiv_vars <- model_params$indiv_vars
+  beta_vars <- model_params$beta_vars
+  response_vars <- model_params$response_vars; a <- response_vars$a; b <- response_vars$b
   
   # ---------------------------------------------------------------------------
   # Is there any missingness in X1 or X2?
