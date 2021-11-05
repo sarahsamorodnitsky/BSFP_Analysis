@@ -47,7 +47,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   
   # If so, which entries are missing?
   if (missingness_in_data) {
-    missing_obs <- apply(data, 1, function(source) list(which(is.na(source[[1]]))))
+    missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
   }
   
   # ---------------------------------------------------------------------------
@@ -226,6 +226,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
   }
   
+  # Still need to think about this
   if (response_given) {
     if (response_type == "binary") {
       # For V - Combined error variances between X1, X2, and Z
@@ -254,15 +255,13 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     # ---------------------------------------------------------------------------
     
     V.iter <- V.draw[[iter]]
-    U.iter <- U1.draw[[iter]]
-    V1.iter <- V1.draw[[iter]]
-    V2.iter <- V2.draw[[iter]]
-    W1.iter <- W1.draw[[iter]]
-    W2.iter <- W2.draw[[iter]]
+    U.iter <- U.draw[[iter]]
+    Vs.iter <- Vs.draw[[iter]]
+    W.iter <- W.draw[[iter]]
     
     if (response_given) {
       # The current values of the betas
-      beta.iter <- beta.draw[[iter]]
+      beta.iter <- beta.draw[iter,]
       
       # Breaking them down into the intercept, joint effects, individual effects
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
@@ -271,16 +270,16 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       beta_indiv2.iter <- beta.iter[(r+1+r1+1):n_beta,, drop = FALSE]
       
       if (response_type == "binary") {
-        Z.iter <- Z.draw[[iter]]
+        Z.iter <- Z.draw[iter,]
       }
       
       if (response_type == "continuous") {
-        tau2.iter <- tau2.draw[[iter]]
+        tau2.iter <- tau2.draw[iter]
       }
       
       if (missingness_in_response) {
         # Save the current imputations for the missing values
-        Ym.iter <- Ym.draw[[iter]] 
+        Ym.iter <- Ym.draw[iter,]
         
         # Creating the completed outcome vector
         Y_complete <- Y
@@ -295,22 +294,17 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     }
     
     if (missingness_in_data) {
-      # Storing the current imputations for the missing values
-      Xm.iter <- list(Xm1.iter = Xm.draw$Xm1.draw[[iter]],
-                      Xm2.iter = Xm.draw$Xm2.draw[[iter]])
-      
       # Creating the completed matrices. 
-      X1_complete = X1
-      X2_complete = X2
+      data_complete <- data
       
       # Fill in the completed matrices with the imputed values
-      X1_complete[missing_obs_data$X1] <- Xm.iter$Xm1.iter[missing_obs_data$X1]
-      X2_complete[missing_obs_data$X2] <- Xm.iter$Xm2.iter[missing_obs_data$X2]
+      for (s in 1:q) {
+        data_complete[[s,1]][missing_obs[[s]]] <- Xm.draw[[iter]][[s,1]]
+      }
     }
     
     if (!missingness_in_data) {
-      X1_complete <- X1
-      X2_complete <- X2
+      data_complete <- data
     }
     
     # -------------------------------------------------------------------------
