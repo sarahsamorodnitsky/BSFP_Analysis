@@ -25,15 +25,17 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   
   q <- nrow(data)
   p.vec <- apply(data, 1, function(source) nrow(source[[1]]))
+  p <- sum(p.vec)
+  n <- ncol(data[[1,1]])
   
   # ---------------------------------------------------------------------------
   # Extracting the model parameters
   # ---------------------------------------------------------------------------
   
   errors_vars <- model_params$error_vars
-  joint_var <- model_params$joint_var
-  indiv_vars <- model_params$indiv_vars
-  beta_vars <- model_params$beta_vars
+  sigma2_joint <- joint_var <- model_params$joint_var
+  sigma2_indiv <- indiv_vars <- model_params$indiv_vars
+  beta_vars <- model_params$beta_vars; Sigma_beta <- diag(beta_vars)
   response_vars <- model_params$response_vars; a <- response_vars$a; b <- response_vars$b
   
   # ---------------------------------------------------------------------------
@@ -82,7 +84,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     r <- rankMatrix(C[[1,1]]) # Joint rank
     I <- rank_init$I
     r_indivs <- sapply(1:q, function(i) rankMatrix(I[[i,1]])) # Individual ranks
-    r_total <- sum(r_indivs)
     
     # Scaling the data
     for (i in 1:q) {
@@ -95,41 +96,32 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     r_indivs <- unlist(ranks[!(names(ranks) %in% "r")])
   }
   
+  r_total <- sum(r_indivs)
+  n_beta <- 1 + r + r_total
+  
   # ---------------------------------------------------------------------------
   # Initialize V, U, V, W
   # ---------------------------------------------------------------------------
   
   V0 <- matrix(list(), nrow = 1, ncol = 1)
+  V0[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
+  
   U0 <- matrix(list(), nrow = q, ncol = 1)
   Vi0 <- matrix(list(), nrow = 1, ncol = q)
-  W0 <- matrix(list(), nrow = )
+  W0 <- matrix(list(), nrow = q, ncol = q)
   
-  V0 <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
-  
-  U10 <- matrix(rnorm(p1*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p1, ncol = r)
-  U20 <- matrix(rnorm(p2*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p2, ncol = r)
-  
-  V10 <- matrix(rnorm(n*r1, mean = 0, sd = sqrt(sigma2_indiv1)), nrow = n, ncol = r1)
-  V20 <- matrix(rnorm(n*r2, mean = 0, sd = sqrt(sigma2_indiv2)), nrow = n, ncol = r2)
-  
-  W10 <- matrix(rnorm(p1*r1, mean = 0, sd = sqrt(sigma2_indiv1)), nrow = p1, ncol = r1)
-  W20 <- matrix(rnorm(p2*r2, mean = 0, sd = sqrt(sigma2_indiv2)), nrow = p2, ncol = r2)
-  
-  VStar0 <- cbind(1, V0, V10, V20)
-  
-  if (response_given) {
-    # Sigma_beta <- diag(c(100, rep(lambda2_joint, r), rep(lambda2_indiv1, r1), rep(lambda2_indiv2, r2)))
-    beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
+  for (i in 1:q) {
+    U0[[i,1]] <- matrix(rnorm(p.vec[i]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[i], ncol = r)
     
-    # If the response is binary, initialize the latent continuous variable
-    if (response_type == "binary") {
-      Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
-    }
+    Vi0[[1,i]] <- matrix(rnorm(n*r_indivs[i], mean = 0, sd = sqrt(sigma2_indiv[i])), nrow = n, ncol = indiv_vars[i])
     
-    if (response_type == "continuous") {
-      tau20 <- 1/rgamma(1, shape = shape, rate = rate)
-    }
+    W0[[i,i]] <- matrix(rnorm(p.vec[i]*r_indivs[i], mean = 0, sd = sqrt(sigma2_indiv[i])), nrow = p.vec[i], ncol = r_indivs[i])
   }
+  
+  V.star0 <- cbind(1, V0, V10, V20)
+  beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
+  Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+  tau20 <- 1/rgamma(1, shape = shape, rate = rate)
   
   # If there is missingness in X1 or X2, generate starting values for the missing entries
   if (missingness_in_data) {
