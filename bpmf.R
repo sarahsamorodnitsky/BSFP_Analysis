@@ -117,6 +117,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     Vs0[[1,s]] <- matrix(rnorm(n*r_indivs[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r_indivs[s])
     
     W0[[s,s]] <- matrix(rnorm(p.vec[s]*r_indivs[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r_indivs[s])
+    
+    for (ss in 1:q) {
+      if (ss != s) {
+        W0[[s,ss]] <- matrix(0, nrow = p.vec[s], ncol = r_indivs[ss])
+      }
+    }
   }
   
   if (response_given) {
@@ -181,13 +187,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # Storing the initial values 
   # ---------------------------------------------------------------------------
   
-  V.draw[[1]][[1,1]] <- V0[[1,1]]
-  
-  for (s in 1:q) {
-    U.draw[[1]][[s,1]] <- U0[[s,1]]
-    Vs.draw[[1]][[1,s]] <- Vs0[[1,s]]
-    W.draw[[1]][[s,s]] <- W0[[s,s]]
-  }
+  V.draw[[1]] <- V0
+  U.draw[[1]] <- U0
+  Vs.draw[[1]] <- Vs0
+  W.draw[[1]] <- W0
   
   if (response_given) {
     beta.draw[1,] <- beta0
@@ -263,12 +266,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       # The current values of the betas
       beta.iter <- beta.draw[iter,]
       
-      # Breaking them down into the intercept, joint effects, individual effects
-      beta_intercept.iter <- beta.iter[1,, drop = FALSE]
-      beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE]
-      beta_indiv1.iter <- beta.iter[(r+2):(r+1+r1),, drop = FALSE]
-      beta_indiv2.iter <- beta.iter[(r+1+r1+1):n_beta,, drop = FALSE]
-      
       if (response_type == "binary") {
         Z.iter <- Z.draw[iter,]
       }
@@ -295,64 +292,17 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (missingness_in_data) {
       # Creating the completed matrices. 
-      data_complete <- data
+      X_complete <- data
       
       # Fill in the completed matrices with the imputed values
       for (s in 1:q) {
-        data_complete[[s,1]][missing_obs[[s]]] <- Xm.draw[[iter]][[s,1]]
+        X_complete[[s,1]][missing_obs[[s]]] <- Xm.draw[[iter]][[s,1]]
       }
     }
     
     if (!missingness_in_data) {
-      data_complete <- data
+      X_complete <- data
     }
-    
-    # -------------------------------------------------------------------------
-    # Computing the inverse that changes with tau2
-    # -------------------------------------------------------------------------
-    
-    if (response_given) {
-      if (response_type == "continuous") {
-        # For V - Combined error variances between X1, X2, and Y
-        Sigma_V_Inv <- diag(1/c(rep(sigma21, p1), rep(sigma22, p2), tau2.iter))
-        
-        # For V1 - Combined error variances between X1 and Z
-        Sigma_V1_Inv <- diag(1/c(rep(sigma21, p1), tau2.iter))
-        
-        # For V2 - Combined error variances between X2 and Z
-        Sigma_V2_Inv <- diag(1/c(rep(sigma22, p2), tau2.iter))
-      }
-    }
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for U1
-    # -------------------------------------------------------------------------
-    
-    X1.iter <- X1_complete - W1.iter %*% t(V1.iter)
-    Bu1 <- solve((1/sigma21) * t(V.iter) %*% V.iter + (1/sigma2_joint) * diag(r))
-    U1.draw[[iter+1]] <- t(sapply(1:p1, function(l1) {
-      bu1 <- (1/sigma21) * t(V.iter) %*% X1.iter[l1, ]
-      
-      U1i <- mvrnorm(1, mu = Bu1 %*% bu1, Sigma = Bu1)
-      U1i
-    }))
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for U2
-    # -------------------------------------------------------------------------
-    
-    X2.iter <- X2_complete - W2.iter %*% t(V2.iter)
-    Bu2 <- solve((1/sigma22) * t(V.iter) %*% V.iter + (1/sigma2_joint) * diag(r))
-    U2.draw[[iter+1]] <- t(sapply(1:p2, function(l2) {
-      bu2 <- (1/sigma22) * t(V.iter) %*% X2.iter[l2, ]
-      
-      U2i <- mvrnorm(1, mu = Bu2 %*% bu2, Sigma = Bu2)
-      U2i
-    }))
-    
-    # Update the current value of U1 and U2
-    U1.iter <- U1.draw[[iter+1]]
-    U2.iter <- U2.draw[[iter+1]]
     
     # -------------------------------------------------------------------------
     # Posterior sample for V
@@ -360,15 +310,14 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (!response_given) {
       # Concatenating Ui's together
-      U.iter <- rbind(U1.iter, U2.iter)
+      U.iter <- data.rearrange(U.iter)$out
+      SigmaInvV <- data.rearrange(SigmaInv)$out
       
       # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
-      tU_Sigma <- crossprod(U.iter, Sigma_V_Inv)
-      tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter)
+      tU_Sigma_U <- crossprod(t(crossprod(U.iter, SigmaInvV)), U.iter)
       
       # The combined centered Xis with the latent response vector
-      X.iter <- rbind(X1_complete - W1.iter %*% t(V1.iter),
-                      X2_complete - W2.iter %*% t(V2.iter))
+      X.iter <- data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% data.rearrange(t(Vs.iter))$out
       
       Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
       
@@ -421,6 +370,36 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     # Updating the value of V
     V.iter <- V.draw[[iter+1]]
+    
+    # -------------------------------------------------------------------------
+    # Posterior sample for Us
+    # -------------------------------------------------------------------------
+    
+    X.iter <- X_complete - W.iter %*% t(V.iter)
+    Bu1 <- solve((1/sigma21) * t(V.iter) %*% V.iter + (1/sigma2_joint) * diag(r))
+    U1.draw[[iter+1]] <- t(sapply(1:p1, function(l1) {
+      bu1 <- (1/sigma21) * t(V.iter) %*% X1.iter[l1, ]
+      
+      U1i <- mvrnorm(1, mu = Bu1 %*% bu1, Sigma = Bu1)
+      U1i
+    }))
+    
+    # -------------------------------------------------------------------------
+    # Posterior sample for U2
+    # -------------------------------------------------------------------------
+    
+    X2.iter <- X2_complete - W2.iter %*% t(V2.iter)
+    Bu2 <- solve((1/sigma22) * t(V.iter) %*% V.iter + (1/sigma2_joint) * diag(r))
+    U2.draw[[iter+1]] <- t(sapply(1:p2, function(l2) {
+      bu2 <- (1/sigma22) * t(V.iter) %*% X2.iter[l2, ]
+      
+      U2i <- mvrnorm(1, mu = Bu2 %*% bu2, Sigma = Bu2)
+      U2i
+    }))
+    
+    # Update the current value of U1 and U2
+    U1.iter <- U1.draw[[iter+1]]
+    U2.iter <- U2.draw[[iter+1]]
     
     # -------------------------------------------------------------------------
     # Posterior sample for V1
