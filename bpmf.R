@@ -175,7 +175,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     }
     
     if (missingness_in_response) {
-      Ym.draw <- matrix(nrow = nsample, ncol = n)
+      Ym.draw <- lapply(1:nsample, function(i) list())
     }
   }
   
@@ -375,46 +375,35 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     # Posterior sample for Us
     # -------------------------------------------------------------------------
     
-    X.iter <- X_complete - W.iter %*% t(V.iter)
-    Bu1 <- solve((1/sigma21) * t(V.iter) %*% V.iter + (1/sigma2_joint) * diag(r))
-    U1.draw[[iter+1]] <- t(sapply(1:p1, function(l1) {
-      bu1 <- (1/sigma21) * t(V.iter) %*% X1.iter[l1, ]
-      
-      U1i <- mvrnorm(1, mu = Bu1 %*% bu1, Sigma = Bu1)
-      U1i
-    }))
+    for (s in 1:q) {
+      Xs.iter <- X_complete[[s,1]] - W.iter[[s,s]] %*% t(Vs.iter[[1,s]])
+      Bu <- solve((1/error_vars[s]) * t(V.iter[[1,1]]) %*% V.iter[[1,1]] + (1/sigma2_joint) * diag(r))
+      U.draw[[iter+1]][[s,1]] <- t(sapply(1:p.vec[s], function(j) {
+        bu <- (1/error_vars[s]) * t(V.iter[[1,1]]) %*% Xs.iter[j, ]
+        
+        U1j <- mvrnorm(1, mu = Bu %*% bu, Sigma = Bu)
+        U1j
+      }))
+    }
+
+    U.iter <- U.draw[[iter+1]]
     
     # -------------------------------------------------------------------------
-    # Posterior sample for U2
-    # -------------------------------------------------------------------------
-    
-    X2.iter <- X2_complete - W2.iter %*% t(V2.iter)
-    Bu2 <- solve((1/sigma22) * t(V.iter) %*% V.iter + (1/sigma2_joint) * diag(r))
-    U2.draw[[iter+1]] <- t(sapply(1:p2, function(l2) {
-      bu2 <- (1/sigma22) * t(V.iter) %*% X2.iter[l2, ]
-      
-      U2i <- mvrnorm(1, mu = Bu2 %*% bu2, Sigma = Bu2)
-      U2i
-    }))
-    
-    # Update the current value of U1 and U2
-    U1.iter <- U1.draw[[iter+1]]
-    U2.iter <- U2.draw[[iter+1]]
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for V1
+    # Posterior sample for Vs, s=1,...,q
     # -------------------------------------------------------------------------
     
     if (!response_given) {
-      X1.iter <- X1_complete - U1.iter %*% t(V.iter)
-      Bv1 <- solve((1/sigma21) * t(W1.iter) %*% W1.iter + (1/sigma2_indiv1) * diag(r1))
-      
-      V1.draw[[iter+1]] <- t(sapply(1:n, function(j) {
-        bv1 <- (1/sigma21) * t(W1.iter) %*% X1.iter[, j]
+      for (s in 1:q) {
+        Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
+        Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r_indivs[s]))
         
-        V1j <- mvrnorm(1, mu = Bv1 %*% bv1, Sigma = Bv1)
-        V1j
-      }))
+        Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
+          bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
+          
+          V1j <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+          V1j
+        }))
+      }
     }
     
     if (response_given) {
@@ -460,114 +449,45 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       }
     }
     
-    # Update the current value of V1
-    V1.iter <- V1.draw[[iter+1]]
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for V2
-    # -------------------------------------------------------------------------
-    
-    if (!response_given) {
-      X2.iter <- X2_complete - U2.iter %*% t(V.iter)
-      Bv2 <- solve((1/sigma22) * t(W2.iter) %*% W2.iter + (1/sigma2_indiv2) * diag(r2))
-      
-      V2.draw[[iter+1]] <- t(sapply(1:n, function(j) {
-        bv2 <- (1/sigma22) * t(W2.iter) %*% X2.iter[, j]
-        
-        V12 <- mvrnorm(1, mu = Bv2 %*% bv2, Sigma = Bv2)
-        V12
-      }))
-    }
-    
-    if (response_given) {
-      if (response_type == "binary") {
-        # Combined centered X2 and Z
-        X.iter <- rbind(X2_complete - U2.iter %*% t(V.iter),
-                        t(Z.iter - c(beta_intercept.iter) - V.iter %*% beta_joint.iter - V1.iter %*% beta_indiv1.iter))
-        
-        # Combined Ws and beta
-        W.iter <- rbind(W2.iter, t(beta_indiv2.iter))
-        
-        tW_Sigma <- crossprod(W.iter, Sigma_V2_Inv)
-        tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter)
-        
-        Bv2 <- solve(tW_Sigma_W + (1/sigma2_indiv2) * diag(r2))
-        V2.draw[[iter+1]] <- t(sapply(1:n, function(i) {
-          bv2 <- tW_Sigma %*% X.iter[, i]
-          
-          V2j <- mvrnorm(1, mu = Bv2 %*% bv2, Sigma = Bv2)
-          V2j
-        }))
-      }
-      
-      if (response_type == "continuous") {
-        # Combined centered X2 and Y
-        X.iter <- rbind(X2_complete - U2.iter %*% t(V.iter),
-                        t(Y_complete - c(beta_intercept.iter) -  V.iter %*% beta_joint.iter - V1.iter %*% beta_indiv1.iter))
-        
-        # Combined Ws and beta
-        W.iter <- rbind(W2.iter, t(beta_indiv2.iter))
-        
-        tW_Sigma <- crossprod(W.iter, Sigma_V2_Inv)
-        tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter)
-        
-        Bv2 <- solve(tW_Sigma_W + (1/sigma2_indiv2) * diag(r2))
-        V2.draw[[iter+1]] <- t(sapply(1:n, function(i) {
-          bv2 <- tW_Sigma %*% X.iter[, i]
-          
-          V2j <- mvrnorm(1, mu = Bv2 %*% bv2, Sigma = Bv2)
-          V2j
-        }))
-      }
-    }
-    
-    # Update the current value of V2
-    V2.iter <- V2.draw[[iter+1]]
+    # Update the current value of V
+    Vs.iter <- Vs.draw[[iter+1]]
     
     # -------------------------------------------------------------------------
     # Posterior sample for W1
     # -------------------------------------------------------------------------
     
-    X1.iter <- X1_complete - U1.iter %*% t(V.iter)
-    Bw1 <- solve((1/sigma21) * t(V1.iter) %*% V1.iter + (1/sigma2_indiv1) * diag(r1))
-    
-    W1.draw[[iter+1]] <- t(sapply(1:p1, function(l1) {
-      bw1 <- (1/sigma21) * t(V1.iter) %*% X1.iter[l1,] 
+    for (s in 1:q) {
+      Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
+      Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r_indivs[s]))
       
-      W1i <- mvrnorm(1, mu = Bw1 %*% bw1, Sigma = Bw1)
-      W1i
-    }))
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for W2
-    # -------------------------------------------------------------------------
-    
-    X2.iter <- X2_complete - U2.iter %*% t(V.iter)
-    Bw2 <- solve((1/sigma22) * t(V2.iter) %*% V2.iter + (1/sigma2_indiv2) * diag(r2))
-    W2.draw[[iter+1]] <- t(sapply(1:p2, function(l2) {
-      bw2 <- (1/sigma22) * t(V2.iter) %*% X2.iter[l2,] 
+      W.draw[[iter+1]][[s,s]] <- t(sapply(1:p.vec[s], function(j) {
+        bws <- (1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Xs.iter[j,] 
+        
+        Wsj <- mvrnorm(1, mu = Bws %*% bws, Sigma = Bws)
+        Wsj
+      }))
       
-      W2i <- mvrnorm(1, mu = Bw2 %*% bw2, Sigma = Bw2)
-      W2i
-    }))
+      for (ss in 1:q) {
+        if (ss != s) W.draw[[iter+1]][[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = r_indivs[ss])
+      }
+    }
     
-    # Update the current value of W1 and W2
-    W1.iter <- W1.draw[[iter+1]]
-    W2.iter <- W2.draw[[iter+1]]
+    # Update the current value of W
+    W.iter <- W.draw[[iter+1]]
     
     # -------------------------------------------------------------------------
     # Posterior sample for tau2
     # -------------------------------------------------------------------------
     
     if (response_given) {
-      # Combine current values of V, V1, and V2
-      VStar.iter <- cbind(1, V.iter, V1.iter, V2.iter)
+      # Combine current values of V and V_\cdot
+      VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
       
       if (response_type == "continuous") {
-        tau2.draw[[iter+1]] <- 1/rgamma(1, shape = shape + (n/2), rate = rate + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2))
+        tau2.draw[iter+1] <- 1/rgamma(1, shape = shape + (n/2), rate = rate + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2))
         
         # Update the current value of tau2
-        tau2.iter <- tau2.draw[[iter+1]]
+        tau2.iter <- tau2.draw[iter+1]
       }
     }
     
@@ -579,17 +499,17 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       if (response_type == "binary") {
         Bbeta <- solve(t(VStar.iter) %*% VStar.iter + Sigma_beta_Inv)
         bbeta <- t(VStar.iter) %*% Z.iter
-        beta.draw[[iter+1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+        beta.draw[iter+1,] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
       
       if (response_type == "continuous") {
         Bbeta <- solve((1/tau2.iter) * t(VStar.iter) %*% VStar.iter + Sigma_beta_Inv)
         bbeta <- (1/tau2.iter) * t(VStar.iter) %*% Y_complete
-        beta.draw[[iter+1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+        beta.draw[iter+1,] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
       
       # Update the current value of beta
-      beta.iter <- beta.draw[[iter+1]]
+      beta.iter <- beta.draw[iter+1,]
       
       # Breaking them down into the intercept, joint effects, individual effects
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
@@ -604,7 +524,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (response_given) {
       if (response_type == "binary") {
-        Z.draw[[iter+1]] <- matrix(sapply(1:n, function(i) {
+        Z.draw[iter+1,] <- matrix(sapply(1:n, function(i) {
           if (Y_complete[i,] == 1) z <- rtruncnorm(1, a = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
           if (Y_complete[i,] == 0) z <- rtruncnorm(1, b = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
           z
@@ -619,186 +539,31 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (response_given) {
       if (missingness_in_response) {
         if (response_type == "continuous") {
-          Ym.draw[[iter+1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter)), ncol = 1)
+          Ym.draw[[iter+1]] <- matrix(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter), ncol = 1)[missing_obs_Y,]
         }
         
         if (response_type == "binary") {
-          Ym.draw[[iter+1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar.iter %*% beta.iter)), ncol = 1)
+          Ym.draw[[iter+1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar.iter %*% beta.iter)), ncol = 1)[missing_obs_Y,]
         }
       }
     }
     
     if (missingness_in_data) {
-      E1.iter <- matrix(rnorm(p1*n, 0, sqrt(sigma21)), nrow = p1, ncol = n)
-      Xm.draw$Xm1.draw[[iter+1]] <- (U1.iter %*% t(V.iter) + W1.iter %*% t(V1.iter) + E1.iter)[missing_obs_data$X1]
-      
-      E2.iter <- matrix(rnorm(p2*n, 0, sqrt(sigma22)), nrow = p2, ncol = n)
-      Xm.draw$Xm2.draw[[iter+1]] <- (U2.iter %*% t(V.iter) + W2.iter %*% t(V2.iter) + E2.iter)[missing_obs_data$X2]
+      for (s in 1:q) {
+        Es <-  matrix(rnorm(p.vec[s]*n, 0, sqrt(error_vars[s])), nrow = p.vec[s], ncol = n)
+        Xm.draw[[iter+1]][[s,1]] <- (U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]) + Es)[missing_obs[[s]]]
+      }
     }
   }
   
   # Return
-  if (!response_given & !missingness_in_data) {
-    return(list(X1 = X1, # Returning the scaled version of the data
-                X2 = X2, # Returning the scaled version of the data
-                sigma.mat = sigma.mat, # Returning the scaling factors
-                V.draw = V.draw, 
-                U1.draw = U1.draw,
-                U2.draw = U2.draw,
-                V1.draw = V1.draw,
-                V2.draw = V2.draw,
-                W1.draw = W1.draw,
-                W2.draw = W2.draw))
-  }
-  
-  if (!response_given & missingness_in_data) {
-    return(list(X1 = X1, # Returning the scaled version of the data
-                X2 = X2, # Returning the scaled version of the data
-                sigma.mat = sigma.mat, # Returning the scaling factors
-                V.draw = V.draw, 
-                U1.draw = U1.draw,
-                U2.draw = U2.draw,
-                V1.draw = V1.draw,
-                V2.draw = V2.draw,
-                W1.draw = W1.draw,
-                W2.draw = W2.draw,
-                Xm.draw = Xm.draw))
-  }
-  
-  if (response_given) {
-    if (!missingness_in_response) {
-      if (response_type == "continuous" & !missingness_in_data) {
-        return(list(X1 = X1, # Returning the scaled version of the data
-                    X2 = X2, # Returning the scaled version of the data
-                    sigma.mat = sigma.mat, # Returning the scaling factors
-                    V.draw = V.draw, 
-                    U1.draw = U1.draw,
-                    U2.draw = U2.draw,
-                    V1.draw = V1.draw,
-                    V2.draw = V2.draw,
-                    W1.draw = W1.draw,
-                    W2.draw = W2.draw,
-                    beta.draw = beta.draw,
-                    tau2.draw = tau2.draw))
-      }
-      
-      if (response_type == "binary" & !missingness_in_data) {
-        return(list(X1 = X1, # Returning the scaled version of the data
-                    X2 = X2, # Returning the scaled version of the data
-                    sigma.mat = sigma.mat, # Returning the scaling factors
-                    V.draw = V.draw, 
-                    U1.draw = U1.draw,
-                    U2.draw = U2.draw,
-                    V1.draw = V1.draw,
-                    V2.draw = V2.draw,
-                    W1.draw = W1.draw,
-                    W2.draw = W2.draw,
-                    beta.draw = beta.draw,
-                    Z.draw = Z.draw))
-      }
-      
-      if (response_type == "continuous" & missingness_in_data) {
-        return(list(X1 = X1, # Returning the scaled version of the data
-                    X2 = X2, # Returning the scaled version of the data
-                    sigma.mat = sigma.mat, # Returning the scaling factors
-                    V.draw = V.draw, 
-                    U1.draw = U1.draw,
-                    U2.draw = U2.draw,
-                    V1.draw = V1.draw,
-                    V2.draw = V2.draw,
-                    W1.draw = W1.draw,
-                    W2.draw = W2.draw,
-                    beta.draw = beta.draw,
-                    tau2.draw = tau2.draw,
-                    Xm.draw = Xm.draw))
-      }
-      
-      if (response_type == "binary" & missingness_in_data) {
-        return(list(X1 = X1, # Returning the scaled version of the data
-                    X2 = X2, # Returning the scaled version of the data
-                    sigma.mat = sigma.mat, # Returning the scaling factors
-                    V.draw = V.draw, 
-                    U1.draw = U1.draw,
-                    U2.draw = U2.draw,
-                    V1.draw = V1.draw,
-                    V2.draw = V2.draw,
-                    W1.draw = W1.draw,
-                    W2.draw = W2.draw,
-                    beta.draw = beta.draw,
-                    Z.draw = Z.draw,
-                    Xm.draw = Xm.draw))
-      }
-    }
-    
-    if (missingness_in_response) {
-      if (response_type == "continuous" & !missingness_in_data) {
-        return(list(X1 = X1, # Returning the scaled version of the data
-                    X2 = X2, # Returning the scaled version of the data
-                    sigma.mat = sigma.mat, # Returning the scaling factors
-                    V.draw = V.draw, 
-                    U1.draw = U1.draw,
-                    U2.draw = U2.draw,
-                    V1.draw = V1.draw,
-                    V2.draw = V2.draw,
-                    W1.draw = W1.draw,
-                    W2.draw = W2.draw,
-                    beta.draw = beta.draw,
-                    tau2.draw = tau2.draw,
-                    Ym.draw = Ym.draw))
-      }
-      
-      if (response_type == "binary" & !missingness_in_data) {
-        return(list(X1 = X1, # Returning the scaled version of the data
-                    X2 = X2, # Returning the scaled version of the data
-                    sigma.mat = sigma.mat, # Returning the scaling factors
-                    V.draw = V.draw, 
-                    U1.draw = U1.draw,
-                    U2.draw = U2.draw,
-                    V1.draw = V1.draw,
-                    V2.draw = V2.draw,
-                    W1.draw = W1.draw,
-                    W2.draw = W2.draw,
-                    beta.draw = beta.draw,
-                    Ym.draw = Ym.draw,
-                    Z.draw = Z.draw))
-      }
-      
-      if (response_type == "continuous" & missingness_in_data) {
-        return(list(X1 = X1, # Returning the scaled version of the data
-                    X2 = X2, # Returning the scaled version of the data
-                    sigma.mat = sigma.mat, # Returning the scaling factors
-                    V.draw = V.draw, 
-                    U1.draw = U1.draw,
-                    U2.draw = U2.draw,
-                    V1.draw = V1.draw,
-                    V2.draw = V2.draw,
-                    W1.draw = W1.draw,
-                    W2.draw = W2.draw,
-                    beta.draw = beta.draw,
-                    tau2.draw = tau2.draw,
-                    Ym.draw = Ym.draw,
-                    Xm.draw = Xm.draw))
-      }
-      
-      if (response_type == "binary" & missingness_in_data) {
-        return(list(X1 = X1, # Returning the scaled version of the data
-                    X2 = X2, # Returning the scaled version of the data
-                    sigma.mat = sigma.mat, # Returning the scaling factors
-                    V.draw = V.draw, 
-                    U1.draw = U1.draw,
-                    U2.draw = U2.draw,
-                    V1.draw = V1.draw,
-                    V2.draw = V2.draw,
-                    W1.draw = W1.draw,
-                    W2.draw = W2.draw,
-                    beta.draw = beta.draw,
-                    tau2.draw = tau2.draw,
-                    Ym.draw = Ym.draw,
-                    Z.draw = Z.draw,
-                    Xm.draw = Xm.draw))
-      }
-    }
-  }
+  list(data = data, # Returning the scaled version of the data
+        Y = Y, # Return the response vector
+        sigma.mat = sigma.mat, # Returning the scaling factors
+        V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw,
+        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
+        tau2.draw = tau2.draw, beta.draw = beta.draw)
+
 }
 
 
