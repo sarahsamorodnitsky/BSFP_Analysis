@@ -36,19 +36,18 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   error_vars <- model_params$error_vars
   sigma2_joint <- joint_var <- model_params$joint_var
   sigma2_indiv <- indiv_vars <- model_params$indiv_vars
-  beta_vars <- model_params$beta_vars; Sigma_beta <- diag(beta_vars)
-  response_vars <- model_params$response_vars; a <- response_vars$a; b <- response_vars$b
+  beta_vars <- model_params$beta_vars
+  response_vars <- model_params$response_vars; a <- response_vars[1]; b <- response_vars[2]
   
   # ---------------------------------------------------------------------------
   # Check for missingness in data
   # ---------------------------------------------------------------------------
   
-  missingness_in_data <- any(apply(data, 1, function(source) any(is.na(source[[1]])))) # Consider changing
+  # Check for missingness
+  missingness_in_data <- any(apply(data, 1, function(source) any(is.na(source[[1]])))) 
   
-  # If so, which entries are missing?
-  if (missingness_in_data) {
-    missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
-  }
+  # Which entries are missing?
+  missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
   
   # ---------------------------------------------------------------------------
   # Is there a response vector?
@@ -63,10 +62,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     # If there is a response, is there missingness in the outcome?
     missingness_in_response <- any(is.na(Y))
     
-    # If there is missingness, which entries are missing?
-    if (missingness_in_response) {
-      missing_obs_Y <- which(is.na(Y))
-    }
+    # Which entries are missing?
+    missing_obs_Y <- which(is.na(Y))
   }
   
   # ---------------------------------------------------------------------------
@@ -100,6 +97,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   r_total <- sum(r.vec)
   n_beta <- 1 + r + r_total
   
+  # If a response is given, set up the variance matrix for the prior of the betas using the ranks
+  if (response_given) {
+    Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
+    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+  }
+  
   # ---------------------------------------------------------------------------
   # Initialize V, U, V, W
   # ---------------------------------------------------------------------------
@@ -131,7 +134,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
-    tau20 <- 1/rgamma(1, shape = shape, rate = rate)
+    tau20 <- 1/rgamma(1, shape = a, rate = b)
   }
   
   # If there is missingness in the data, generate starting values for the missing entries
@@ -166,9 +169,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   if (response_given) {
     beta.draw <- matrix(nrow = nsample, ncol = n_beta)
     
-    if (response_type == "binary") {
-      Z.draw <- matrix(nrow = nsample, ncol = n)
-    }
+    Z.draw <- matrix(nrow = nsample, ncol = n)
     
     if (response_type == "continuous") {
       tau2.draw <- c()
@@ -229,17 +230,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
   }
   
-  # Still need to think about this
   if (response_given) {
     if (response_type == "binary") {
-      # For V - Combined error variances between X1, X2, and Z
-      Sigma_V_Inv <- diag(1/c(rep(sigma21, p1), rep(sigma22, p2), 1))
-      
-      # For V1 - Combined error variances between X1 and Z
-      Sigma_V1_Inv <- diag(1/c(rep(sigma21, p1), 1))
-      
-      # For V2 - Combined error variances between X2 and Z
-      Sigma_V2_Inv <- diag(1/c(rep(sigma22, p2), 1))
+      # For V - Combined error variances between data and Z
+      SigmaVInv <- diag(c(rep(1/error_vars, p.vec), 1))
     } 
     
     # For beta - Combined error variances between intercept and all betas
