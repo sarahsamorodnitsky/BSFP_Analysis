@@ -84,7 +84,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     C <- rank_init$C
     r <- rankMatrix(C[[1,1]]) # Joint rank
     I <- rank_init$I
-    r_indivs <- sapply(1:q, function(s) rankMatrix(I[[s,1]])) # Individual ranks
+    r.vec <- sapply(1:q, function(s) rankMatrix(I[[s,1]])) # Individual ranks
     
     # Scaling the data
     for (s in 1:q) {
@@ -94,10 +94,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   
   if (!nninit) {
     r <- ranks$r 
-    r_indivs <- unlist(ranks[!(names(ranks) %in% "r")])
+    r.vec <- unlist(ranks[!(names(ranks) %in% "r")])
   }
   
-  r_total <- sum(r_indivs)
+  r_total <- sum(r.vec)
   n_beta <- 1 + r + r_total
   
   # ---------------------------------------------------------------------------
@@ -114,13 +114,13 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   for (s in 1:q) {
     U0[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
     
-    Vs0[[1,s]] <- matrix(rnorm(n*r_indivs[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r_indivs[s])
+    Vs0[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
     
-    W0[[s,s]] <- matrix(rnorm(p.vec[s]*r_indivs[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r_indivs[s])
+    W0[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r.vec[s])
     
     for (ss in 1:q) {
       if (ss != s) {
-        W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r_indivs[ss])
+        W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
       }
     }
   }
@@ -395,7 +395,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (!response_given) {
       for (s in 1:q) {
         Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
-        Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r_indivs[s]))
+        Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
         
         Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
           bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
@@ -458,7 +458,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     for (s in 1:q) {
       Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
-      Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r_indivs[s]))
+      Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
       
       W.draw[[iter+1]][[s,s]] <- t(sapply(1:p.vec[s], function(j) {
         bws <- (1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Xs.iter[j,] 
@@ -468,7 +468,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       }))
       
       for (ss in 1:q) {
-        if (ss != s) W.draw[[iter+1]][[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = r_indivs[ss])
+        if (ss != s) W.draw[[iter+1]][[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = r.vec[ss])
       }
     }
     
