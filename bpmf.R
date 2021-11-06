@@ -120,7 +120,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     for (ss in 1:q) {
       if (ss != s) {
-        W0[[s,ss]] <- matrix(0, nrow = p.vec[s], ncol = r_indivs[ss])
+        W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r_indivs[ss])
       }
     }
   }
@@ -312,17 +312,17 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       # Concatenating Ui's together
       U.iter <- data.rearrange(U.iter)$out
       SigmaInvV <- data.rearrange(SigmaInv)$out
+      tU_Sigma <- crossprod(U.iter, SigmaInvV)
       
       # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
-      tU_Sigma_U <- crossprod(t(crossprod(U.iter, SigmaInvV)), U.iter)
+      tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter)
       
       # The combined centered Xis with the latent response vector
-      X.iter <- data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% data.rearrange(t(Vs.iter))$out
-      
+      X.iter <- data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
       Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
       
-      V.draw[[iter+1]] <- t(sapply(1:n, function(j) {
-        bv <-  tU_Sigma %*% X.iter[,j]
+      V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
+        bv <-  tU_Sigma %*% X.iter[,i]
         
         Vj <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
         Vj
