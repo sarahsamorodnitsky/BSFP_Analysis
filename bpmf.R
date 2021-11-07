@@ -258,7 +258,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (response_given) {
       # The current values of the betas
-      beta.iter <- beta.draw[iter,]
+      beta.iter <- t(beta.draw[iter,, drop = FALSE])
+      
+      # Breaking beta down into the intercept, joint, and individual effects
+      beta_intercept.iter <- beta.iter[1,, drop = FALSE]
+      beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE]
+      beta_indiv.iter <- beta.iter[(r+2):nrow(beta.iter),, drop = FALSE]
       
       if (response_type == "binary") {
         Z.iter <- Z.draw[iter,]
@@ -401,45 +406,47 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     }
     
     if (response_given) {
-      if (response_type == "binary") {
-        # Combined centered X1 and Z
-        X.iter <- rbind(X1_complete - U1.iter %*% t(V.iter),
-                        t(Z.iter - c(beta_intercept.iter) - V.iter %*% beta_joint.iter - V2.iter %*% beta_indiv2.iter))
-        
-        # Combined Ws and beta
-        W.iter <- rbind(W1.iter, t(beta_indiv1.iter))
-        
-        tW_Sigma <- crossprod(W.iter, Sigma_V1_Inv)
-        tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter)
-        
-        Bv1 <- solve(tW_Sigma_W + (1/sigma2_indiv1) * diag(r1))
-        V1.draw[[iter+1]] <- t(sapply(1:n, function(i) {
-          bv1 <- tW_Sigma %*% X.iter[, i]
+      for (s in 1:q) {
+        if (response_type == "binary") {
+          # Combined centered X1 and Z
+          Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
+                          t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - V2.iter %*% beta_indiv2.iter))
           
-          V1j <- mvrnorm(1, mu = Bv1 %*% bv1, Sigma = Bv1)
-          V1j
-        }))
-      }
-      
-      if (response_type == "continuous") {
-        # Combined centered X1 and Y
-        Y.iter <- t(Y_complete - c(beta_intercept.iter) - V.iter %*% beta_joint.iter - V2.iter %*% beta_indiv2.iter)
-        colnames(Y.iter) <- colnames(X1)
-        X.iter <- rbind(X1_complete - U1.iter %*% t(V.iter), Y.iter)
-        
-        # Combined Ws and beta
-        W.iter <- rbind(W1.iter, t(beta_indiv1.iter))
-        
-        tW_Sigma <- crossprod(W.iter, Sigma_V1_Inv)
-        tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter)
-        
-        Bv1 <- solve(tW_Sigma_W + (1/sigma2_indiv1) * diag(r1))
-        V1.draw[[iter+1]] <- t(sapply(1:n, function(i) {
-          bv1 <- tW_Sigma %*% X.iter[, i]
+          # Combined Ws and beta
+          W.iter <- rbind(W.iter[[s,s]], t(beta_indiv1.iter))
           
-          V1j <- mvrnorm(1, mu = Bv1 %*% bv1, Sigma = Bv1)
-          V1j
-        }))
+          tW_Sigma <- crossprod(W.iter, Sigma_V1_Inv)
+          tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter)
+          
+          Bv1 <- solve(tW_Sigma_W + (1/sigma2_indiv1) * diag(r1))
+          V1.draw[[iter+1]] <- t(sapply(1:n, function(i) {
+            bv1 <- tW_Sigma %*% X.iter[, i]
+            
+            V1j <- mvrnorm(1, mu = Bv1 %*% bv1, Sigma = Bv1)
+            V1j
+          }))
+        }
+        
+        if (response_type == "continuous") {
+          # Combined centered X1 and Y
+          Y.iter <- t(Y_complete - c(beta_intercept.iter) - V.iter %*% beta_joint.iter - V2.iter %*% beta_indiv2.iter)
+          colnames(Y.iter) <- colnames(X1)
+          X.iter <- rbind(X1_complete - U1.iter %*% t(V.iter), Y.iter)
+          
+          # Combined Ws and beta
+          W.iter <- rbind(W1.iter, t(beta_indiv1.iter))
+          
+          tW_Sigma <- crossprod(W.iter, Sigma_V1_Inv)
+          tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter)
+          
+          Bv1 <- solve(tW_Sigma_W + (1/sigma2_indiv1) * diag(r1))
+          V1.draw[[iter+1]] <- t(sapply(1:n, function(i) {
+            bv1 <- tW_Sigma %*% X.iter[, i]
+            
+            V1j <- mvrnorm(1, mu = Bv1 %*% bv1, Sigma = Bv1)
+            V1j
+          }))
+        }
       }
     }
     
