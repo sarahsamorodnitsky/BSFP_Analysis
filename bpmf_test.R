@@ -45,28 +45,44 @@ model_params <- list(error_vars = c(1,1),
 # No outcome
 # -----------------------------------------------------------------------------
 
-no.out <- bpmf(data, Y = NULL, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
+Y <- NULL
+no.out <- bpmf(data, Y = Y, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
 
 # -----------------------------------------------------------------------------
 # Continuous outcome
 # -----------------------------------------------------------------------------
 
 Y <- matrix(rnorm(n), nrow = n)
-
+continuous.out <- bpmf(data, Y = Y, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
 
 # -----------------------------------------------------------------------------
 # Binary outcome
 # -----------------------------------------------------------------------------
 
-Y <- matrix(rbinom(n, p = 0.5), nrow = n)
+Y <- matrix(rbinom(n, size = 1, p = 0.5), nrow = n)
+bin.out <- bpmf(data, Y = Y, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
 
 # -----------------------------------------------------------------------------
 # Missing data 
 # -----------------------------------------------------------------------------
 
+data.missing <- data
+for (s in 1:q) {
+  n_s <- length(data[[s,1]])
+  random_missing <- sample(1:n_s, size = 0.1 * n_s, replace = FALSE)
+  data.missing[random_missing] <- NA
+}
+
+Y <- NULL
+missing.data.out <- bpmf(data.missing, Y = Y, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
+
 # -----------------------------------------------------------------------------
 # Missing continuous response
 # -----------------------------------------------------------------------------
+
+Y.missing <- matrix(rnorm(n), nrow = n)
+Y.missing[sample(1:n, size = 0.1 * n, replace = FALSE)] <- NA
+continuous.out <- bpmf(data, Y = Y.missing, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
 
 # -----------------------------------------------------------------------------
 # Missing binary response
