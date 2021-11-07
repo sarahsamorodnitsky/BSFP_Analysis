@@ -5,6 +5,7 @@
 # Packages
 library(Matrix)
 library(MASS)
+library(truncnorm)
 
 # -----------------------------------------------------------------------------
 # Bayesian PMF functions
