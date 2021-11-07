@@ -88,6 +88,10 @@ continuous.out <- bpmf(data, Y = Y.missing, nninit = TRUE, model_params, ranks =
 # Missing binary response
 # -----------------------------------------------------------------------------
 
+Y.missing <- matrix(rbinom(n, size = 1, p = 0.5), nrow = n)
+Y.missing[sample(1:n, size = 0.1 * n, replace = FALSE)] <- NA
+continuous.out <- bpmf(data, Y = Y.missing, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
+
 # -----------------------------------------------------------------------------
 # Both
 # -----------------------------------------------------------------------------
