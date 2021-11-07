@@ -278,7 +278,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       beta.iter <- t(beta.draw[iter,, drop = FALSE])
       
       # Creating a matrix of the joint and individual effects
-      beta.indiv.iter <- matrix(list(), ncol = 1, nrow = q)
+      beta_indiv.iter <- matrix(list(), ncol = 1, nrow = q)
       
       # Breaking beta down into the intercept, joint, and individual effects
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
@@ -286,8 +286,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       beta_indiv.iter.temp <- beta.iter[(r+2):nrow(beta.iter),, drop = FALSE]
       
       for (s in 1:q) {
-        if (s == 1) beta.indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
-        if (s != 1) beta.indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
+        if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
       }
       
       if (response_type == "binary") {
@@ -300,7 +300,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       
       if (missingness_in_response) {
         # Save the current imputations for the missing values
-        Ym.iter <- Ym.draw[iter,]
+        Ym.iter <- Ym.draw[[iter]]
         
         # Creating the completed outcome vector
         Y_complete <- Y
@@ -366,7 +366,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
           # The combined centered Xis with the latent response vector
           X.iter <- rbind(data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                          (Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% beta_indiv.iter)[i,])
+                          (Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
           
           bv <- tU_Sigma %*% X.iter[,i]
           
@@ -380,7 +380,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
           # The combined centered Xis with the latent response vector
           X.iter <- rbind(data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                          (Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% beta_indiv.iter)[i,])
+                          (Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
           
           bv <- tU_Sigma %*% X.iter[,i]
           
@@ -431,7 +431,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (response_given) {
       for (s in 1:q) {
         # Combined Ws and beta
-        W.iter.combined <- rbind(W.iter[[s,s]], t(beta.indiv.iter[[s,1]]))
+        W.iter.combined <- rbind(W.iter[[s,s]], t(beta_indiv.iter[[s,1]]))
         
         tW_Sigma <- crossprod(W.iter.combined, SigmaVsInv[[s,s]])
         tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter.combined)
@@ -440,7 +440,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
           # Combined centered Xs and Z
           Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
                           t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
-                              do.call(cbind, Vs.iter[1, !(1:ncol(Vs.iter) %in% s)]) %*% do.call(rbind, beta.indiv.iter[!(c(1:q) %in% s), 1])))
+                              do.call(cbind, Vs.iter[1, !(1:ncol(Vs.iter) %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(c(1:q) %in% s), 1])))
           
           Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
           Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
@@ -455,7 +455,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
           # Combined centered Xs and Y
           Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
                            t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
-                               do.call(cbind, Vs.iter[1, !(1:ncol(Vs.iter) %in% s)]) %*% do.call(rbind, beta.indiv.iter[!(c(1:q) %in% s), 1])))
+                               do.call(cbind, Vs.iter[1, !(1:ncol(Vs.iter) %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(c(1:q) %in% s), 1])))
           
           Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
           Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
@@ -531,7 +531,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       beta.iter <- t(beta.draw[iter+1,, drop = FALSE])
       
       # Creating a matrix of the joint and individual effects
-      beta.indiv.iter <- matrix(list(), ncol = 1, nrow = q)
+      beta_indiv.iter <- matrix(list(), ncol = 1, nrow = q)
       
       # Breaking beta down into the intercept, joint, and individual effects
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
@@ -539,8 +539,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       beta_indiv.iter.temp <- beta.iter[(r+2):nrow(beta.iter),, drop = FALSE]
       
       for (s in 1:q) {
-        if (s == 1) beta.indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
-        if (s != 1) beta.indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
+        if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
       }
     }
     
