@@ -354,11 +354,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (response_given) {
       # Concatenating Ui's together
-      U.iter <- rbind(do.call(rbind, U.iter), t(beta_joint.iter))
+      U.iter.combined <- rbind(do.call(rbind, U.iter), t(beta_joint.iter))
       
       # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
-      tU_Sigma <- crossprod(U.iter, SigmaVInv) 
-      tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter)
+      tU_Sigma <- crossprod(U.iter.combined, SigmaVInv) 
+      tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
       
       if (response_type == "binary") {
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
@@ -430,10 +430,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (response_given) {
       for (s in 1:q) {
         # Combined Ws and beta
-        W.iter <- rbind(W.iter[[s,s]], t(beta.indiv.iter[[s,1]]))
+        W.iter.combined <- rbind(W.iter[[s,s]], t(beta.indiv.iter[[s,1]]))
         
-        tW_Sigma <- crossprod(W.iter, SigmaVsInv[[s,s]])
-        tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter)
+        tW_Sigma <- crossprod(W.iter.combined, SigmaVsInv[[s,s]])
+        tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter.combined)
         
         if (response_type == "binary") {
           # Combined centered Xs and Z
