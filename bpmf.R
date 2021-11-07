@@ -251,6 +251,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # Start Gibbs sampling!
   # ---------------------------------------------------------------------------
   
+  nsample <- nsample-1
   for (iter in 1:nsample) {
     if (progress) svMisc::progress(iter/(nsample/100))
     
