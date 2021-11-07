@@ -165,6 +165,14 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   U.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   Vs.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = q))
   W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
+  
+  if (!response_given) {
+    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- NULL
+  }
+  
+  if (!missingness_in_data) {
+    Xm.draw <- NULL
+  }
 
   if (response_given) {
     beta.draw <- matrix(nrow = nsample, ncol = n_beta)
@@ -582,7 +590,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         tau2.draw = tau2.draw, beta.draw = beta.draw)
 
 }
-
 
 # -----------------------------------------------------------------------------
 # Helper functions for initializing with BIDIFAC
