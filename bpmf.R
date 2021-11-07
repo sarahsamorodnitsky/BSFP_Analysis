@@ -148,12 +148,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (missingness_in_response) {
       if (response_type == "continuous") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))
+        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,]
       }
       
       if (response_type == "binary") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))
+        Ym0 <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,]
       }
     }
   }
@@ -306,7 +306,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         Y_complete <- Y
         
         # Filling in the missing entries for R1 and R2. 
-        Y_complete[missing_obs_Y] <- Ym.iter[missing_obs_Y] 
+        Y_complete[missing_obs_Y] <- Ym.iter
       }
       
       if (!missingness_in_response) {
@@ -565,7 +565,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (response_given) {
       if (missingness_in_response) {
         if (response_type == "continuous") {
-          Ym.draw[[iter+1]] <- matrix(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter), ncol = 1)[missing_obs_Y,]
+          Ym.draw[[iter+1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter)), ncol = 1)[missing_obs_Y,]
         }
         
         if (response_type == "binary") {
