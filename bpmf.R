@@ -324,12 +324,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (!response_given) {
       # Concatenating Ui's together
-      U.iter <- data.rearrange(U.iter)$out
+      U.iter.combined <- data.rearrange(U.iter)$out
       SigmaInvV <- data.rearrange(SigmaInv)$out
-      tU_Sigma <- crossprod(U.iter, SigmaInvV)
+      tU_Sigma <- crossprod(U.iter.combined, SigmaInvV)
       
       # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
-      tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter)
+      tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
       
       # The combined centered Xis with the latent response vector
       X.iter <- data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
@@ -579,6 +579,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw,
         Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
         tau2.draw = tau2.draw, beta.draw = beta.draw)
+
 }
 
 
