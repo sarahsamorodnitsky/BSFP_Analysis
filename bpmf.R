@@ -612,6 +612,9 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
     
     # Saving the data
     data <- sim_data$data
+    structure <- list(joint = sim_data$joint.structure.scale,
+                      indiv = sim_data$indiv.structure.scale)
+    
     missing_data <- sim_data$missing_data
     missing_obs <- sim_data$missing_obs
     
@@ -631,25 +634,19 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
     # Center the data
     # -------------------------------------------------------------------------
     
-    centered_data <- center_data(data = data,
-                                 structure = )
+    center_the_data <- center_data(data = data, structure = structure)
     
     # Saving the centered data
-    
-    
-    # Saving the centered structure
-    X1_joint_structure_s2n_center <- centered_data$structure_centered[[1]]$joint
-    X2_joint_structure_s2n_center <- centered_data$structure_centered[[2]]$joint
-    
-    X1_indiv_structure_s2n_center <- centered_data$structure_centered[[1]]$indiv
-    X2_indiv_structure_s2n_center <- centered_data$structure_centered[[2]]$indiv
+    data_centered <- center_the_data$data_centered
+    means_for_centering <- center_the_data$means_for_centering
+    structure_centered <- center_the_data$structure_centered
     
     # -------------------------------------------------------------------------
     # Running the Gibbs sampling algorithm
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bayesian_pmf_2datasources(X1_for_model, X2_for_model, Y = Y_for_model, nuclear_norm_init = nuclear_norm_init, dims = parameters, hyperparameters_for_model, nsample = nsample, progress = FALSE)
+    res <- bpmf(data_centered, Y, nninit = nninit, model_params, ranks = NULL, nsample, progress = TRUE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -803,7 +800,7 @@ data.rearrange=function(data,rmt=F,sigma=NULL){
   q=ncol(data)
   
   m.vec=rep(NA,p)
-  n.vec=do.call(c, lapply(data[1,], ncol))
+  n.vec= ncol(data[[1,1]]) # do.call(c, lapply(data[1,], ncol))
   
   if (is.null(sigma)) sigma=matrix(1,p,q)
   
@@ -1280,19 +1277,23 @@ center_data <- function(data, structure) {
   # Center each entry in data 
   q <- nrow(data)
   data_centered <- matrix(list(), nrow = q, ncol = 1)
-  means_for_centering <- rep(NA, q)
-  structure_centered <- matrix(list(), nrow = q, ncol = 1)
+  means_for_centering <- lapply(1:q, function(s) list())
+  structure_centered <- list(joint = matrix(list(), nrow = q, ncol = 1),
+                             indiv = matrix(list(), nrow = q, ncol = 1))
   
   for (s in 1:q) {
     # Center the data itself
     data_centered[[s,1]] <- scale(data[[s,1]], center = TRUE, scale = FALSE)
     
     # Use the means for centering to center the structure
-    means_for_centering[s] <- attr(data_centered[[s,1]], "scaled:center")
+    means_for_centering[[s]] <- attr(data_centered[[s,1]], "scaled:center")
+    
+    # Remove the attribute for the column means
+    attr(data_centered[[s,1]], "scaled:center") <- NULL
     
     # Scale the structure
-    structure_centered[[i]] <- list(joint = sweep(structure[[i]]$joint, 2, means_for_centering[[i]]),
-                                    indiv = sweep(structure[[i]]$indiv, 2, means_for_centering[[i]]))
+    structure_centered$joint[[s,1]] <- sweep(structure$joint[[s,1]], 2, means_for_centering[[s]])
+    structure_centered$indiv[[s,1]] <- sweep(structure$indiv[[s,1]], 2, means_for_centering[[s]])
   }
   
   # Return
