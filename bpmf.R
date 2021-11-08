@@ -592,6 +592,185 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
 
 }
 
+bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, s2n,
+                     ranks = NULL, response = NULL, missingness = NULL, prop_missing = NULL, 
+                     entrywise = NULL, nninit = TRUE) {
+  
+  # ---------------------------------------------------------------------------
+  # Change the below to be fed in by the parameters and hyperparameters arguments above 
+  # ---------------------------------------------------------------------------
+  
+  cl <- makeCluster(n_clust)
+  registerDoParallel(cl)
+  sim_results <- foreach (sim_iter = 1:nsim, .packages = c("Matrix", "MASS")) %dopar% {
+    
+    # -------------------------------------------------------------------------
+    # Generating the data
+    # -------------------------------------------------------------------------
+  
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing)
+    
+    # Saving the data
+    data <- sim_data$data
+    missing_data <- sim_data$missing_data
+    missing_obs <- sim_data$missing_obs
+    
+    # The response
+    Y <- sim_data$Y
+    Y_missing <- sim_data$Y_missing
+    missing_obs_Y <- sim_data$missing_obs_Y
+    
+    # The standardizing coefficients
+    s2n_coef <- sim_data$s2n_coef
+    
+    # The response parameters
+    beta <- sim_data$beta
+    tau2 <- sim_data$tau2
+    
+    # -------------------------------------------------------------------------
+    # Center the data
+    # -------------------------------------------------------------------------
+    
+    centered_data <- center_data(data = data,
+                                 structure = )
+    
+    # Saving the centered data
+    
+    
+    # Saving the centered structure
+    X1_joint_structure_s2n_center <- centered_data$structure_centered[[1]]$joint
+    X2_joint_structure_s2n_center <- centered_data$structure_centered[[2]]$joint
+    
+    X1_indiv_structure_s2n_center <- centered_data$structure_centered[[1]]$indiv
+    X2_indiv_structure_s2n_center <- centered_data$structure_centered[[2]]$indiv
+    
+    # -------------------------------------------------------------------------
+    # Running the Gibbs sampling algorithm
+    # -------------------------------------------------------------------------
+    
+    # Gibbs sampling
+    res <- bayesian_pmf_2datasources(X1_for_model, X2_for_model, Y = Y_for_model, nuclear_norm_init = nuclear_norm_init, dims = parameters, hyperparameters_for_model, nsample = nsample, progress = FALSE)
+    
+    # -------------------------------------------------------------------------
+    # Extracting the results for each of decomposition matrices
+    # -------------------------------------------------------------------------
+    U.draw <- res$U.draw
+    V.draw <- res$V.draw
+    W.draw <- res$W.draw
+    Vs.draw <- res$Vs.draw
+    beta.draw <- res$beta.draw
+    Z.draw <- res$Z.draw
+    tau2.draw <- res$tau2.draw
+    Xm.draw <- res$Xm.draw
+    Ym.draw <- res$Ym.draw
+    
+    # -------------------------------------------------------------------------
+    # Adding a burn-in
+    # -------------------------------------------------------------------------
+    burnin <- nsample/2
+    
+    U.burnin <- U.draw[burnin:nsample]
+    V.burnin <- V.draw[burnin:nsample]
+    W.burnin <- W.draw[burnin:nsample]
+    Vs.burnin <- Vs.draw[burnin:nsample]
+    beta.burnin <- beta.draw[burnin:nsample]
+    Z.burnin <- Z.draw[burnin:nsample]
+    tau2.burnin <- tau2.draw[burnin:nsample]
+    Xm.burnin <- Xm.draw
+    Ym.burnin <- Ym.draw[burnin:nsample]
+    
+    # Computing the underlying structure for X1 and X2 after burn-in from the sampler
+    X1_joint_structure_burnin <- lapply(1:(burnin+1), function(res) {
+      U1.burnin[[res]] %*% t(V.burnin[[res]])
+    })
+    
+    X1_indiv_structure_burnin <- lapply(1:(burnin+1), function(res) {
+      W1.burnin[[res]] %*% t(V1.burnin[[res]])
+    })
+    
+    X2_joint_structure_burnin <- lapply(1:(burnin+1), function(res) {
+      U2.burnin[[res]] %*% t(V.burnin[[res]]) 
+    })
+    
+    X2_indiv_structure_burnin <- lapply(1:(burnin+1), function(res) {
+      W2.burnin[[res]] %*% t(V2.burnin[[res]])
+    })
+    
+    # -------------------------------------------------------------------------
+    # Checking the coverage
+    # -------------------------------------------------------------------------
+    
+    # Saving the draws from the sampler together
+    draws <- list(X1_joint_structure_burnin = X1_joint_structure_burnin,
+                  X1_indiv_structure_burnin = X1_indiv_structure_burnin,
+                  X2_joint_structure_burnin = X2_joint_structure_burnin,
+                  X2_indiv_structure_burnin = X2_indiv_structure_burnin)
+    
+    # Saving the truth together for comparison
+    truth <- list(X1_joint_structure_s2n_center = X1_joint_structure_s2n_center,
+                  X1_indiv_structure_s2n_center = X1_indiv_structure_s2n_center,
+                  X2_joint_structure_s2n_center = X2_joint_structure_s2n_center,
+                  X2_indiv_structure_s2n_center = X2_indiv_structure_s2n_center)
+    
+    if (!is.null(missingness)) {
+      if (missingness == "missingness_in_data" | missingness == "both") {
+        draws$Xm1 = Xm.burnin$Xm1.draw
+        draws$Xm2 = Xm.burnin$Xm2.draw
+        
+        truth$Xm1 = X1
+        truth$Xm2 = X2
+      }
+      
+      if (missingness == "missingness_in_response" | missingness == "both") {
+        draws$Ym = Ym.burnin
+        truth$Ym = Y
+      }
+    }
+    
+    if (!is.null(response)) {
+      draws$beta = beta.burnin
+      truth$beta = beta
+      
+      if (response == "continuous") {
+        draws$tau2 = tau2.burnin
+      }
+    }
+    
+    # Adding up the coverage, MSE, and CI width from this iteration
+    sim_iter_results <- get_results(truth, draws, burnin)
+    
+    # ---------------------------------------------------------------------------
+    # Returning the results at the end of the loop
+    # ---------------------------------------------------------------------------
+    
+    # Add the indices for the missing values in this sim_iter
+    sim_iter_results$missing_obs <- list(X1 = missing_obs_X1,
+                                         X2 = missing_obs_X2,
+                                         Y = missing_obs_Y)
+    
+    # Return 
+    sim_iter_results
+  }
+  stopCluster(cl)
+  
+  # ---------------------------------------------------------------------------
+  # Averaging the results
+  # ---------------------------------------------------------------------------
+  
+  # Calculating how many times each entry in the data was observed
+  observed_counts <- calculate_observed(sim_results, parameters, response)
+  
+  # Taking the averages of all the results
+  sim_results_avg <- average_results(sim_results, observed_counts, nsim)
+  
+  # ---------------------------------------------------------------------------
+  # Returning the results
+  # ---------------------------------------------------------------------------
+  
+  sim_results_avg
+  
+}
+
 # -----------------------------------------------------------------------------
 # Helper functions for initializing with BIDIFAC
 # -----------------------------------------------------------------------------
@@ -1085,10 +1264,10 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   # Return
   # -------------------------------------------------------------------------
   
-  list(data, # The "observed data"
+  list(data = data, # The "observed data"
        Y = Y, # The "observed outcome"
-       missing_data, # Missing data 
-       missing_obs, # Missing data 
+       missing_data = missing_data, # Missing data 
+       missing_obs = missing_obs, # Missing data 
        Y_missing = Y_missing, missing_obs_Y = missing_obs_Y, # Missing data 
        s2n = s2n, s2n_coef = s2n_coef, # Scaling for s2n
        joint.structure.scale = joint.structure.scale, # Joint structure
@@ -1098,17 +1277,18 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
 
 # Center the data and the underlying structure 
 center_data <- function(data, structure) {
-  # Center each entry in data = list(X1, X2)
-  data_centered <- lapply(1:length(data), function(i) list())
-  means_for_centering <- lapply(1:length(data), function(i) list())
-  structure_centered <- lapply(1:length(structure), function(i) list())
+  # Center each entry in data 
+  q <- nrow(data)
+  data_centered <- matrix(list(), nrow = q, ncol = 1)
+  means_for_centering <- rep(NA, q)
+  structure_centered <- matrix(list(), nrow = q, ncol = 1)
   
-  for (i in 1:length(data)) {
+  for (s in 1:q) {
     # Center the data itself
-    data_centered[[i]] <- scale(data[[i]], center = TRUE, scale = FALSE)
+    data_centered[[s,1]] <- scale(data[[s,1]], center = TRUE, scale = FALSE)
     
     # Use the means for centering to center the structure
-    means_for_centering[[i]] <- attr(data_centered[[i]], "scaled:center")
+    means_for_centering[s] <- attr(data_centered[[s,1]], "scaled:center")
     
     # Scale the structure
     structure_centered[[i]] <- list(joint = sweep(structure[[i]]$joint, 2, means_for_centering[[i]]),
