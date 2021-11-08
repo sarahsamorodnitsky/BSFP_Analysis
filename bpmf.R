@@ -900,80 +900,84 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
 # -----------------------------------------------------------------------------
 
 # Generate fake data depending on conditions
-bpmf_data <- function(parameters, hyperparameters, s2n, response, missingness, entrywise, prop_missing) {
-  # Generates fake data depending on the dims provided in `parameters`
-  # and the model parameters provided in `hyperparameters`
+bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing) {
+  # Generates fake data depending on the dims provided in p.vec, n, and ranks
+  # and the true parameters provided in `true_params`
   # s2n = desired signal-to-noise ratio 
   
   # -------------------------------------------------------------------------
   # Setting the dimensions and latent components
   # -------------------------------------------------------------------------
-
-  p1 <- parameters$p1 # number rows X1
-  p2 <- parameters$p2 # number rows X2
-  n <- parameters$n # number cols X1 and X2
-  r <- parameters$r # number latent components of X1, X2
-  r1 <- parameters$r1 # number latent components of individual structure X1
-  r2 <- parameters$r2 # number of latent components of individual structure X2
-  n_beta <- 1 + r + r1 + r2
+  
+  q <- length(p.vec)
+  n_beta <- 1 + sum(ranks)
   
   # Setting the hyperparameters
-  sigma21 <- hyperparameters$sigma21 # Error variance for X1
-  sigma22 <- hyperparameters$sigma22 # Error variance for X2
-  sigma2_joint_model <- hyperparameters$sigma2_joint_model # Model variance of joint structure
-  sigma2_indiv1_model <- hyperparameters$sigma2_indiv1_model # Model variance of individual structure for X1
-  sigma2_indiv2_model <- hyperparameters$sigma2_indiv2_model # Model variance of individual structure for X2
-  sigma2_joint_true <- hyperparameters$sigma2_joint_true # Variance of joint structure for generating data
-  sigma2_indiv1_true <- hyperparameters$sigma2_indiv1_true # Variance of individual structure for X1 for generating data
-  sigma2_indiv2_true <- hyperparameters$sigma2_indiv2_true # Variance of individual structure for X2 for generating data
-  Sigma_beta <- hyperparameters$Sigma_beta # Covariance for betas
-  shape <- hyperparameters$shape 
-  rate <- hyperparameters$rate
+  error_vars <- true_params$error_vars
+  sigma2_joint <- joint_var <- true_params$joint_var
+  sigma2_indiv <- indiv_vars <- true_params$indiv_vars
+  beta_vars <- true_params$beta_vars
+  response_vars <- true_params$response_vars; a <- response_vars[1]; b <- response_vars[2]
   
   # -------------------------------------------------------------------------
   # Generating the underlying structure
   # -------------------------------------------------------------------------
   
-  V <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint_true)), nrow = n, ncol = r)
-  U1 <- matrix(rnorm(p1*r, mean = 0, sd = sqrt(sigma2_joint_true)), nrow = p1, ncol = r)
-  U2 <- matrix(rnorm(p2*r, mean = 0, sd = sqrt(sigma2_joint_true)), nrow = p2, ncol = r)
-  V1 <- matrix(rnorm(n*r1, mean = 0, sd = sqrt(sigma2_indiv1_true)), nrow = n, ncol = r1)
-  V2 <- matrix(rnorm(n*r2, mean = 0, sd = sqrt(sigma2_indiv2_true)), nrow = n, ncol = r2)
-  W1 <- matrix(rnorm(p1*r1, mean = 0, sd = sqrt(sigma2_indiv1_true)), nrow = p1, ncol = r1)
-  W2 <- matrix(rnorm(p2*r2, mean = 0, sd = sqrt(sigma2_indiv2_true)), nrow = p2, ncol = r2)
+  joint.structure <- indiv.structure <- matrix(list(), ncol = 1, nrow = q)
   
-  # Generating the residual error
-  E1 <- matrix(rnorm(p1*n, 0, sqrt(sigma21)), nrow = p1, ncol = n)
-  E2 <- matrix(rnorm(p2*n, 0, sqrt(sigma22)), nrow = p2, ncol = n)
+  V <- matrix(list(), nrow = 1, ncol = 1)
+  V[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
   
-  # Calculating the structure
-  X1_joint_structure <- U1 %*% t(V)
-  X1_indiv_structure <- W1 %*% t(V1)
+  U <- matrix(list(), nrow = q, ncol = 1)
+  Vs <- matrix(list(), nrow = 1, ncol = q)
+  W <- matrix(list(), nrow = q, ncol = q)
   
-  X2_joint_structure <- U2 %*% t(V)
-  X2_indiv_structure <- W2 %*% t(V2)
+  E <- matrix(list(), nrow = q, ncol = 1)
+  
+  for (s in 1:q) {
+    U[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(10)), nrow = p.vec[s], ncol = r)
+    
+    Vs[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(5)), nrow = n, ncol = r.vec[s])
+    
+    W[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(5)), nrow = p.vec[s], ncol = r.vec[s])
+    
+    E[[s,1]] <- matrix(rnorm(p.vec[s]*n), nrow = p.vec[s], ncol = n)
+    
+    for (ss in 1:q) {
+      if (ss != s) {
+        W[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+      }
+    }
+    
+    joint.structure[[s,1]] <- U[[s,1]] %*% t(V[[1,1]])
+    indiv.structure[[s,1]] <- W[[s,s]] %*% t(Vs[[1,s]])
+  }
   
   # -------------------------------------------------------------------------
   # Standardizing the variance of the signal
   # -------------------------------------------------------------------------
   
   # Calculating the scaling coefficient so that the variance of the underlying structure = s2n * noise variance
-  s2n_coef_X1 <- s2n * sd(c(E1))/sd(c(X1_joint_structure + X1_indiv_structure))
-  s2n_coef_X2 <- s2n * sd(c(E2))/sd(c(X2_joint_structure + X2_indiv_structure))
+  s2n_coef <- rep(0, q)
+  joint.structure.scale <- joint.structure
+  indiv.structure.scale <- indiv.structure
   
-  # Scaling the underlying structure
-  X1_joint_structure_s2n <- s2n_coef_X1 * X1_joint_structure
-  X1_indiv_structure_s2n <- s2n_coef_X1 * X1_indiv_structure
-  
-  X2_joint_structure_s2n <- s2n_coef_X2 * X2_joint_structure
-  X2_indiv_structure_s2n <- s2n_coef_X2 * X2_indiv_structure
+  for (s in 1:q) {
+    s2n_coef[s] <- s2n * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
+    
+    joint.structure.scale[[s,1]] <- s2n_coef[s] * joint.structure[[s,1]]
+    indiv.structure.scale[[s,1]] <- s2n_coef[s] * indiv.structure[[s,1]]
+  }
   
   # -------------------------------------------------------------------------
   # Calculating the observed data
   # -------------------------------------------------------------------------
   
-  X1 <- X1_joint_structure_s2n + X1_indiv_structure_s2n + E1
-  X2 <- X2_joint_structure_s2n + X2_indiv_structure_s2n + E2
+  data <- matrix(list(), nrow = q, ncol = 1)
+  
+  for (s in 1:q) {
+    data[s,1][[1]] <- joint.structure.scale[[s,1]] + indiv.structure[[s,1]] + E[[s,1]]
+  }
   
   # -------------------------------------------------------------------------
   # Adding a response if desired
@@ -987,11 +991,14 @@ bpmf_data <- function(parameters, hyperparameters, s2n, response, missingness, e
   }
   
   if (!is.null(response)) {
+    Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
+    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+    
     # Generate betas
     beta <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
     
     # Combine the Vs
-    VStar <- cbind(1, V, V1, V2)
+    VStar <- cbind(1, do.call(cbind, V), do.call(cbind, Vs))
     
     # True probability of being a case
     Prob.VStar.beta <- pnorm(VStar %*% beta)
@@ -1002,7 +1009,7 @@ bpmf_data <- function(parameters, hyperparameters, s2n, response, missingness, e
     }
     
     if (response == "continuous") {
-      tau2 <- 1/rgamma(1, shape = shape, rate = rate)
+      tau2 <- 1/rgamma(1, shape = a, rate = b)
       Y <- VStar %*% beta + rnorm(n, mean = 0, sd = sqrt(tau2))
     }
   }
@@ -1025,11 +1032,8 @@ bpmf_data <- function(parameters, hyperparameters, s2n, response, missingness, e
   
   if (!is.null(missingness)) {
     if (missingness != "missingness_in_data" | missingness != "both") {
-      missing_obs_X1 <- NULL
-      missing_obs_X2 <- NULL
-      
-      X1_missing <- NULL
-      X2_missing <- NULL
+      missing_obs <- lapply(1:q, function(s) NULL)
+      missing_data <- matrix(list(), nrow = q, ncol = 1);
     }
     
     if (missingness != "missingness_in_response" | missingness != "both") {
@@ -1044,40 +1048,35 @@ bpmf_data <- function(parameters, hyperparameters, s2n, response, missingness, e
     }
     
     if (missingness == "missingness_in_data" | missingness == "both") {
+      
+      missing_obs <- lapply(1:q, function(s) list())
+      missing_data <- matrix(list(), nrow = q, ncol = 1)
+      
       if (entrywise) { # if removing observations entrywise
-        # these are counters going down the columns of R. So 9 would be the 9th entry counting down. 
-        missing_obs_X1 <- sample(x = 1:length(X1), size = prop_missing*length(X1), replace = FALSE) 
-        missing_obs_X2 <- sample(x = 1:length(X2), size = prop_missing*length(X2), replace = FALSE)
-        
-        # Duplicate X1 and X2 so that I have one with the full data and one with the missing data
-        X1_missing <- X1_scaled
-        X1_missing[missing_obs_X1] <- NA
-        
-        X2_missing <- X2_scaled
-        X2_missing[missing_obs_X2] <- NA
+        for (s in 1:q) {
+          # these are counters going down the columns of R. So 9 would be the 9th entry counting down. 
+          missing_obs[[s]] <- sample(x = 1:length(data[[s,1]]), size = prop_missing*length(data[[s,1]]), replace = FALSE) 
+
+          # Duplicate Xs so that I have one with the full data and one with the missing data
+          missing_data[[s,1]] <- data[[s,1]]
+          missing_data[[s,1]][missing_obs[[s]]] <- NA
+        }
       } else { # if removing entire columns
         # Gives the column indices to remove
-        cols_to_remove_X1 <- sample(x=1:n, size = n*prop_missing, replace = FALSE)
-        cols_to_remove_X2 <- sample(x=1:n, size = n*prop_missing, replace = FALSE)
         
-        # Enforce different subjects to be missing from either dataset
-        any_overlap <- length(intersect(cols_to_remove_X1, cols_to_remove_X2)) != 0
-        while (any_overlap) {
-          # Sample the columns to remove from X2 again
-          cols_to_remove_X2 <- sample(x=1:n, size = n*prop_missing, replace = FALSE)
+        for (s in 1:q) {
+          # These are counters going down the columns of X. So 9 would be the 9th entry counting down. 
+          missing_obs[[s]] <- sample(x=1:n, size = n*prop_missing, replace = FALSE)
           
-          # Check for overlap
-          any_overlap <- length(intersect(cols_to_remove_X1, cols_to_remove_X2)) != 0
+          if (s != 1) {
+            avail_obs <- c(1:n)[!(c(1:n) %in% unlist(missing_obs[1:(s-1)]))]
+            missing_obs[[s]] <- sample(x=avail_obs, size = n*prop_missing, replace = FALSE)
+          }
+      
+          # Duplicate Xs so that I have one with the full data and one with the missing data
+          missing_data[[s,1]] <- data[[s,1]]
+          missing_data[[s,1]][,missing_obs[[s]]] <- NA
         }
-        
-        X1_missing <- X1_scaled
-        X1_missing[,cols_to_remove_X1] <- NA
-        
-        X2_missing <- X2_scaled
-        X2_missing[,cols_to_remove_X2] <- NA
-        
-        missing_obs_X1 <- which(is.na(X1_missing))
-        missing_obs_X2 <- which(is.na(X2_missing))
       }
     }
   }
@@ -1086,14 +1085,14 @@ bpmf_data <- function(parameters, hyperparameters, s2n, response, missingness, e
   # Return
   # -------------------------------------------------------------------------
   
-  list(X1 = X1, X2 = X2, # The "observed data"
+  list(data, # The "observed data"
        Y = Y, # The "observed outcome"
-       X1_missing = X1_missing, X2_missing = X2_missing, # Missing data 
-       missing_obs_X1 = missing_obs_X1, missing_obs_X2 = missing_obs_X2, # Missing data 
+       missing_data, # Missing data 
+       missing_obs, # Missing data 
        Y_missing = Y_missing, missing_obs_Y = missing_obs_Y, # Missing data 
-       s2n = s2n, s2n_coef_X1 = s2n_coef_X1, s2n_coef_X2 = s2n_coef_X2, # Scaling for s2n
-       X1_joint_structure_s2n = X1_joint_structure_s2n, X2_joint_structure_s2n = X2_joint_structure_s2n, # Joint structure
-       X1_indiv_structure_s2n = X1_indiv_structure_s2n, X2_indiv_structure_s2n = X2_indiv_structure_s2n, # Individual structure
+       s2n = s2n, s2n_coef = s2n_coef, # Scaling for s2n
+       joint.structure.scale = joint.structure.scale, # Joint structure
+       indiv.structure.scale = indiv.structure.scale, # Individual structure
        beta = beta, tau2 = tau2)
 }
 
