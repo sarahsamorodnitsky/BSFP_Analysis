@@ -3,6 +3,8 @@
 # -----------------------------------------------------------------------------
 
 # Packages
+library(doParallel)
+library(foreach)
 library(Matrix)
 library(MASS)
 library(truncnorm)
@@ -721,7 +723,7 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
     # ---------------------------------------------------------------------------
     
     # Add the indices for the missing values in this sim_iter
-    sim_iter_results$missing_obs <- list(missing_obs = missing_obs,
+    sim_iter_results$any_missing <- list(missing_obs = missing_obs,
                                          missing_obs_Y = missing_obs_Y)
     
     # Return 
@@ -734,7 +736,7 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
   # ---------------------------------------------------------------------------
   
   # Calculating how many times each entry in the data was observed
-  observed_counts <- calculate_observed(sim_results, parameters, response)
+  observed_counts <- calculate_observed(sim_results, p.vec, n, response)
   
   # Taking the averages of all the results
   sim_results_avg <- average_results(sim_results, observed_counts, nsim)
@@ -1386,34 +1388,36 @@ get_results <- function(truth, draws, burnin) {
 }
 
 # Count the number of times each observation in each dataset was observed
-calculate_observed <- function(sim_results, parameters, response) {
+calculate_observed <- function(sim_results, p.vec, n, response) {
   # sim_results (list) = list of results from the simulation
 
   # Count how many datasources there were (add 1 for the response)
-  n_sources <- sum(substr(names(parameters), start = 1, stop = 1) == "p") + 1
+  q <- nrow(sim_results[[1]]$joint.structure.burnin)
   
   # Create a list of indices for observation
-  obs_inds <- lapply(1:n_sources, function(i) {
-    if (i != n_sources) 1:(parameters[[i]] * parameters$n) else 1:parameters$n
-  })
+  obs_inds <- lapply(1:q, function(i) 1:(p.vec[i] * n))
   
   # Create a list to store the results
-  observed_counts <- lapply(1:n_sources, function(i) {
-    if (i != n_sources) rep(0, length(obs_inds[[i]])) else rep(0, length(obs_inds[[i]]))
-  })
+  observed_counts <- lapply(1:q, function(i) rep(0, length(obs_inds[[i]])))
   
-  for (i in 1:length(sim_results)) {
-    for (j in 1:n_sources) {
-      # Save the indices for the missing observations in the jth source (could be the response)
-      current_missing_obs <- sim_results[[i]]$missing_obs[[j]]
-      observed_counts[[j]] <- observed_counts[[j]] + !(obs_inds[[j]] %in% current_missing_obs)
-    }
+  # If there is a response
+  if (response) {
+    obs_inds[[q+1]] <- 1:n
+    observed_counts[[q+1]] <- rep(0, length(obs_inds[[q+1]]))
   }
   
-  names(observed_counts) <- c(paste0("X", 1:(n_sources-1)), "Y")
-  
-  if (is.null(response)) observed_counts <- observed_counts[!(names(observed_counts) %in% "Y")]
-  
+  for (sim_iter in 1:length(sim_results)) {
+    for (s in 1:q) {
+      current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs[[s]]
+      observed_counts[[s]] <- observed_counts[[s]] + !(obs_inds[[s]] %in% current_missing_obs)
+    }
+    
+    if (response) {
+      current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs_Y
+      observed_counts[[q+1]] <- observed_counts[[q+1]] + !(obs_inds[[q+1]] %in% current_missing_obs)
+    }
+  }
+
   # Return
   observed_counts
 }
