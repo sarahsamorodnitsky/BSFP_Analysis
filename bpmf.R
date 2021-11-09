@@ -284,7 +284,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (response_given) {
       # The current values of the betas
-      beta.iter <- t(beta.draw[iter,, drop = FALSE])
+      beta.iter <- beta.draw[[iter]][[1,1]] 
       
       # Creating a matrix of the joint and individual effects
       beta_indiv.iter <- matrix(list(), ncol = 1, nrow = q)
@@ -300,16 +300,16 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       }
       
       if (response_type == "binary") {
-        Z.iter <- Z.draw[iter,]
+        Z.iter <- Z.draw[[iter]][[1,1]]
       }
       
       if (response_type == "continuous") {
-        tau2.iter <- tau2.draw[iter]
+        tau2.iter <- tau2.draw[[iter]][[1,1]]
       }
       
       if (missingness_in_response) {
         # Save the current imputations for the missing values
-        Ym.iter <- Ym.draw[[iter]]
+        Ym.iter <- Ym.draw[[iter]][[1,1]]
         
         # Creating the completed outcome vector
         Y_complete <- Y
