@@ -112,6 +112,41 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   }
   
   # ---------------------------------------------------------------------------
+  # Storing the posterior samples
+  # ---------------------------------------------------------------------------
+  
+  V.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+  U.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  Vs.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = q))
+  W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
+  
+  if (!response_given) {
+    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- matrix(list(), nrow = 1, ncol = 1)
+  }
+  
+  if (!missingness_in_data) {
+    Xm.draw <- matrix(list(), nrow = q, ncol = 1)
+  }
+  
+  if (response_given) {
+    beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    
+    Z.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    
+    if (response_type == "continuous") {
+      tau2.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    }
+    
+    if (missingness_in_response) {
+      Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    }
+  }
+  
+  if (missingness_in_data) {
+    Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  }
+  
+  # ---------------------------------------------------------------------------
   # Initialize V, U, V, W
   # ---------------------------------------------------------------------------
   
@@ -171,41 +206,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   }
   
   # ---------------------------------------------------------------------------
-  # Storing the posterior samples
-  # ---------------------------------------------------------------------------
-  
-  V.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
-  U.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
-  Vs.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = q))
-  W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
-  
-  if (!response_given) {
-    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- matrix(list(), nrow = 1, ncol = 1)
-  }
-  
-  if (!missingness_in_data) {
-    Xm.draw <- matrix(list(), nrow = q, ncol = 1)
-  }
-
-  if (response_given) {
-    beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-
-    Z.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    
-    if (response_type == "continuous") {
-      tau2.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    }
-    
-    if (missingness_in_response) {
-      Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    }
-  }
-  
-  if (missingness_in_data) {
-    Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
-  }
-  
-  # ---------------------------------------------------------------------------
   # Storing the initial values 
   # ---------------------------------------------------------------------------
   
@@ -215,7 +215,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   W.draw[[1]] <- W0
   
   if (response_given) {
-    beta.draw[1,] <- beta0
+    beta.draw[[1]] <- beta0
     Z.draw[1,] <- Z0
     tau2.draw[1] <- tau20
 
