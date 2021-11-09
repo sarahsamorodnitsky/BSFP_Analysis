@@ -7,7 +7,8 @@ n <- 20
 p.vec <- c(100, 150)
 r <- 5
 r.vec <- c(2, 5)
-data <- matrix(list(), ncol = 1, nrow = 2)
+q <- 2
+data <- matrix(list(), ncol = 1, nrow = q)
 
 V <- matrix(list(), nrow = 1, ncol = 1)
 V[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(10)), nrow = n, ncol = r)
