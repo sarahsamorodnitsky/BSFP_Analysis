@@ -361,7 +361,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (!response_given) {
       # Concatenating Ui's together
-      U.iter.combined <- data.rearrange(U.iter)$out
+      U.iter.combined <- do.call(rbind, U.iter)
       SigmaInvV <- data.rearrange(SigmaInv)$out
       tU_Sigma <- crossprod(U.iter.combined, SigmaInvV)
       
@@ -369,7 +369,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
       
       # The combined centered Xis with the latent response vector
-      X.iter <- data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
+      X.iter <- do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
       Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
       
       V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
@@ -385,6 +385,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       U.iter.combined <- rbind(do.call(rbind, U.iter), t(beta_joint.iter))
       
       # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
+      SigmaInvV <- data.rearrange(SigmaInv)$out
       tU_Sigma <- crossprod(U.iter.combined, SigmaVInv) 
       tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
       
@@ -392,7 +393,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
         V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
           # The combined centered Xis with the latent response vector
-          X.iter <- rbind(data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+          X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
                           (Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
           
           bv <- tU_Sigma %*% X.iter[,i]
@@ -406,7 +407,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
         V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
           # The combined centered Xis with the latent response vector
-          X.iter <- rbind(data.rearrange(X_complete)$out - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+          X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
                           (Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
           
           bv <- tU_Sigma %*% X.iter[,i]
