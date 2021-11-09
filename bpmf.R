@@ -77,7 +77,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE)
     
     # Print when finished
-    print("posterior mode obtained")
+    print("Posterior mode obtained: joint and individual ranks determined.")
     
     # Saving the results
     sigma.mat <- rank_init$sigma.mat
@@ -93,8 +93,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   }
   
   if (!nninit) {
-    r <- ranks$r 
-    r.vec <- unlist(ranks[!(names(ranks) %in% "r")])
+    r.vec <- ranks
   }
   
   r_total <- sum(r.vec)
