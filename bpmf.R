@@ -148,6 +148,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # If there is missingness in the data, generate starting values for the missing entries
   if (missingness_in_data) {
     Xm0 <- matrix(list(), ncol = 1, nrow = q)
+    for (s in 1:q) {
+      Xm0[[s,1]] <- rep(0, length(missing_obs[s]))
+    }
   }
   
   # If there is missingness in Y, generate starting values for the missing entries
@@ -155,12 +158,14 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (missingness_in_response) {
       if (response_type == "continuous") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,]
+        Ym0 <- matrix(list(), nrow = 1, ncol = 1)
+        Ym0[[1,1]] <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,]
       }
       
       if (response_type == "binary") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,]
+        Ym0 <- matrix(list(), nrow = 1, ncol = 1)
+        Ym0[[1,1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,]
       }
     }
   }
@@ -175,24 +180,24 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
   
   if (!response_given) {
-    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- NULL
+    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- matrix(list(), nrow = 1, ncol = 1)
   }
   
   if (!missingness_in_data) {
-    Xm.draw <- NULL
+    Xm.draw <- matrix(list(), nrow = q, ncol = 1)
   }
 
   if (response_given) {
-    beta.draw <- matrix(nrow = nsample, ncol = n_beta)
-    
-    Z.draw <- matrix(nrow = nsample, ncol = n)
+    beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+
+    Z.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     
     if (response_type == "continuous") {
-      tau2.draw <- c()
+      tau2.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     }
     
     if (missingness_in_response) {
-      Ym.draw <- lapply(1:nsample, function(i) list())
+      Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     }
   }
   
