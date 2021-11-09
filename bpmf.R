@@ -721,9 +721,8 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
     # ---------------------------------------------------------------------------
     
     # Add the indices for the missing values in this sim_iter
-    sim_iter_results$missing_obs <- list(X1 = missing_obs_X1,
-                                         X2 = missing_obs_X2,
-                                         Y = missing_obs_Y)
+    sim_iter_results$missing_obs <- list(missing_obs = missing_obs,
+                                         missing_obs_Y = missing_obs_Y)
     
     # Return 
     sim_iter_results
@@ -1360,22 +1359,25 @@ get_results <- function(truth, draws, burnin) {
     dim_param <- dim(truth[[param]])
     q <- dim_param[1]
     
-    # If the results are a matrix then they correspond to multiple datasets
-    if (!is.null(dim_param)) {
-      sim_results[[i]] <- matrix(list(), nrow = q, ncol = 1)
-      
-      for (s in 1:q) {
-        current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
-        sim_results[[i]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
-                                        mse(truth[[param]][[s,1]], current_draws),
-                                        ci_width(current_draws, burnin = burnin))
+    # If there are results available
+    if (!is.null(truth[[param]][[1,1]])) {
+      # If the results are a matrix then they correspond to multiple datasets
+      if (!is.null(dim_param)) {
+        sim_results[[i]] <- matrix(list(), nrow = q, ncol = 1)
+        
+        for (s in 1:q) {
+          current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
+          sim_results[[i]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
+                                          mse(truth[[param]][[s,1]], current_draws),
+                                          ci_width(current_draws, burnin = burnin))
+        }
       }
-    }
-    
-    if (is.null(dim_param)) {
-      sim_results[[i]] <- list(check_coverage(truth[[param]], draws[[param]], burnin),
-                               mse(truth[[param]], draws[[param]]),
-                               ci_width(draws[[param]], burnin = burnin))
+      
+      if (is.null(dim_param)) {
+        sim_results[[i]] <- list(check_coverage(truth[[param]], draws[[param]], burnin),
+                                 mse(truth[[param]], draws[[param]]),
+                                 ci_width(draws[[param]], burnin = burnin))
+      }
     }
   }
   
