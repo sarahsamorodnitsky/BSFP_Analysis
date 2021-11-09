@@ -47,7 +47,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # ---------------------------------------------------------------------------
   
   # Check for missingness
-  missingness_in_data <- any(apply(data, 1, function(source) any(is.na(source[[1]])))) 
+  missingness_in_data <- any(sapply(data[,1], function(source) any(is.na(source))))
   
   # Which entries are missing?
   missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
