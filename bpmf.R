@@ -89,7 +89,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     C <- rank_init$C
     r <- rankMatrix(C[[1,1]]) # Joint rank
     I <- rank_init$I
-    r.vec <- c(r, sapply(1:q, function(s) rankMatrix(I[[s,1]]))) # Individual ranks
+    r.vec <- sapply(1:q, function(s) rankMatrix(I[[s,1]])) # Individual ranks
     
     # Scaling the data
     for (s in 1:q) {
@@ -102,13 +102,13 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     r.vec <- ranks[-1]
   }
   
-  r_total <- sum(r.vec)
+  r_total <- r + sum(r.vec)
   n_beta <- 1 + r_total
   
   # If a response is given, set up the variance matrix for the prior of the betas using the ranks
   if (response_given) {
     Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
-    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], r.vec))
+    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
   }
   
   # ---------------------------------------------------------------------------
