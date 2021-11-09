@@ -673,24 +673,24 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
     beta.burnin <- beta.draw[burnin:nsample]
     Z.burnin <- Z.draw[burnin:nsample]
     tau2.burnin <- tau2.draw[burnin:nsample]
-    Xm.burnin <- Xm.draw
+    Xm.burnin <- Xm.draw[burnin:nsample]
     Ym.burnin <- Ym.draw[burnin:nsample]
     
-    # Computing the underlying structure for X1 and X2 after burn-in from the sampler
-    X1_joint_structure_burnin <- lapply(1:(burnin+1), function(res) {
-      U1.burnin[[res]] %*% t(V.burnin[[res]])
+    # Computing the underlying structure for each Xs after burn-in from the sampler
+    joint.structure.burnin <- lapply(1:(burnin+1), function(res) {
+      mat <- matrix(list(), nrow = q, ncol = 1)
+      for (s in 1:q) {
+        mat[[s,1]] <- U.burnin[[res]][[s,1]] %*% t(V.burnin[[res]][[1,1]])
+      }
+      mat
     })
     
-    X1_indiv_structure_burnin <- lapply(1:(burnin+1), function(res) {
-      W1.burnin[[res]] %*% t(V1.burnin[[res]])
-    })
-    
-    X2_joint_structure_burnin <- lapply(1:(burnin+1), function(res) {
-      U2.burnin[[res]] %*% t(V.burnin[[res]]) 
-    })
-    
-    X2_indiv_structure_burnin <- lapply(1:(burnin+1), function(res) {
-      W2.burnin[[res]] %*% t(V2.burnin[[res]])
+    indiv.structure.burnin <- lapply(1:(burnin+1), function(res) {
+      mat <- matrix(list(), nrow = q, ncol = 1)
+      for (s in 1:q) {
+        mat[[s,1]] <- W.burnin[[res]][[s,s]] %*% t(Vs.burnin[[res]][[1,s]])
+      }
+      mat
     })
     
     # -------------------------------------------------------------------------
@@ -698,40 +698,20 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
     # -------------------------------------------------------------------------
     
     # Saving the draws from the sampler together
-    draws <- list(X1_joint_structure_burnin = X1_joint_structure_burnin,
-                  X1_indiv_structure_burnin = X1_indiv_structure_burnin,
-                  X2_joint_structure_burnin = X2_joint_structure_burnin,
-                  X2_indiv_structure_burnin = X2_indiv_structure_burnin)
+    draws <- list(joint.structure.burnin = joint.structure.burnin,
+                  indiv.structure.burnin = indiv.structure.burnin,
+                  beta.burnin = beta.burnin,
+                  tau2.burnin = tau2.burnin,
+                  Xm.burnin = Xm.burnin,
+                  Ym.burnin = Ym.burnin)
     
     # Saving the truth together for comparison
-    truth <- list(X1_joint_structure_s2n_center = X1_joint_structure_s2n_center,
-                  X1_indiv_structure_s2n_center = X1_indiv_structure_s2n_center,
-                  X2_joint_structure_s2n_center = X2_joint_structure_s2n_center,
-                  X2_indiv_structure_s2n_center = X2_indiv_structure_s2n_center)
-    
-    if (!is.null(missingness)) {
-      if (missingness == "missingness_in_data" | missingness == "both") {
-        draws$Xm1 = Xm.burnin$Xm1.draw
-        draws$Xm2 = Xm.burnin$Xm2.draw
-        
-        truth$Xm1 = X1
-        truth$Xm2 = X2
-      }
-      
-      if (missingness == "missingness_in_response" | missingness == "both") {
-        draws$Ym = Ym.burnin
-        truth$Ym = Y
-      }
-    }
-    
-    if (!is.null(response)) {
-      draws$beta = beta.burnin
-      truth$beta = beta
-      
-      if (response == "continuous") {
-        draws$tau2 = tau2.burnin
-      }
-    }
+    truth <- list(joint.structure.scale = joint.structure.scale,
+                  indiv.structure.scale = indiv.structure.scale,
+                  beta = beta,
+                  tau2 = tau2,
+                  Xm = missing_data,
+                  Ym = Y_missing)
     
     # Adding up the coverage, MSE, and CI width from this iteration
     sim_iter_results <- get_results(truth, draws, burnin)
@@ -1371,16 +1351,32 @@ get_results <- function(truth, draws, burnin) {
   n_param <- length(draws)
   
   # Save the results 
-  sim_results <- lapply(1:n_param, function(i) list(avg_coverage = 0,
-                                                    avg_MSE = 0,
-                                                    avg_CI_width = 0))
+  sim_results <- lapply(1:n_param, function(i) list())
   names(sim_results) <- names(draws)
   
   # Iterate through the parameters, checking the coverage, MSE, and CI width
   for (param in 1:n_param) {
-    sim_results[[param]]$avg_coverage <- sim_results[[param]]$avg_coverage + check_coverage(truth[[param]], draws[[param]], burnin = burnin)
-    sim_results[[param]]$avg_MSE <- sim_results[[param]]$avg_MSE + mse(truth[[param]], draws[[param]])
-    sim_results[[param]]$avg_CI_width <- sim_results[[param]]$avg_CI_width + ci_width(draws[[param]], burnin = burnin)
+    # Check the dimension of the current parameter
+    dim_param <- dim(truth[[param]])
+    q <- dim_param[1]
+    
+    # If the results are a matrix then they correspond to multiple datasets
+    if (!is.null(dim_param)) {
+      sim_results[[i]] <- matrix(list(), nrow = q, ncol = 1)
+      
+      for (s in 1:q) {
+        current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
+        sim_results[[i]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
+                                        mse(truth[[param]][[s,1]], current_draws),
+                                        ci_width(current_draws, burnin = burnin))
+      }
+    }
+    
+    if (is.null(dim_param)) {
+      sim_results[[i]] <- list(check_coverage(truth[[param]], draws[[param]], burnin),
+                               mse(truth[[param]], draws[[param]]),
+                               ci_width(draws[[param]], burnin = burnin))
+    }
   }
   
   # Return the results
