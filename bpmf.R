@@ -338,6 +338,24 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     }
     
     # -------------------------------------------------------------------------
+    # Computing the inverse that changes with tau2
+    # -------------------------------------------------------------------------
+    
+    if (response_given) {
+      if (response_type == "continuous") {
+        # For V - Combined error variances between X1, X2, and Y
+        SigmaVInv <- diag(c(rep(1/error_vars, p.vec), tau2.iter))
+        
+        # For Vs
+        SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
+        
+        for (s in 1:q) {
+          SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), tau2.iter))
+        }
+      }
+    }
+    
+    # -------------------------------------------------------------------------
     # Posterior sample for V
     # -------------------------------------------------------------------------
     
