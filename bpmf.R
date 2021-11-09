@@ -98,7 +98,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   }
   
   if (!nninit) {
-    r.vec <- ranks
+    r <- ranks[1]
+    r.vec <- ranks[-1]
   }
   
   r_total <- sum(r.vec)
