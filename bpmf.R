@@ -215,23 +215,21 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   W.draw[[1]] <- W0
   
   if (response_given) {
-    beta.draw[[1]] <- beta0
-    Z.draw[1,] <- Z0
-    tau2.draw[1] <- tau20
+    beta.draw[[1]][[1,1]] <- beta0
+    Z.draw[[1]][[1,1]] <- Z0
+    tau2.draw[[1]][[1,1]] <- tau20
 
     if (missingness_in_response) {
-      Ym.draw[[1]] <- Ym0
+      Ym.draw[[1]][[1,1]] <- Ym0
     }
   }
   
   if (missingness_in_data) {
-    for (s in 1:q) {
-      Xm.draw[[1]][[s,1]] <- U.draw[[1]][[s,1]] %*% t(V.draw[[1]][[1,1]]) + W.draw[[1]][[s,s]] %*% t(Vs.draw[[1]][[1,s]])
-    }
+    Xm.draw[[1]] <- Xm0
   }
   
   # ---------------------------------------------------------------------------
-  # Computing the inverses (all diagonal matrices)
+  # Computing the inverses that don't change from iteration to iteration
   # ---------------------------------------------------------------------------
   
   if (!response_given) {
@@ -272,8 +270,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # Start Gibbs sampling!
   # ---------------------------------------------------------------------------
   
-  nsample <- nsample-1
-  for (iter in 1:nsample) {
+  for (iter in 1:(nsample-1)) {
     if (progress) svMisc::progress(iter/(nsample/100))
     
     # ---------------------------------------------------------------------------
