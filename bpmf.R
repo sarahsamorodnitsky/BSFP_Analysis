@@ -52,6 +52,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # Which entries are missing?
   missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
   
+  # If there is missingness, initialize the missing values with 0s
+  for (s in 1:q) {
+    data[[s,1]][missing_obs[[s]]] <- 0
+  }
+  
   # ---------------------------------------------------------------------------
   # Is there a response vector?
   # ---------------------------------------------------------------------------
@@ -84,7 +89,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     C <- rank_init$C
     r <- rankMatrix(C[[1,1]]) # Joint rank
     I <- rank_init$I
-    r.vec <- sapply(1:q, function(s) rankMatrix(I[[s,1]])) # Individual ranks
+    r.vec <- c(r, sapply(1:q, function(s) rankMatrix(I[[s,1]]))) # Individual ranks
     
     # Scaling the data
     for (s in 1:q) {
@@ -97,12 +102,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   }
   
   r_total <- sum(r.vec)
-  n_beta <- 1 + r + r_total
+  n_beta <- 1 + r_total
   
   # If a response is given, set up the variance matrix for the prior of the betas using the ranks
   if (response_given) {
     Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
-    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], r.vec))
   }
   
   # ---------------------------------------------------------------------------
