@@ -7,6 +7,7 @@ n <- 20
 p.vec <- c(100, 150)
 r <- 5
 r.vec <- c(2, 5)
+ranks <- c(r, r.vec)
 q <- 2
 data <- matrix(list(), ncol = 1, nrow = q)
 
