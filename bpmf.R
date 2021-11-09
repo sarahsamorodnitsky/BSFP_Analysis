@@ -594,9 +594,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
 
 }
 
-bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, s2n,
-                     ranks = NULL, response = NULL, missingness = NULL, prop_missing = NULL, 
-                     entrywise = NULL, nninit = TRUE) {
+bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, s2n, ranks, 
+                     response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, nninit = TRUE) {
   
   # ---------------------------------------------------------------------------
   # Change the below to be fed in by the parameters and hyperparameters arguments above 
@@ -1363,22 +1362,24 @@ get_results <- function(truth, draws, burnin) {
     
     # If there are results available
     if (!is.null(truth[[param]][[1,1]])) {
+      
       # If the results are a matrix then they correspond to multiple datasets
       if (!is.null(dim_param)) {
-        sim_results[[i]] <- matrix(list(), nrow = q, ncol = 1)
+        sim_results[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
         for (s in 1:q) {
           current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
-          sim_results[[i]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
-                                          mse(truth[[param]][[s,1]], current_draws),
-                                          ci_width(current_draws, burnin = burnin))
+          sim_results[[param]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
+                                              mse(truth[[param]][[s,1]], current_draws),
+                                              ci_width(current_draws, burnin = burnin))
         }
       }
       
+      # if the results do not correspond to a matrix
       if (is.null(dim_param)) {
-        sim_results[[i]] <- list(check_coverage(truth[[param]], draws[[param]], burnin),
-                                 mse(truth[[param]], draws[[param]]),
-                                 ci_width(draws[[param]], burnin = burnin))
+        sim_results[[param]] <- list(check_coverage(truth[[param]], draws[[param]], burnin),
+                                     mse(truth[[param]], draws[[param]]),
+                                     ci_width(draws[[param]], burnin = burnin))
       }
     }
   }
@@ -1428,33 +1429,62 @@ average_results <- function(sim_results, observed_counts, nsim) {
   # observed_counts (list) = list of how many times each observation in each dataset was missing
   # nsim (int) = the number of simulation iterations that were run
   
-  n_results <- length(sim_results[[1]])
-  sim_results_avg <- lapply(1:n_results, function(i) list())
-  names(sim_results_avg) <- names(sim_results[[1]])[1:n_results]
+  # Save the names of each parameter
+  params <- names(sim_results[[1]])
   
-  for (i in 1:n_results) {
-    # Select the index for the observed counts (change this later)
-    k <- if (i == 1 | i == 2) 1 else 2
-    
-    # Select all results from across sim iters
-    all_results_i <- lapply(1:nsim, function(res) {
-      sim_results[[res]][[i]]
-    })
-    
-    # Sum across each result type
-    sim_results_avg[[i]]$avg_coverage <- mean(Reduce("+", lapply(all_results_i, function(res) {
-      res$avg_coverage
-    }))/observed_counts[[k]])
-
-    sim_results_avg[[i]]$avg_MSE <- mean(Reduce("+", lapply(all_results_i, function(res) {
-      res$avg_MSE
-    }))/observed_counts[[k]])
-    
-    sim_results_avg[[i]]$avg_CI_width <- mean(Reduce("+", lapply(all_results_i, function(res) {
-      res$avg_CI_width
-    }))/observed_counts[[k]])
+  # Initialize a list to contain the averages
+  sim_results_avg <- lapply(1:length(params), function(i) list())
+  names(sim_results_avg) <- params
+  
+  for (param in params) {
+    if (param != "any_missing") {
+      # Save the results across the simulation replications for this parameter
+      param_by_rep <- lapply(sim_results, function(sim_iter) sim_iter[[param]])
+      
+      # Are the results for a matrix or for a vector?
+      matrix_or_vec <- dim(param_by_rep[[1]])
+      
+      # If matrix
+      if (!is.null(matrix_or_vec)) {
+        # Save the number of sources
+        q <- matrix_or_vec[1]
+        
+        # Initialize a list for the results
+        results_for_param <- matrix(list(), nrow = q, ncol = 1)
+        
+        # Iterate through the results for each source
+        for (s in 1:q) {
+          # Save the results for source s
+          res_by_source <- lapply(param_by_rep, function(sim_iter) sim_iter[[s,1]])
+          
+          # Calculate the average coverage
+          avg_coverage_source <- Reduce("+", lapply(res_by_source, function(sim_iter) sim_iter[[1]]))/observed_counts[[s]]
+          
+          # Calculate the average MSE
+          avg_mse_source <- Reduce("+", lapply(res_by_source, function(sim_iter) sim_iter[[2]]))/observed_counts[[s]]
+          
+          # Calculate the average CI width
+          avg_ci_width_source <- Reduce("+", lapply(res_by_source, function(sim_iter) sim_iter[[3]]))/observed_counts[[s]]
+          
+          # Save the results
+          results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
+                                           avg_mse = mean(avg_mse_source),
+                                           avg_ci_width = mean(avg_ci_width_source))
+        }
+        
+        # Save the overall results
+        sim_results_avg[[param]] <- results_for_param
+        
+      }
+      
+      # If not a matrix
+      if (is.null(matrix_or_vec)) {
+        # Save the results for this parameter
+        sim_results_avg[[param]] <- mean(Reduce("+", param_by_rep)/nsim)
+      }
+    }
   }
-  
+
   # Return
   sim_results_avg
 }
