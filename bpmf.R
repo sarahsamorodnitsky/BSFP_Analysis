@@ -1343,7 +1343,7 @@ mse <- function(truth, draws) {
   # true component being estimated. 
   Reduce('+', lapply(draws, function(iter.val) {
     (iter.val - truth)^2
-  }))/sum(draws^2)
+  }))/sum(truth^2)
 }
 
 # Computing credible interval width
@@ -1374,41 +1374,29 @@ get_results <- function(truth, draws, burnin) {
   n_param <- length(draws)
   
   # Save the results 
-  sim_results <- lapply(1:n_param, function(i) list())
-  names(sim_results) <- names(draws)
+  results <- lapply(1:n_param, function(i) list())
+  names(results) <- names(draws)
   
   # Iterate through the parameters, checking the coverage, MSE, and CI width
   for (param in 1:n_param) {
     # Check the dimension of the current parameter
-    dim_param <- dim(truth[[param]])
-    q <- dim_param[1]
+    dim_param <- nrow(truth[[param]])
     
-    # If there are results available
-    if (!is.null(truth[[param]][[1,1]])) {
-      
-      # If the results are a matrix then they correspond to multiple datasets
-      if (!is.null(dim_param)) {
-        sim_results[[param]] <- matrix(list(), nrow = q, ncol = 1)
-        
-        for (s in 1:q) {
-          current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
-          sim_results[[param]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
-                                              mse(truth[[param]][[s,1]], current_draws),
-                                              ci_width(current_draws, burnin = burnin))
-        }
-      }
-      
-      # if the results do not correspond to a matrix
-      if (is.null(dim_param)) {
-        sim_results[[param]] <- list(check_coverage(truth[[param]], draws[[param]], burnin),
-                                     mse(truth[[param]], draws[[param]]),
-                                     ci_width(draws[[param]], burnin = burnin))
+    results[[param]] <- matrix(list(), nrow = dim_param, ncol = 1)
+    
+    # Only calculate results if there are results
+    if (!is.null(draws[[param]][[iter]][[1,1]])) {
+      for (s in 1:dim_param) {
+        current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
+        results[[param]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
+                                        mse(truth[[param]][[s,1]], current_draws),
+                                        ci_width(current_draws, burnin = burnin))
       }
     }
   }
   
   # Return the results
-  sim_results
+  results
 }
 
 # Count the number of times each observation in each dataset was observed
