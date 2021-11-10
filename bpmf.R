@@ -621,16 +621,23 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
 
 }
 
-bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, s2n, ranks, 
+bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2n, ranks, 
                      response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, nninit = TRUE) {
   
   # ---------------------------------------------------------------------------
   # Change the below to be fed in by the parameters and hyperparameters arguments above 
   # ---------------------------------------------------------------------------
   
-  cl <- makeCluster(n_clust)
-  registerDoParallel(cl)
-  sim_results <- foreach (sim_iter = 1:nsim, .packages = c("Matrix", "MASS")) %dopar% {
+  sim_results <- lapply(1:nsim, function(i) list())
+  
+  # cl <- makeCluster(n_clust)
+  # registerDoParallel(cl)
+  # funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC", 
+  #            "check_coverage", "mse", "ci_width", "data.rearrange",
+  #            "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2")
+  # packs <- c("Matrix", "MASS", "truncnorm")
+  # sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs) %dopar% {
+  for (sim_iter in 1:nsim) {
     
     # -------------------------------------------------------------------------
     # Generating the data
@@ -640,8 +647,10 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
     
     # Saving the data
     data <- sim_data$data
-    structure <- list(joint = sim_data$joint.structure.scale,
-                      indiv = sim_data$indiv.structure.scale)
+    joint.structure.scale <- sim_data$joint.structure.scale
+    indiv.structure.scale <- sim_data$indiv.structure.scale
+    structure <- list(joint = joint.structure.scale,
+                      indiv = indiv.structure.scale)
     
     missing_data <- sim_data$missing_data
     missing_obs <- sim_data$missing_obs
@@ -674,7 +683,7 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data_centered, Y, nninit = nninit, model_params, ranks = NULL, nsample, progress = TRUE)
+    res <- bpmf(data_centered, Y, nninit = nninit, model_params, ranks = NULL, nsample, progress = FALSE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -753,9 +762,9 @@ bpmf_sim <- function(nsample, p.vec, n, true_params, model_params, nsim = 1000, 
                                          missing_obs_Y = missing_obs_Y)
     
     # Return 
-    sim_iter_results
+    sim_results[[sim_iter]] <- sim_iter_results
   }
-  stopCluster(cl)
+  # stopCluster(cl)
   
   # ---------------------------------------------------------------------------
   # Averaging the results
@@ -1094,6 +1103,8 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   
   q <- length(p.vec)
   n_beta <- 1 + sum(ranks)
+  r <- ranks[1]
+  r.vec <- ranks[-1]
   
   # Setting the hyperparameters
   error_vars <- true_params$error_vars
@@ -1387,7 +1398,7 @@ get_results <- function(truth, draws, burnin) {
     results[[param]] <- matrix(list(), nrow = dim_param, ncol = 1)
     
     # Only calculate results if there are results
-    if (!is.null(draws[[param]][[iter]][[1,1]])) {
+    if (!is.null(draws[[param]][[1]][[1,1]])) {
       for (s in 1:dim_param) {
         current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
         results[[param]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
