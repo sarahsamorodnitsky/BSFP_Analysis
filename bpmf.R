@@ -372,12 +372,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       X.iter <- do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
       Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
       
-      V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
+      V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
         bv <-  tU_Sigma %*% X.iter[,i]
         
         Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
         Vi
-      }))
+      }), nrow = r))
     }
     
     if (response_given) {
@@ -391,7 +391,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       
       if (response_type == "binary") {
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
-        V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
+        V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
           # The combined centered Xis with the latent response vector
           X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
                           (Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
@@ -400,12 +400,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
           
           Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
           Vi
-        }))
+        }), nrow = r))
       }
       
       if (response_type == "continuous") {
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
-        V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
+        V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
           # The combined centered Xis with the latent response vector
           X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
                           (Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
@@ -414,7 +414,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
           
           Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
           Vi
-        }))
+        }), nrow = r))
       }
     }
     
@@ -428,12 +428,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     for (s in 1:q) {
       Xs.iter <- X_complete[[s,1]] - W.iter[[s,s]] %*% t(Vs.iter[[1,s]])
       Bu <- solve((1/error_vars[s]) * t(V.iter[[1,1]]) %*% V.iter[[1,1]] + (1/sigma2_joint) * diag(r))
-      U.draw[[iter+1]][[s,1]] <- t(sapply(1:p.vec[s], function(j) {
+      U.draw[[iter+1]][[s,1]] <- t(matrix(sapply(1:p.vec[s], function(j) {
         bu <- (1/error_vars[s]) * t(V.iter[[1,1]]) %*% Xs.iter[j, ]
         
         U1j <- mvrnorm(1, mu = Bu %*% bu, Sigma = Bu)
         U1j
-      }))
+      }), nrow = r))
     }
 
     U.iter <- U.draw[[iter+1]]
@@ -447,12 +447,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
         Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
         
-        Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
+        Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
           bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
           
           Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
           Vsi
-        }))
+        }), nrow = r.vec[s]))
       }
     }
     
@@ -471,12 +471,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
                               do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
           
           Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
-          Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
+          Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
             bvs <- tW_Sigma %*% Xs.iter[, i]
             
             Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
             Vsi
-          }))
+          }), nrow = r.vec[s]))
         }
         
         if (response_type == "continuous") {
@@ -486,12 +486,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
                                do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
           
           Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
-          Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
+          Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
             bvs <- tW_Sigma %*% Xs.iter[, i]
             
             Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
             Vsi
-          }))
+          }), nrow = r.vec[s]))
         }
       }
     }
@@ -507,12 +507,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
       Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
       
-      W.draw[[iter+1]][[s,s]] <- t(sapply(1:p.vec[s], function(j) {
+      W.draw[[iter+1]][[s,s]] <- t(matrix(sapply(1:p.vec[s], function(j) {
         bws <- (1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Xs.iter[j,] 
         
         Wsj <- mvrnorm(1, mu = Bws %*% bws, Sigma = Bws)
         Wsj
-      }))
+      }), nrow = r.vec[s]))
       
       for (ss in 1:q) {
         if (ss != s) W.draw[[iter+1]][[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = r.vec[ss])
