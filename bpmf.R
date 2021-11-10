@@ -375,8 +375,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
         bv <-  tU_Sigma %*% X.iter[,i]
         
-        Vj <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-        Vj
+        Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+        Vi
       }))
     }
     
@@ -398,8 +398,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
           
           bv <- tU_Sigma %*% X.iter[,i]
           
-          Vj <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-          Vj
+          Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+          Vi
         }))
       }
       
@@ -412,8 +412,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
           
           bv <- tU_Sigma %*% X.iter[,i]
           
-          Vj <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-          Vj
+          Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+          Vi
         }))
       }
     }
@@ -450,8 +450,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
           bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
           
-          V1j <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
-          V1j
+          Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+          Vsi
         }))
       }
     }
@@ -468,7 +468,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
           # Combined centered Xs and Z
           Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
                           t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
-                              do.call(cbind, Vs.iter[1, !(1:ncol(Vs.iter) %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(c(1:q) %in% s), 1])))
+                              do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
           
           Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
           Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
@@ -483,7 +483,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
           # Combined centered Xs and Y
           Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
                            t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
-                               do.call(cbind, Vs.iter[1, !(1:ncol(Vs.iter) %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(c(1:q) %in% s), 1])))
+                               do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
           
           Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
           Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
@@ -531,10 +531,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
       
       if (response_type == "continuous") {
-        tau2.draw[iter+1] <- 1/rgamma(1, shape = a + (n/2), rate = b + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2))
+        tau2.draw[[iter+1]][[1,1]] <- 1/rgamma(1, shape = a + (n/2), rate = b + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2))
         
         # Update the current value of tau2
-        tau2.iter <- tau2.draw[iter+1]
+        tau2.iter <- tau2.draw[[iter+1]][[1,1]]
       }
     }
     
@@ -546,17 +546,17 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
       if (response_type == "binary") {
         Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- t(VStar.iter) %*% Z.iter
-        beta.draw[iter+1,] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
       
       if (response_type == "continuous") {
         Bbeta <- solve((1/tau2.iter) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- (1/tau2.iter) * t(VStar.iter) %*% Y_complete
-        beta.draw[iter+1,] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
       
       # Update the current value of beta
-      beta.iter <- t(beta.draw[iter+1,, drop = FALSE])
+      beta.iter <- beta.draw[[iter+1]][[1,1]]
       
       # Creating a matrix of the joint and individual effects
       beta_indiv.iter <- matrix(list(), ncol = 1, nrow = q)
@@ -578,10 +578,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     
     if (response_given) {
       if (response_type == "binary") {
-        Z.draw[iter+1,] <- matrix(sapply(1:n, function(i) {
-          if (Y_complete[i,] == 1) z <- rtruncnorm(1, a = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
-          if (Y_complete[i,] == 0) z <- rtruncnorm(1, b = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
-          z
+        Z.draw[[iter+1]][[1,1]] <- matrix(sapply(1:n, function(i) {
+          if (Y_complete[i,] == 1) rtruncnorm(1, a = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
+          if (Y_complete[i,] == 0) rtruncnorm(1, b = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
         }), ncol = 1)
       }
     }
@@ -593,11 +592,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (response_given) {
       if (missingness_in_response) {
         if (response_type == "continuous") {
-          Ym.draw[[iter+1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter)), ncol = 1)[missing_obs_Y,]
+          Ym.draw[[iter+1]][[1,1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter)), ncol = 1)[missing_obs_Y,]
         }
         
         if (response_type == "binary") {
-          Ym.draw[[iter+1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar.iter %*% beta.iter)), ncol = 1)[missing_obs_Y,]
+          Ym.draw[[iter+1]][[1,1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar.iter %*% beta.iter)), ncol = 1)[missing_obs_Y,]
         }
       }
     }
