@@ -1343,7 +1343,7 @@ mse <- function(truth, draws) {
   # true component being estimated. 
   Reduce('+', lapply(draws, function(iter.val) {
     (iter.val - truth)^2
-  }))/length(draws)
+  }))/sum(draws^2)
 }
 
 # Computing credible interval width
