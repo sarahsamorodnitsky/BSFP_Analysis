@@ -193,14 +193,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (missingness_in_response) {
       if (response_type == "continuous") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(list(), nrow = 1, ncol = 1)
-        Ym0[[1,1]] <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,]
+        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,]
       }
       
       if (response_type == "binary") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(list(), nrow = 1, ncol = 1)
-        Ym0[[1,1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,]
+        Ym0 <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,]
       }
     }
   }
@@ -579,8 +577,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
     if (response_given) {
       if (response_type == "binary") {
         Z.draw[[iter+1]][[1,1]] <- matrix(sapply(1:n, function(i) {
-          if (Y_complete[i,] == 1) rtruncnorm(1, a = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
-          if (Y_complete[i,] == 0) rtruncnorm(1, b = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
+          if (Y_complete[i,] == 1) {
+            rtruncnorm(1, a = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
+          } else {
+            rtruncnorm(1, b = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
+          }
         }), ncol = 1)
       }
     }
@@ -615,7 +616,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
         sigma.mat = sigma.mat, # Returning the scaling factors
         V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw,
         Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
-        tau2.draw = tau2.draw, beta.draw = beta.draw)
+        tau2.draw = tau2.draw, beta.draw = beta.draw,
+        ranks = c(r, r.vec))
 
 }
 
