@@ -271,7 +271,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   # ---------------------------------------------------------------------------
   
   for (iter in 1:(nsample-1)) {
-    if (progress) svMisc::progress(iter/(nsample/100))
+    if (progress) svMisc::progress(iter/((nsample-1)/100))
     
     # ---------------------------------------------------------------------------
     # Storing the current values of the parameters
