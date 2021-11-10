@@ -1166,9 +1166,9 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   
   if (is.null(response)) {
     Y <- NULL
-    Y_missing <- NULL
-    beta <- NULL
-    tau2 <- NULL
+    Y_missing <- matrix(list(), nrow = 1, ncol = 1)
+    beta <- matrix(list(), nrow = 1, ncol = 1)
+    tau2 <- matrix(list(), nrow = 1, ncol = 1)
   }
   
   if (!is.null(response)) {
@@ -1176,22 +1176,23 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
     diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
     
     # Generate betas
-    beta <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
+    beta <- matrix(list(), nrow = 1, ncol = 1)
+    beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
     
     # Combine the Vs
     VStar <- cbind(1, do.call(cbind, V), do.call(cbind, Vs))
     
     # True probability of being a case
-    Prob.VStar.beta <- pnorm(VStar %*% beta)
+    Prob.VStar.beta <- pnorm(VStar %*% beta[[1,1]])
     
     if (response == "binary") {
-      Y <- matrix(rbinom(n, size = 1, prob = pnorm(VStar %*% beta)), ncol = 1)
-      tau2 <- NULL
+      Y <- matrix(rbinom(n, size = 1, prob = pnorm(VStar %*% beta[[1,1]])), ncol = 1)
+      tau2[[1,1]] <- NULL
     }
     
     if (response == "continuous") {
       tau2 <- 1/rgamma(1, shape = a, rate = b)
-      Y <- VStar %*% beta + rnorm(n, mean = 0, sd = sqrt(tau2))
+      Y <- VStar %*% beta[[1,1]] + rnorm(n, mean = 0, sd = sqrt(tau2))
     }
   }
   
@@ -1200,13 +1201,8 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   # -------------------------------------------------------------------------
   
   if (is.null(missingness)) {
-    missing_obs_X1 <- NULL
-    missing_obs_X2 <- NULL
-    
-    X1_missing <- NULL
-    X2_missing <- NULL
-    
-    Y_missing <- NULL
+    missing_obs <- lapply(1:q, function(s) NULL)
+    missing_data <- matrix(list(), nrow = q, ncol = 1)
     missing_obs_Y <- NULL
     
   }
@@ -1214,18 +1210,20 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   if (!is.null(missingness)) {
     if (missingness != "missingness_in_data" | missingness != "both") {
       missing_obs <- lapply(1:q, function(s) NULL)
-      missing_data <- matrix(list(), nrow = q, ncol = 1);
+      Y_missing <- matrix(list(), nrow = 1, ncol = 1)
+      missing_data <- matrix(list(), nrow = q, ncol = 1)
     }
     
     if (missingness != "missingness_in_response" | missingness != "both") {
-      Y_missing <- NULL
+      Y_missing <- matrix(list(), nrow = 1, ncol = 1)
       missing_obs_Y <- NULL
     }
     
     if (missingness == "missingness_in_response" | missingness == "both") {
       missing_obs_Y <- sample(1:n, size = prop_missing * n, replace = FALSE)
-      Y_missing <- Y
-      Y_missing[missing_obs_Y] <- NA
+      Y_missing <- matrix(list(), nrow = 1, ncol = 1)
+      Y_missing[[1,1]] <- Y
+      Y_missing[[1,1]][missing_obs_Y] <- NA
     }
     
     if (missingness == "missingness_in_data" | missingness == "both") {
