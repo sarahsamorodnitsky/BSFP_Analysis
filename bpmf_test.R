@@ -2,6 +2,9 @@
 # Model testing for various scenarios
 # -----------------------------------------------------------------------------
 
+# Load in the helper functions
+source("bpmf.R")
+
 # Setting up the data
 n <- 20
 p.vec <- c(100, 150)
@@ -43,6 +46,14 @@ model_params <- list(error_vars = c(1,1),
                      beta_vars = c(10, 1, rep(1, q)), # Use the same variance for all the effects from each source
                      response_vars = c(0.1,0.1))
 
+true_params <- model_params
+
+nsample <- 10
+n_clust <- 2
+nsim <- 10
+s2n <- 1
+nninit <- TRUE
+
 # -----------------------------------------------------------------------------
 # No outcome
 # -----------------------------------------------------------------------------
@@ -72,7 +83,7 @@ data.missing <- data
 for (s in 1:q) {
   n_s <- length(data[[s,1]])
   random_missing <- sample(1:n_s, size = 0.1 * n_s, replace = FALSE)
-  data.missing[random_missing] <- NA
+  data.missing[[s,1]][random_missing] <- NA
 }
 
 Y <- NULL
@@ -97,3 +108,20 @@ continuous.out <- bpmf(data, Y = Y.missing, nninit = TRUE, model_params, ranks =
 # -----------------------------------------------------------------------------
 # Both
 # -----------------------------------------------------------------------------
+
+# Missing data and missing continuous
+Y.missing <- matrix(rnorm(n), nrow = n)
+Y.missing[sample(1:n, size = 0.1 * n, replace = FALSE)] <- NA
+continous.out.missing <- bpmf(data.missing, Y = Y.missing, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
+
+# Missing data and missing binary
+Y.missing <- matrix(rbinom(n, size = 1, p = 0.5), nrow = n)
+Y.missing[sample(1:n, size = 0.1 * n, replace = FALSE)] <- NA
+continous.out.missing <- bpmf(data.missing, Y = Y.missing, nninit = TRUE, model_params, ranks = NULL, nsample = 10, progress = TRUE)
+
+
+# -----------------------------------------------------------------------------
+# Testing the coverage
+# -----------------------------------------------------------------------------
+
+test <- bpmf_sim(nsample = nsample, n_clust = n_clust, p.vec, n, true_params, model_params, nsim = nsim, s2n = s2n, ranks, nninit = nninit)
