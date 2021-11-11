@@ -638,6 +638,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   # packs <- c("Matrix", "MASS", "truncnorm")
   # sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs) %dopar% {
   for (sim_iter in 1:nsim) {
+    svMisc::progress(sim_iter/(nsim/100))
     
     # -------------------------------------------------------------------------
     # Generating the data
