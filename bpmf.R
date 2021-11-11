@@ -100,6 +100,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
   if (!nninit) {
     r <- ranks[1]
     r.vec <- ranks[-1]
+    sigma.mat <- matrix(list(), nrow = q, 1)
+    for (s in 1:q) {
+      sigma.mat[[s,1]] < 1
+    }
   }
   
   r_total <- r + sum(r.vec)
@@ -628,16 +632,16 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   # Change the below to be fed in by the parameters and hyperparameters arguments above 
   # ---------------------------------------------------------------------------
   
-  sim_results <- lapply(1:nsim, function(i) list())
+  # sim_results <- lapply(1:nsim, function(i) list())
   
-  # cl <- makeCluster(n_clust)
-  # registerDoParallel(cl)
-  # funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC", 
-  #            "check_coverage", "mse", "ci_width", "data.rearrange",
-  #            "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2")
-  # packs <- c("Matrix", "MASS", "truncnorm")
-  # sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs) %dopar% {
-  for (sim_iter in 1:nsim) {
+  cl <- makeCluster(n_clust)
+  registerDoParallel(cl)
+  funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
+             "check_coverage", "mse", "ci_width", "data.rearrange",
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2")
+  packs <- c("Matrix", "MASS", "truncnorm")
+  sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs) %dopar% {
+  # for (sim_iter in 1:nsim) {
     svMisc::progress(sim_iter/(nsim/100))
     
     # -------------------------------------------------------------------------
@@ -684,7 +688,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data_centered, Y, nninit = nninit, model_params, ranks = NULL, nsample, progress = FALSE)
+    res <- bpmf(data_centered, Y, nninit = nninit, model_params, ranks = ranks, nsample, progress = FALSE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -765,7 +769,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Return 
     sim_results[[sim_iter]] <- sim_iter_results
   }
-  # stopCluster(cl)
+  stopCluster(cl)
   
   # ---------------------------------------------------------------------------
   # Averaging the results
