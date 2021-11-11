@@ -625,8 +625,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, nsample, pr
 
 }
 
-bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2n, ranks, 
-                     response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, nninit = TRUE) {
+bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2n, nninit, ranks, 
+                     response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL) {
   
   # ---------------------------------------------------------------------------
   # Change the below to be fed in by the parameters and hyperparameters arguments above 
@@ -652,6 +652,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     
     # Saving the data
     data <- sim_data$data
+    q <- length(p.vec)
     joint.structure.scale <- sim_data$joint.structure.scale
     indiv.structure.scale <- sim_data$indiv.structure.scale
     structure <- list(joint = joint.structure.scale,
@@ -688,7 +689,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data_centered, Y, nninit = nninit, model_params, ranks = ranks, nsample, progress = FALSE)
+    res <- bpmf(data_centered, Y, nninit = nninit, model_params, ranks = ranks, nsample, progress = TRUE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -766,8 +767,12 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     sim_iter_results$any_missing <- list(missing_obs = missing_obs,
                                          missing_obs_Y = missing_obs_Y)
     
+    # Share the ranks used
+    sim_iter_results$ranks <- list(ranks = res$ranks)
+    
     # Return 
-    sim_results[[sim_iter]] <- sim_iter_results
+    sim_iter_results
+    # sim_results[[sim_iter]] <- sim_iter_results
   }
   stopCluster(cl)
   
@@ -780,6 +785,11 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
 
   # Taking the averages of all the results
   sim_results_avg <- average_results(sim_results, observed_counts, q, nsim)
+  
+  # Save all the ranks
+  summary_ranks <- do.call(rbind, lapply(sim_results, function(sim_iter) sim_iter$ranks$ranks))
+  summary_ranks <- apply(summary_ranks, 2, summary)
+  sim_results_avg$summary_ranks <- summary_ranks
   
   # ---------------------------------------------------------------------------
   # Returning the results
@@ -1456,7 +1466,7 @@ average_results <- function(sim_results, observed_counts, q, nsim) {
   # nsim (int) = the number of simulation iterations that were run
   
   # Save the number of parameters
-  n_param <- length(sim_results[[1]]) - 1
+  n_param <- length(sim_results[[1]]) - 2
   
   # Initialize a list to contain the averages
   results_avg <- lapply(1:n_param, function(i) list())
