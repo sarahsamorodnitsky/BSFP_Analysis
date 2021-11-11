@@ -124,4 +124,4 @@ continous.out.missing <- bpmf(data.missing, Y = Y.missing, nninit = TRUE, model_
 # Testing the coverage
 # -----------------------------------------------------------------------------
 
-test <- bpmf_sim(nsample = nsample, n_clust = n_clust, p.vec, n, true_params, model_params, nsim = nsim, s2n = s2n, ranks, nninit = nninit)
+test <- bpmf_sim(nsample = 2000, n_clust = n_clust, p.vec, n, true_params, model_params, nsim = 100, s2n = s2n, ranks, nninit = nninit)
