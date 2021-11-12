@@ -779,7 +779,6 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   
   # Calculate the denominator for when the results are averaged
   results_available <- c(TRUE, TRUE, !is.null(response), response == "continuous", !is.null(sim_results[[1]]$Xm[[1,1]]), !is.null(sim_results[[1]]$Ym[[1,1]]))
-  names(results_available) <- names(sim_results[[1]])[1:6]
   observed_counts <- calculate_observed(sim_results, q, p.vec, n, nsim, results_available)
 
   # Taking the averages of all the results
