@@ -44,17 +44,19 @@ model_params <- list(error_vars = c(1,1),
                      joint_var = 1,
                      indiv_vars = c(1,1),
                      beta_vars = c(10, 1, rep(1, q)), # Use the same variance for all the effects from each source
-                     response_vars = c(0.1,0.1))
+                     response_vars = c(1,1))
 
 true_params <- model_params
 
 nsample <- 10
-n_clust <- 2
+n_clust <- 10
 nsim <- 10
 s2n <- 1
 nninit <- FALSE
 response <- NULL
-missingness <- NULL
+missingness <- "missingness_in_data"
+prop_missing <- 0.1
+entrywise = TRUE
 
 # -----------------------------------------------------------------------------
 # No outcome
@@ -126,4 +128,8 @@ continous.out.missing <- bpmf(data.missing, Y = Y.missing, nninit = TRUE, model_
 # Testing the coverage
 # -----------------------------------------------------------------------------
 
-test <- bpmf_sim(nsample = 2000, n_clust = n_clust, p.vec, n, true_params, model_params, nsim = 5, s2n = s2n, nninit = nninit, ranks)
+test <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = s2n, nninit = FALSE, ranks)
+
+test_with_resp <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = s2n, nninit = FALSE, ranks, response = "continuous")
+
+
