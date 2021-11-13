@@ -194,12 +194,12 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     if (missingness_in_response) {
       if (response_type == "continuous") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,]
+        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,, drop = FALSE]
       }
       
       if (response_type == "binary") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,]
+        Ym0 <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,, drop = FALSE]
       }
     }
   }
@@ -313,7 +313,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
         Y_complete <- Y
         
         # Filling in the missing entries for R1 and R2. 
-        Y_complete[missing_obs_Y] <- Ym.iter
+        Y_complete[missing_obs_Y,] <- Ym.iter
       }
       
       if (!missingness_in_response) {
@@ -593,11 +593,11 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     if (response_given) {
       if (missingness_in_response) {
         if (response_type == "continuous") {
-          Ym.draw[[iter+1]][[1,1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter[[1,1]])), ncol = 1)[missing_obs_Y,]
+          Ym.draw[[iter+1]][[1,1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter[[1,1]])), ncol = 1)[missing_obs_Y,, drop = FALSE]
         }
         
         if (response_type == "binary") {
-          Ym.draw[[iter+1]][[1,1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar.iter %*% beta.iter)), ncol = 1)[missing_obs_Y,]
+          Ym.draw[[iter+1]][[1,1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar.iter %*% beta.iter)), ncol = 1)[missing_obs_Y,, drop = FALSE]
         }
       }
     }
@@ -624,11 +624,11 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
 bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2n, nninit, ranks, 
                      response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL) {
   
-  # ---------------------------------------------------------------------------
-  # Change the below to be fed in by the parameters and hyperparameters arguments above 
-  # ---------------------------------------------------------------------------
-  
   # sim_results <- lapply(1:nsim, function(i) list())
+  
+  # Check availability of parameters
+  results_available <- c(TRUE, TRUE, !is.null(response), check_availability(response, "continuous"), check_availability(missingness, "missingness_in_data") | check_availability(missingness, "both"), check_availability(missingness, "missingness_in_response") | check_availability(missingness, "both"))
+  names(results_available) <- c("joint.structure.scale", "indiv.structure.scale", "beta", "tau2", "Xm", "Ym")
   
   cl <- makeCluster(n_clust)
   registerDoSNOW(cl)
@@ -640,6 +640,10 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   # for (sim_iter in 1:nsim) {
     # svMisc::progress(sim_iter/(nsim/100))
     
+    # Check availability of parameters
+    results_available <- c(TRUE, TRUE, !is.null(response), check_availability(response, "continuous"), check_availability(missingness, "missingness_in_data") | check_availability(missingness, "both"), check_availability(missingness, "missingness_in_response") | check_availability(missingness, "both"))
+    names(results_available) <- c("joint.structure.scale", "indiv.structure.scale", "beta", "tau2", "Xm", "Ym")
+    
     # -------------------------------------------------------------------------
     # Generating the data
     # -------------------------------------------------------------------------
@@ -647,7 +651,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing)
     
     # Saving the data
-    data <- sim_data$data
+    true_data <- sim_data$data
     q <- length(p.vec)
     joint.structure.scale <- sim_data$joint.structure.scale
     indiv.structure.scale <- sim_data$indiv.structure.scale
@@ -670,10 +674,36 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     tau2 <- sim_data$tau2
     
     # -------------------------------------------------------------------------
+    # Setting the proper variable names for the sampler
+    # -------------------------------------------------------------------------
+    
+    if (is.null(missingness)) {
+      observed_data <- data
+      Y_observed <- Y
+    }
+    
+    if (!is.null(missingness)) {
+      if (missingness == "missingness_in_data") {
+        observed_data <- missing_data
+        Y_observed <- Y
+      }
+      
+      if (missingness == "missingness_in_response") {
+        observed_data <- data
+        Y_observed <- Y_missing
+      }
+      
+      if (missingness == "both") {
+        observed_data <- missing_data
+        Y_observed <- Y_missing
+      }
+    }
+  
+    # -------------------------------------------------------------------------
     # Center the data
     # -------------------------------------------------------------------------
     
-    center_the_data <- center_data(data = data, structure = structure)
+    center_the_data <- center_data(data = observed_data, structure = structure)
     
     # Saving the centered data
     data_centered <- center_the_data$data_centered
@@ -685,7 +715,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data_centered, Y, nninit = nninit, model_params, ranks = ranks, nsample, progress = TRUE)
+    res <- bpmf(data_centered, Y_observed, nninit = nninit, model_params, ranks = ranks, nsample, progress = TRUE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -739,21 +769,23 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Saving the draws from the sampler together
     draws <- list(joint.structure.burnin = joint.structure.burnin,
                   indiv.structure.burnin = indiv.structure.burnin,
-                  beta.burnin = beta.burnin,
-                  tau2.burnin = tau2.burnin,
-                  Xm.burnin = Xm.burnin,
-                  Ym.burnin = Ym.burnin)
+                  beta = beta.burnin,
+                  tau2 = tau2.burnin,
+                  Xm = Xm.burnin,
+                  Ym = Ym.burnin)
+    
+    Xm <- return_missing(observed_data, data, missing_obs)
+    Ym <- return_missing(Y_observed, Y, missing_obs_Y)
     
     # Saving the truth together for comparison
     truth <- list(joint.structure.scale = joint.structure.scale,
                   indiv.structure.scale = indiv.structure.scale,
                   beta = beta,
                   tau2 = tau2,
-                  Xm = missing_data,
-                  Ym = Y_missing)
+                  Xm = Xm,
+                  Ym = Ym)
     
     # Adding up the coverage, MSE, and CI width from this iteration
-    results_available <- sapply(truth, function(param) !is.null(param[[1,1]]))
     sim_iter_results <- get_results(truth, draws, burnin, results_available)
     
     # ---------------------------------------------------------------------------
@@ -778,7 +810,6 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   # ---------------------------------------------------------------------------
   
   # Calculate the denominator for when the results are averaged
-  results_available <- c(TRUE, TRUE, !is.null(response), response == "continuous", !is.null(sim_results[[1]]$Xm[[1,1]]), !is.null(sim_results[[1]]$Ym[[1,1]]))
   observed_counts <- calculate_observed(sim_results, q, p.vec, n, nsim, results_available)
 
   # Taking the averages of all the results
@@ -1104,6 +1135,33 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
 # Helper functions for simulations
 # -----------------------------------------------------------------------------
 
+# Checks if a response is given (and what type) and if there is missingness (and what type)
+check_availability <- function(param, compare) {
+  if (is.null(param)) return(FALSE)
+  if (!is.null(param)) return(param == compare)
+}
+
+# Returns the true missing values
+return_missing <- function(observed_param, true_param, missing_obs_inds) {
+  any_missing <- is.null(unlist(missing_obs_inds))
+  
+  if (any_missing) {
+    dm <- missing_obs_inds
+  }
+  
+  if (!any_missing) {
+    dim_param <- nrow(observed_param)
+    dm <- matrix(list(), nrow = dim_param, ncol = 1)
+    
+    for (s in 1:dim_param) {
+      if (dim_param == 1) dm[[s,1]] <- true_param[[s,1]][missing_obs_inds[[s,1]], drop = FALSE]
+      if (dim_param != 1) dm[[s,1]] <- true_param[[s,1]][missing_obs_inds[[s,1]]]
+    }
+  }
+  
+  dm
+}
+
 # Generate fake data depending on conditions
 bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing) {
   # Generates fake data depending on the dims provided in p.vec, n, and ranks
@@ -1213,7 +1271,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
     
     if (response == "binary") {
       Y <- matrix(rbinom(n, size = 1, prob = pnorm(VStar %*% beta[[1,1]])), ncol = 1)
-      tau2[[1,1]] <- NULL
+      tau2 <- matrix(list(), nrow = 1, ncol = 1)
     }
     
     if (response == "continuous") {
@@ -1228,51 +1286,50 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   # -------------------------------------------------------------------------
   
   if (is.null(missingness)) {
-    missing_obs <- lapply(1:q, function(s) matrix(list(), nrow = 1, ncol = 1))
+    missing_obs <-  matrix(list(), nrow = q, ncol = 1)
     missing_data <- matrix(list(), nrow = q, ncol = 1)
     missing_obs_Y <-matrix(list(), nrow = 1, ncol = 1)
-    Y_missing <-matrix(list(), nrow = 1, ncol = 1)
+    Y_missing <- NULL
   }
   
   if (!is.null(missingness)) {
     if (missingness != "missingness_in_data" | missingness != "both") {
       missing_obs <- lapply(1:q, function(s) matrix(list(), nrow = 1, ncol = 1))
-      Y_missing <- matrix(list(), nrow = 1, ncol = 1)
       missing_data <- matrix(list(), nrow = q, ncol = 1)
     }
     
     if (missingness != "missingness_in_response" | missingness != "both") {
-      Y_missing <- matrix(list(), nrow = 1, ncol = 1)
-      missing_obs_Y <- NULL
+      Y_missing <- NULL
+      missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
     }
     
     if (missingness == "missingness_in_response" | missingness == "both") {
-      missing_obs_Y <- sample(1:n, size = prop_missing * n, replace = FALSE)
-      Y_missing <- matrix(list(), nrow = 1, ncol = 1)
-      Y_missing[[1,1]] <- Y
-      Y_missing[[1,1]][missing_obs_Y] <- NA
+      missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
+      missing_obs_Y[[1,1]] <- sample(1:n, size = prop_missing * n, replace = FALSE)
+      Y_missing <- Y
+      Y_missing[missing_obs_Y[[1,1]]] <- NA
     }
     
     if (missingness == "missingness_in_data" | missingness == "both") {
       
-      missing_obs <- lapply(1:q, function(s) matrix(list(), nrow = 1, ncol = 1))
+      missing_obs <- matrix(list(), nrow = q, ncol = 1)
       missing_data <- matrix(list(), nrow = q, ncol = 1)
       
       if (entrywise) { # if removing observations entrywise
         for (s in 1:q) {
           # these are counters going down the columns of R. So 9 would be the 9th entry counting down. 
-          missing_obs[[s]][[1,1]] <- sample(x = 1:length(data[[s,1]]), size = prop_missing*length(data[[s,1]]), replace = FALSE) 
+          missing_obs[[s,1]] <- sample(x = 1:length(data[[s,1]]), size = prop_missing*length(data[[s,1]]), replace = FALSE) 
 
           # Duplicate Xs so that I have one with the full data and one with the missing data
           missing_data[[s,1]] <- data[[s,1]]
-          missing_data[[s,1]][missing_obs[[s]][[1,1]]] <- NA
+          missing_data[[s,1]][missing_obs[[s,1]]] <- NA
         }
       } else { # if removing entire columns
         # Gives the column indices to remove
         
         for (s in 1:q) {
           # These are counters going down the columns of X. So 9 would be the 9th entry counting down. 
-          missing_obs[[s]][[1,1]] <- sample(x=1:n, size = n*prop_missing, replace = FALSE)
+          missing_obs[[s,1]] <- sample(x=1:n, size = n*prop_missing, replace = FALSE)
           
           if (s != 1) {
             avail_obs <- c(1:n)[!(c(1:n) %in% unlist(missing_obs[1:(s-1)]))]
@@ -1281,7 +1338,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
       
           # Duplicate Xs so that I have one with the full data and one with the missing data
           missing_data[[s,1]] <- data[[s,1]]
-          missing_data[[s,1]][,missing_obs[[s]][[1,1]]] <- NA
+          missing_data[[s,1]][,missing_obs[[s,1]]] <- NA
         }
       }
     }
