@@ -1217,7 +1217,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   data <- matrix(list(), nrow = q, ncol = 1)
   
   for (s in 1:q) {
-    data[s,1][[1]] <- joint.structure.scale[[s,1]] + indiv.structure[[s,1]] + E[[s,1]]
+    data[s,1][[1]] <- joint.structure.scale[[s,1]] + indiv.structure.scale[[s,1]] + E[[s,1]]
   }
   
   # -------------------------------------------------------------------------
