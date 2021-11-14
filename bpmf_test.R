@@ -54,7 +54,7 @@ nsim <- 10
 s2n <- 1
 nninit <- FALSE
 response <- NULL
-missingness <- "missingness_in_data"
+missingness <- NULL
 prop_missing <- 0.1
 entrywise = TRUE
 
@@ -128,8 +128,12 @@ continous.out.missing <- bpmf(data.missing, Y = Y.missing, nninit = TRUE, model_
 # Testing the coverage
 # -----------------------------------------------------------------------------
 
-test <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = s2n, nninit = FALSE, ranks)
+test <- bpmf_sim(nsample = 10, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, s2n = s2n, nninit = FALSE, ranks)
 
-test_with_resp <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = s2n, nninit = FALSE, ranks, response = "continuous")
+test_with_resp <- bpmf_sim(nsample = 10, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, s2n = s2n, nninit = FALSE, ranks, response = "continuous")
 
+test_with_resp_bin <- bpmf_sim(nsample = 10, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, s2n = s2n, nninit = FALSE, ranks, response = "binary")
+
+test_with_resp_missing <- bpmf_sim(nsample = 10, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, s2n = s2n, nninit = FALSE, ranks, 
+                                   missingness = "missingness_in_data", prop_missing = 0.1, entrywise = TRUE)
 
