@@ -1202,12 +1202,16 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   s2n_coef <- rep(0, q)
   joint.structure.scale <- joint.structure
   indiv.structure.scale <- indiv.structure
+  Vs.scale <- Vs
   
   for (s in 1:q) {
     s2n_coef[s] <- s2n * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
     
     joint.structure.scale[[s,1]] <- s2n_coef[s] * joint.structure[[s,1]]
     indiv.structure.scale[[s,1]] <- s2n_coef[s] * indiv.structure[[s,1]]
+    
+    # Scaling the individual scores
+    Vs.scale[[1,s]] <- s2n_coef[s] * Vs[[1,s]]
   }
   
   # -------------------------------------------------------------------------
@@ -1237,7 +1241,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
     beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
     
     # Combine the Vs
-    VStar <- cbind(1, do.call(cbind, V), do.call(cbind, Vs))
+    VStar <- cbind(1, do.call(cbind, V), do.call(cbind, Vs.scale))
     
     # True probability of being a case
     Prob.VStar.beta <- pnorm(VStar %*% beta[[1,1]])
