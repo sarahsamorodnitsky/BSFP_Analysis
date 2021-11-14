@@ -131,6 +131,10 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   }
   
+  if (!missingness_in_data) {
+    Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  }
+  
   if (response_given) {
     beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     
@@ -178,7 +182,15 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
     tau20 <- matrix(1/rgamma(1, shape = a, rate = b))
   }
-
+  
+  # If there is missingness in the data, generate starting values for the missing entries
+  if (missingness_in_data) {
+    Xm0 <- matrix(list(), ncol = 1, nrow = q)
+    for (s in 1:q) {
+      Xm0[[s,1]] <- rep(0, length(missing_obs[s]))
+    }
+  }
+  
   # If there is missingness in Y, generate starting values for the missing entries
   if (response_given) {
     if (missingness_in_response) {
@@ -211,6 +223,10 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     if (missingness_in_response) {
       Ym.draw[[1]][[1,1]] <- Ym0
     }
+  }
+  
+  if (missingness_in_data) {
+    Xm.draw[[1]] <- Xm0
   }
   
   # ---------------------------------------------------------------------------
@@ -313,14 +329,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
       
       # Fill in the completed matrices with the imputed values
       for (s in 1:q) {
-        # Draw values for the missing entries
-        Es <-  matrix(rnorm(p.vec[s]*n, 0, sqrt(error_vars[s])), nrow = p.vec[s], ncol = n)
-        Xsm.draw <- matrix((U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]) + Es)[missing_obs[[s]]])
-        
-        X_complete[[s,1]][missing_obs[[s]]] <- Xsm.draw
-        
-        # Remove the missing data to save memory
-        rm(Xsm.draw)
+        X_complete[[s,1]][missing_obs[[s]]] <- Xm.draw[[iter]][[s,1]]
       }
     }
     
@@ -594,6 +603,13 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
         }
       }
     }
+    
+    if (missingness_in_data) {
+      for (s in 1:q) {
+        Es <-  matrix(rnorm(p.vec[s]*n, 0, sqrt(error_vars[s])), nrow = p.vec[s], ncol = n)
+        Xm.draw[[iter+1]][[s,1]] <- matrix((U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]) + Es)[missing_obs[[s]]])
+      }
+    }
   }
   
   # Return
@@ -601,7 +617,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
         Y = Y, # Return the response vector
         sigma.mat = sigma.mat, # Returning the scaling factors
         V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw,
-        Ym.draw = Ym.draw, Z.draw = Z.draw,
+        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
         tau2.draw = tau2.draw, beta.draw = beta.draw,
         ranks = c(r, r.vec))
 
@@ -791,10 +807,10 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   # ---------------------------------------------------------------------------
   
   # Calculate the denominator for when the results are averaged
-  observed_counts <- calculate_observed(sim_results, q, p.vec, n, nsim, results_available)
+  denominator <- calculate_denominator(sim_results, q, p.vec, n, nsim, results_available)
 
   # Taking the averages of all the results
-  sim_results_avg <- average_results(sim_results, observed_counts, q, nsim, results_available)
+  sim_results_avg <- average_results(sim_results, denominator, p.vec, n, q, nsim, results_available)
   
   # Save all the ranks
   sim_ranks <- matrix(list(), nrow = 1, ncol = 1)
@@ -1468,64 +1484,99 @@ get_results <- function(truth, draws, burnin, results_available) {
 }
 
 # Count the number of times each parameter corresponded to an observed value
-calculate_observed <- function(sim_results, q, p.vec, n, nsim, results_available) {
+calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_available) {
   # sim_results (list) = list of results from the simulation
-  n_param <- length(sim_results[[1]]) - 2
+  n_param <- length(results_available)
    
   # Create a list to store the results by model parameter
-  observed_counts <- lapply(1:n_param, function(i) list())
-  names(observed_counts) <- names(sim_results[[1]])[1:n_param]
+  counts <- lapply(1:n_param, function(i) list())
+  names(counts) <- names(sim_results[[1]])[1:n_param]
   
   for (param in 1:n_param) {
     if (results_available[param]) {
       
-      if (param %in% c(1, 2, 5)) {
-        observed_counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
+      if (param %in% c(1, 2)) {
+        counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
         for (s in 1:q) {
           obs_inds <- 1:(p.vec[s] * n) 
-          observed_counts[[param]][[s,1]] <- rep(0, length(obs_inds))
+          counts[[param]][[s,1]] <- rep(0, length(obs_inds))
           
           for (sim_iter in 1:nsim) {
             current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs[[s]]
-            observed_counts[[param]][[s,1]] <- observed_counts[[param]][[s,1]] + !(obs_inds %in% current_missing_obs)
+            counts[[param]][[s,1]] <- counts[[param]][[s,1]] + !(obs_inds %in% current_missing_obs)
           }
         }
       }
       
       if (param %in% c(3, 4)) {
-        observed_counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
-        observed_counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
+        counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
+        counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
+      }
+      
+      if (param == 5) {
+        counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
+        
+        for (s in 1:q) {
+          obs_inds <- 1:(p.vec[s] * n) 
+          counts[[param]][[s,1]] <- rep(0, length(obs_inds))
+          
+          for (sim_iter in 1:nsim) {
+            current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs[[s]]
+            counts[[param]][[s,1]] <- counts[[param]][[s,1]] + (obs_inds %in% current_missing_obs)
+          }
+        }
       }
       
       if (param == 6) {
-        observed_counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
+        counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         obs_inds <- 1:n
-        observed_counts[[param]][[1,1]] <- rep(0, length(obs_inds))
+        counts[[param]][[1,1]] <- rep(0, length(obs_inds))
         for (sim_iter in 1:nsim) {
-          current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs_Y
-          observed_counts[[param]][[1,1]] <- observed_counts[[param]][[1,1]] + !(obs_inds %in% current_missing_obs)
+          current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs_Y[[1,1]]
+          counts[[param]][[1,1]] <- counts[[param]][[1,1]] + (obs_inds %in% current_missing_obs)
         }
       }
     }
     
     if (!results_available[param]) {
-      observed_counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
+      counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
     }
   }
 
   # Return
-  observed_counts
+  counts
+}
+
+# Create a function to compile missing data results
+compile_missing_results <- function(param_by_sim_iter, s, dims, nsim, missing_obs_inds) {
+  # Create a matrix for the results from each metric
+  coverage_mat <- mse_mat <- ci_width_mat <- matrix(0, nrow = dims[1], ncol = dims[2])
+  
+  for (sim_iter in 1:nsim) {
+    # Save the missing observations
+    missing_obs_sim_iter <- missing_obs_inds[[sim_iter]]
+  
+    coverage_mat[missing_obs_sim_iter] <- coverage_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[1]]
+    mse_mat[missing_obs_sim_iter] <- mse_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[2]]
+    ci_width_mat[missing_obs_sim_iter] <- ci_width_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[3]]
+  }
+  
+  # Save the results
+  compiled_results <- list(coverage = coverage_mat, mse = mse_mat, ci_width = ci_width_mat)
+  
+  # Return
+  compiled_results
 }
 
 # Average the results before returning from the function
-average_results <- function(sim_results, observed_counts, q, nsim, results_available) {
+average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results_available) {
   # results_list (list) = list of results to return that should be averaged
   # observed_counts (list) = list of how many times each observation in each dataset was missing
   # nsim (int) = the number of simulation iterations that were run
   
   # Save the number of parameters
-  n_param <- length(sim_results[[1]]) - 2
+  n_param <- length(results_available)
   
   # Initialize a list to contain the averages
   results_avg <- lapply(1:n_param, function(i) list())
@@ -1543,21 +1594,64 @@ average_results <- function(sim_results, observed_counts, q, nsim, results_avail
       results_for_param <- matrix(list(), nrow = nrow(param_by_sim_iter[[1]]), ncol = 1)
       
       # Iterate through the results for each source
-      for (s in 1:nrow(param_by_sim_iter[[1]])) {
-        # Save the results for source s
-        results_by_source <- lapply(param_by_sim_iter, function(sim_iter) sim_iter[[s,1]])
+      if (param != 5 & param != 6) {
+        for (s in 1:nrow(param_by_sim_iter[[1]])) {
+          # Save the results for source s
+          results_by_source <- lapply(param_by_sim_iter, function(sim_iter) sim_iter[[s,1]])
+          
+          # Calculate the average coverage
+          avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[s,1]]
+          
+          # Calculate the average MSE
+          avg_mse_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[2]]))/denominator[[param]][[s,1]]
+          
+          # Calculate the average CI width
+          avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/denominator[[param]][[s,1]]
+          
+          # Save the results
+          results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
+                                           avg_mse = mean(avg_mse_source),
+                                           avg_ci_width = mean(avg_ci_width_source))
+        }
+      }
+      
+      # If there is missing data, construct a matrix for each dataset with the total missingness
+      if (param == 5) {
+        for (s in 1:q) {
+          missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs[[s,1]])
+          results_compiled <- compile_missing_results(param_by_sim_iter, s, dims = c(p.vec[s], n), nsim, missing_obs_inds)
+
+          # Calculate the average
+          avg_coverage_source <- results_compiled[[1]]/(denominator[[param]][[s,1]])
+          
+          # Calculate the average MSE
+          avg_mse_source <- results_compiled[[2]]/(denominator[[param]][[s,1]])
+          
+          # Calculate the average CI width
+          avg_ci_width_source <- results_compiled[[3]]/(denominator[[param]][[s,1]])
+          
+          # Save the results
+          results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
+                                           avg_mse = mean(avg_mse_source),
+                                           avg_ci_width = mean(avg_ci_width_source))
+        }
+      }
         
-        # Calculate the average coverage
-        avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/observed_counts[[param]][[s,1]]
+      if (param == 6) {
+        missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs_Y[[1,1]])
+        results_compiled <- compile_missing_results(param_by_sim_iter, s = 1, dims = c(n, 1), nsim, missing_obs_inds)
+        
+        # Calculate the average
+        avg_coverage_source <- results_compiled[[1]]/(denominator[[param]][[1,1]])
         
         # Calculate the average MSE
-        avg_mse_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[2]]))/observed_counts[[param]][[s,1]]
+        avg_mse_source <- results_compiled[[2]]/(denominator[[param]][[1,1]])
         
         # Calculate the average CI width
-        avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/observed_counts[[param]][[s,1]]
+        avg_ci_width_source <- results_compiled[[3]]/(denominator[[param]][[1,1]])
         
         # Save the results
-        results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
+        results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage_source),
                                          avg_mse = mean(avg_mse_source),
                                          avg_ci_width = mean(avg_ci_width_source))
       }
