@@ -131,10 +131,6 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   }
   
-  if (!missingness_in_data) {
-    Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
-  }
-  
   if (response_given) {
     beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     
@@ -182,15 +178,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
     tau20 <- matrix(1/rgamma(1, shape = a, rate = b))
   }
-  
-  # If there is missingness in the data, generate starting values for the missing entries
-  if (missingness_in_data) {
-    Xm0 <- matrix(list(), ncol = 1, nrow = q)
-    for (s in 1:q) {
-      Xm0[[s,1]] <- rep(0, length(missing_obs[s]))
-    }
-  }
-  
+
   # If there is missingness in Y, generate starting values for the missing entries
   if (response_given) {
     if (missingness_in_response) {
@@ -223,10 +211,6 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     if (missingness_in_response) {
       Ym.draw[[1]][[1,1]] <- Ym0
     }
-  }
-  
-  if (missingness_in_data) {
-    Xm.draw[[1]] <- Xm0
   }
   
   # ---------------------------------------------------------------------------
@@ -329,7 +313,14 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
       
       # Fill in the completed matrices with the imputed values
       for (s in 1:q) {
-        X_complete[[s,1]][missing_obs[[s]]] <- Xm.draw[[iter]][[s,1]]
+        # Draw values for the missing entries
+        Es <-  matrix(rnorm(p.vec[s]*n, 0, sqrt(error_vars[s])), nrow = p.vec[s], ncol = n)
+        Xsm.draw <- matrix((U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]) + Es)[missing_obs[[s]]])
+        
+        X_complete[[s,1]][missing_obs[[s]]] <- Xsm.draw
+        
+        # Remove the missing data to save memory
+        rm(Xsm.draw)
       }
     }
     
@@ -603,13 +594,6 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
         }
       }
     }
-    
-    if (missingness_in_data) {
-      for (s in 1:q) {
-        Es <-  matrix(rnorm(p.vec[s]*n, 0, sqrt(error_vars[s])), nrow = p.vec[s], ncol = n)
-        Xm.draw[[iter+1]][[s,1]] <- matrix((U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]) + Es)[missing_obs[[s]]])
-      }
-    }
   }
   
   # Return
@@ -617,7 +601,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
         Y = Y, # Return the response vector
         sigma.mat = sigma.mat, # Returning the scaling factors
         V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw,
-        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
+        Ym.draw = Ym.draw, Z.draw = Z.draw,
         tau2.draw = tau2.draw, beta.draw = beta.draw,
         ranks = c(r, r.vec))
 
@@ -1294,7 +1278,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
       if (entrywise) { # if removing observations entrywise
         for (s in 1:q) {
           # these are counters going down the columns of R. So 9 would be the 9th entry counting down. 
-          missing_obs[[s,1]] <- sample(x = 1:length(data[[s,1]]), size = prop_missing*length(data[[s,1]]), replace = FALSE) 
+          missing_obs[[s,1]] <- sort(sample(x = 1:length(data[[s,1]]), size = prop_missing*length(data[[s,1]]), replace = FALSE))
           
           # Duplicate Xs so that I have one with the full data and one with the missing data
           missing_data[[s,1]] <- data[[s,1]]
@@ -1305,7 +1289,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
         
         for (s in 1:q) {
           # These are counters going down the columns of X. So 9 would be the 9th entry counting down. 
-          missing_obs[[s,1]] <- sample(x=1:n, size = n*prop_missing, replace = FALSE)
+          missing_obs[[s,1]] <- sort(sample(x=1:n, size = n*prop_missing, replace = FALSE))
           
           if (s != 1) {
             avail_obs <- c(1:n)[!(c(1:n) %in% unlist(missing_obs[1:(s-1)]))]
@@ -1334,7 +1318,6 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
        indiv.structure.scale = indiv.structure.scale, # Individual structure
        beta = beta, tau2 = tau2)
 }
-
 
 # Returns the true missing values
 return_missing <- function(observed_param, true_param, missing_obs_inds) {
