@@ -130,10 +130,10 @@ continous.out.missing <- bpmf(data.missing, Y = Y.missing, nninit = TRUE, model_
 
 test <- bpmf_sim(nsample = 10, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, s2n = s2n, nninit = FALSE, ranks)
 
-test_with_response_continuous <- bpmf_sim(nsample = 10, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, s2n = s2n, nninit = FALSE, ranks, response = "continuous")
+test_with_response_continuous <- bpmf_sim(nsample = 1000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = s2n, nninit = FALSE, ranks, response = "continuous")
 
 test_with_response_bin <- bpmf_sim(nsample = 10, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, s2n = s2n, nninit = FALSE, ranks, response = "binary")
 
-test_with_response_missing <- bpmf_sim(nsample = 1000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = s2n, nninit = FALSE, ranks, 
-                                       missingness = "missingness_in_data", prop_missing = 0.1, entrywise = TRUE)
+test_without_response_missing <- bpmf_sim(nsample = 1000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = s2n, nninit = FALSE, ranks, 
+                                          missingness = "missingness_in_data", prop_missing = 0.1, entrywise = TRUE)
 
