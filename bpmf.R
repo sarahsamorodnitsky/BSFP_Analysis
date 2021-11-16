@@ -1744,3 +1744,8 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
   # Return
   results_avg
 }
+
+# Checking convergence
+convergence <- function(U.draw, V.draw, W.draw, Vs.draw) {
+  
+}
