@@ -51,7 +51,8 @@ true_params <- model_params
 nsample <- 10
 n_clust <- 10
 nsim <- 10
-s2n <- 1
+s2n <- NULL
+center <- FALSE
 nninit <- FALSE
 response <- NULL
 missingness <- NULL
