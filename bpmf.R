@@ -718,7 +718,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data_centered, Y_observed, nninit = nninit, model_params, ranks = ranks, nsample, progress = TRUE)
+    res <- bpmf(observed_data, Y_observed, nninit = nninit, model_params, ranks = ranks, nsample, progress = TRUE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -1182,11 +1182,11 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   E <- matrix(list(), nrow = q, ncol = 1)
   
   for (s in 1:q) {
-    U[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(10)), nrow = p.vec[s], ncol = r)
+    U[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
     
-    Vs[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(5)), nrow = n, ncol = r.vec[s])
+    Vs[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv)), nrow = n, ncol = r.vec[s])
     
-    W[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(5)), nrow = p.vec[s], ncol = r.vec[s])
+    W[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv)), nrow = p.vec[s], ncol = r.vec[s])
     
     E[[s,1]] <- matrix(rnorm(p.vec[s]*n), nrow = p.vec[s], ncol = n)
     
