@@ -623,10 +623,12 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
 
 }
 
-bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2n, nninit, ranks, 
+bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2n = NULL, center = FALSE, nninit, ranks, 
                      response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL) {
   
+  # ---------------------------------------------------------------------------
   # Check availability of parameters
+  # ---------------------------------------------------------------------------
   results_available <- c(TRUE, TRUE, !is.null(response), check_availability(response, "continuous"), 
                          check_availability(missingness, "missingness_in_data") | check_availability(missingness, "both"), 
                          check_availability(missingness, "missingness_in_response") | check_availability(missingness, "both"))
@@ -702,12 +704,14 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Center the data
     # -------------------------------------------------------------------------
     
-    center_the_data <- center_data(data = observed_data, structure = structure)
-    
-    # Saving the centered data
-    data_centered <- center_the_data$data_centered
-    means_for_centering <- center_the_data$means_for_centering
-    structure_centered <- center_the_data$structure_centered
+    if (center) {
+      center_the_data <- center_data(data = observed_data, structure = structure)
+      
+      # Saving the centered data
+      observed_data <- center_the_data$data_centered
+      means_for_centering <- center_the_data$means_for_centering
+      structure_centered <- center_the_data$structure_centered
+    }
     
     # -------------------------------------------------------------------------
     # Running the Gibbs sampling algorithm
@@ -1141,7 +1145,7 @@ check_availability <- function(param, compare) {
 }
 
 # Generate fake data depending on conditions
-bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing) {
+bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missingness, entrywise, prop_missing) {
   # Generates fake data depending on the dims provided in p.vec, n, and ranks
   # and the true parameters provided in `true_params`
   # s2n = desired signal-to-noise ratio 
@@ -1200,20 +1204,25 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
   # Standardizing the variance of the signal
   # -------------------------------------------------------------------------
   
-  # Calculating the scaling coefficient so that the variance of the underlying structure = s2n * noise variance
-  s2n_coef <- rep(0, q)
-  joint.structure.scale <- joint.structure
-  indiv.structure.scale <- indiv.structure
-  Vs.scale <- Vs
+  if (is.null(s2n)) {
+    joint.structure.scale <- joint.structure
+    indiv.structure.scale <- indiv.structure
+    s2n_coef <- NULL
+  }
   
-  for (s in 1:q) {
-    s2n_coef[s] <- s2n * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
+  if (!is.null(s2n)) {
+    # Calculating the scaling coefficient so that the variance of the underlying structure = s2n * noise variance
+    s2n_coef <- rep(0, q)
+    joint.structure.scale <- joint.structure
+    indiv.structure.scale <- indiv.structure
+    Vs.scale <- Vs
     
-    joint.structure.scale[[s,1]] <- s2n_coef[s] * joint.structure[[s,1]]
-    indiv.structure.scale[[s,1]] <- s2n_coef[s] * indiv.structure[[s,1]]
-    
-    # Scaling the individual scores
-    Vs.scale[[1,s]] <- s2n_coef[s] * Vs[[1,s]]
+    for (s in 1:q) {
+      s2n_coef[s] <- s2n * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
+      
+      joint.structure.scale[[s,1]] <- s2n_coef[s] * joint.structure[[s,1]]
+      indiv.structure.scale[[s,1]] <- s2n_coef[s] * indiv.structure[[s,1]]
+    }
   }
   
   # -------------------------------------------------------------------------
@@ -1243,7 +1252,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n, response, missingness, 
     beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
     
     # Combine the Vs
-    VStar <- cbind(1, do.call(cbind, V), do.call(cbind, Vs.scale))
+    VStar <- cbind(1, do.call(cbind, V), do.call(cbind, Vs))
     
     # True probability of being a case
     Prob.VStar.beta <- pnorm(VStar %*% beta[[1,1]])
