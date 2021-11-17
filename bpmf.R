@@ -673,6 +673,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # The response parameters
     beta <- sim_data$beta
     tau2 <- sim_data$tau2
+    EY <- sim_data$EY
     
     # -------------------------------------------------------------------------
     # Setting the proper variable names for the sampler
@@ -765,6 +766,14 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
       mat
     })
     
+    # Calculating the estimate for E(Y) at each iteration
+    EY.burnin <- lapply(1:(burnin+1), function(res) {
+      mat <- matrix(list(), nrow = 1, ncol = 1)
+      VStar.iter <- cbind(1, do.call(cbind, V.burnin[[res]]), do.call(cbind, Vs.burnin[[res]]))
+      mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
+      mat
+    })
+    
     # -------------------------------------------------------------------------
     # Checking the coverage
     # -------------------------------------------------------------------------
@@ -772,7 +781,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Saving the draws from the sampler together
     draws <- list(joint.structure.burnin = joint.structure.burnin,
                   indiv.structure.burnin = indiv.structure.burnin,
-                  beta = beta.burnin,
+                  EY = EY.burnin,
                   tau2 = tau2.burnin,
                   Xm = Xm.burnin,
                   Ym = Ym.burnin)
@@ -783,7 +792,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Saving the truth together for comparison
     truth <- list(joint.structure.scale = joint.structure.scale,
                   indiv.structure.scale = indiv.structure.scale,
-                  beta = beta,
+                  EY = EY,
                   tau2 = tau2,
                   Xm = Xm,
                   Ym = Ym)
@@ -1254,20 +1263,19 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
     # Combine the Vs
     VStar <- cbind(1, do.call(cbind, V), do.call(cbind, Vs))
     
-    # True probability of being a case
-    Prob.VStar.beta <- pnorm(VStar %*% beta[[1,1]])
-    
     if (response == "binary") {
-      Y <- matrix(list(), nrow = 1, ncol = 1)
-      Y[[1,1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar %*% beta[[1,1]])), ncol = 1)
+      Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
+      EY[[1,1]] <- pnorm(VStar %*% beta[[1,1]]) # True probability of being a case
+      Y[[1,1]] <- matrix(rbinom(n, size = 1, prob = EY[[1,1]]), ncol = 1)
       tau2 <- matrix(list(), nrow = 1, ncol = 1)
     }
     
     if (response == "continuous") {
+      Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
+      EY[[1,1]] <- VStar %*% beta[[1,1]]
       tau2 <- matrix(list(), nrow = 1, ncol = 1)
       tau2[[1,1]] <- matrix(1/rgamma(1, shape = a, rate = b))
-      Y <- matrix(list(), nrow = 1, ncol = 1)
-      Y[[1,1]] <- matrix(VStar %*% beta[[1,1]] + rnorm(n, mean = 0, sd = sqrt(tau2[[1,1]])), ncol = 1)
+      Y[[1,1]] <- matrix(EY[[1,1]] + rnorm(n, mean = 0, sd = sqrt(tau2[[1,1]])), ncol = 1)
     }
   }
   
@@ -1343,7 +1351,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
        s2n = s2n, s2n_coef = s2n_coef, # Scaling for s2n
        joint.structure.scale = joint.structure.scale, # Joint structure
        indiv.structure.scale = indiv.structure.scale, # Individual structure
-       beta = beta, tau2 = tau2)
+       beta = beta, tau2 = tau2, EY = EY)
 }
 
 # Returns the true missing values
@@ -1433,9 +1441,11 @@ check_coverage <- function(truth, draws, burnin) {
 mse <- function(truth, draws) {
   # Computes the MSE between Gibbs sampling draws after burn-in and the 
   # true component being estimated. 
-  Reduce('+', lapply(draws, function(iter.val) {
-    (iter.val - truth)^2
-  }))/sum(truth^2)
+  # Reduce('+', lapply(draws, function(iter.val) {
+  #   (iter.val - truth)^2
+  # }))/sum(truth^2)
+  
+  mean(sapply(draws, function(iter.val) {sum((iter.val - truth)^2)/sum(truth^2)}))
 }
 
 # Computing credible interval width
@@ -1467,7 +1477,7 @@ get_results <- function(truth, draws, burnin, results_available) {
   
   # Save the results 
   results <- lapply(1:n_param, function(i) list())
-  names(results) <- names(results_available)
+  names(results) <- names(truth)
   
   # Iterate through the parameters, checking the coverage, MSE, and CI width
   for (param in 1:n_param) {
