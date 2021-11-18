@@ -1444,7 +1444,7 @@ mse <- function(truth, draws) {
   #   (iter.val - truth)^2
   # }))/sum(truth^2)
   
-  mean(sapply(draws, function(iter.val) {sum((iter.val - truth)^2)/sum(truth^2)}))
+  Reduce("+", lapply(draws, function(iter.val) {(iter.val - truth)^2/truth^2}))/length(draws)
 }
 
 # Computing credible interval width
@@ -1658,7 +1658,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
             if (missingness == "missingness_in_data" | missingness == "both") {
               # Check the results for structure corresponding to non-missing entries in each dataset
               missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs[[s,1]])
-              results_compiled_missing <- compile_missing_results(param_by_sim_iter, s, dims = c(p.vec[s], n), nsim, missing_obs_inds, type = "structure", observed = FALSE)
+              results_compiled_missing <- compile_missing_results(param_by_sim_iter, s, dims = c(p.vec[s], n), nsim, missing_obs_inds, type = "structure", observed = FALSE)       
               
               # Calculate the average
               avg_coverage_missing_source <- results_compiled_missing[[1]]/(nsim - denominator[[param]][[s,1]])
@@ -1764,16 +1764,29 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
 }
 
 # Checking convergence
-convergence <- function(nsim, U.draw, V.draw, W.draw, Vs.draw, Y = NULL, beta.draw = NULL, tau2.draw = NULL) {
+convergence <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_params, nsim, Y = NULL, beta.iter = NULL, tau2.iter = NULL) {
+  # How many sources are there?
+  q <- nrow(data)
+  
+  # Saving the model parameters
+  error_vars <- model_params$error_vars # Error variances
+  sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
+  sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
+  beta_vars <- model_params$beta_vars # Variances on betas
+  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
+  
   # Check if there is a response
   response_given <- !is.null(Y)
   
-  if (!response_given) {
-    apply(U.draw, 1, function(row) {
-      sapply(row, function(i) {
-        log(pnorm(i, mean = 0, sd = sqrt(sigma2_joint)))
-      })
-    })
-    
+  # Check if there is missingness
+  missingness_in_data
+  
+  for (s in 1:q) {
+    data_s <- data[[s,1]]
+    prod(sapply(1:n, function(i) {
+      dnorm(data_s[,i], mean = U.iter[[s,1]] %*% t(V.iter[[1,1]])[,i], sd = sqrt(error_vars[s]))
+    }))
   }
+  
+
 }
