@@ -41,7 +41,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
   sigma2_joint <- joint_var <- model_params$joint_var
   sigma2_indiv <- indiv_vars <- model_params$indiv_vars
   beta_vars <- model_params$beta_vars
-  response_vars <- model_params$response_vars; a <- response_vars[1]; b <- response_vars[2]
+  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2]
   
   # ---------------------------------------------------------------------------
   # Check for missingness in data
@@ -105,7 +105,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     r.vec <- ranks[-1]
     sigma.mat <- matrix(list(), nrow = q, 1)
     for (s in 1:q) {
-      sigma.mat[[s,1]] < 1
+      sigma.mat[[s,1]] <- 1
     }
   }
   
@@ -180,7 +180,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     
     beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
-    tau20 <- matrix(1/rgamma(1, shape = a, rate = b))
+    tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
   }
   
   # If there is missingness in the data, generate starting values for the missing entries
@@ -287,7 +287,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
       beta.iter <- beta.draw[[iter]][[1,1]] 
       
       # Creating a matrix of the joint and individual effects
-      beta_indiv.iter <- matrix(list(), ncol = 1, nrow = q)
+      beta_indiv.iter <- matrix(list(), nrow = q, ncol = 1)
       
       # Breaking beta down into the intercept, joint, and individual effects
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
@@ -385,7 +385,6 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
       U.iter.combined <- rbind(do.call(rbind, U.iter), t(beta_joint.iter))
       
       # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
-      SigmaInvV <- SigmaVInv
       tU_Sigma <- crossprod(U.iter.combined, SigmaVInv) 
       tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
       
@@ -523,26 +522,13 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     W.iter <- W.draw[[iter+1]]
     
     # -------------------------------------------------------------------------
-    # Posterior sample for tau2
+    # Posterior sample for beta
     # -------------------------------------------------------------------------
     
     if (response_given) {
       # Combine current values of V and V_\cdot
       VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
       
-      if (response_type == "continuous") {
-        tau2.draw[[iter+1]][[1,1]] <- matrix(1/rgamma(1, shape = a + (n/2), rate = b + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2)))
-        
-        # Update the current value of tau2
-        tau2.iter <- tau2.draw[[iter+1]][[1,1]]
-      }
-    }
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for beta
-    # -------------------------------------------------------------------------
-    
-    if (response_given) {
       if (response_type == "binary") {
         Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- t(VStar.iter) %*% Z.iter
@@ -569,6 +555,19 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
       for (s in 1:q) {
         if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
         if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+      }
+    }
+    
+    # -------------------------------------------------------------------------
+    # Posterior sample for tau2
+    # -------------------------------------------------------------------------
+    
+    if (response_given) {
+      if (response_type == "continuous") {
+        tau2.draw[[iter+1]][[1,1]] <- matrix(1/rgamma(1, shape = shape + (n/2), rate = rate + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2)))
+        
+        # Update the current value of tau2
+        tau2.iter <- tau2.draw[[iter+1]][[1,1]]
       }
     }
     
@@ -632,7 +631,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   results_available <- c(TRUE, TRUE, !is.null(response), check_availability(response, "continuous"), 
                          check_availability(missingness, "missingness_in_data") | check_availability(missingness, "both"), 
                          check_availability(missingness, "missingness_in_response") | check_availability(missingness, "both"))
-  names(results_available) <- c("joint.structure.scale", "indiv.structure.scale", "beta", "tau2", "Xm", "Ym")
+  names(results_available) <- c("joint structure", "indiv structure", "EY", "tau2", "Xm", "Ym")
   
   # sim_results <- lapply(1:nsim, function(i) list())
   cl <- makeCluster(n_clust)
@@ -654,10 +653,8 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Saving the data
     true_data <- sim_data$data
     q <- length(p.vec)
-    joint.structure.scale <- sim_data$joint.structure.scale
-    indiv.structure.scale <- sim_data$indiv.structure.scale
-    structure <- list(joint = joint.structure.scale,
-                      indiv = indiv.structure.scale)
+    joint.structure <- sim_data$joint.structure
+    indiv.structure <- sim_data$indiv.structure
     
     missing_data <- sim_data$missing_data
     missing_obs <- sim_data$missing_obs
@@ -767,12 +764,18 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     })
     
     # Calculating the estimate for E(Y) at each iteration
-    EY.burnin <- lapply(1:(burnin+1), function(res) {
-      mat <- matrix(list(), nrow = 1, ncol = 1)
-      VStar.iter <- cbind(1, do.call(cbind, V.burnin[[res]]), do.call(cbind, Vs.burnin[[res]]))
-      mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
-      mat
-    })
+    if (is.null(response)) {
+      EY.burnin <- lapply(1:(burnin+1), function(res) matrix(list(), nrow = 1, ncol = 1))
+    }
+    
+    if (!is.null(response)) {
+      EY.burnin <- lapply(1:(burnin+1), function(res) {
+        mat <- matrix(list(), nrow = 1, ncol = 1)
+        VStar.iter <- cbind(1, do.call(cbind, V.burnin[[res]]), do.call(cbind, Vs.burnin[[res]]))
+        mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
+        mat
+      })
+    }
     
     # -------------------------------------------------------------------------
     # Checking the coverage
@@ -786,12 +789,13 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
                   Xm = Xm.burnin,
                   Ym = Ym.burnin)
     
+    # Return the imputed values, if any
     Xm <- return_missing(observed_data, true_data, missing_obs)
     Ym <- return_missing(Y_observed, Y, missing_obs_Y)
     
     # Saving the truth together for comparison
-    truth <- list(joint.structure.scale = joint.structure.scale,
-                  indiv.structure.scale = indiv.structure.scale,
+    truth <- list(joint.structure = joint.structure,
+                  indiv.structure = indiv.structure,
                   EY = EY,
                   tau2 = tau2,
                   Xm = Xm,
@@ -1168,12 +1172,12 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   r <- ranks[1]
   r.vec <- ranks[-1]
   
-  # Setting the hyperparameters
+  # Setting the true parameters
   error_vars <- true_params$error_vars
   sigma2_joint <- joint_var <- true_params$joint_var
   sigma2_indiv <- indiv_vars <- true_params$indiv_vars
   beta_vars <- true_params$beta_vars
-  response_vars <- true_params$response_vars; a <- response_vars[1]; b <- response_vars[2]
+  response_vars <- true_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2]
   
   # -------------------------------------------------------------------------
   # Generating the underlying structure
@@ -1193,9 +1197,9 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   for (s in 1:q) {
     U[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
     
-    Vs[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv)), nrow = n, ncol = r.vec[s])
+    Vs[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
     
-    W[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv)), nrow = p.vec[s], ncol = r.vec[s])
+    W[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r.vec[s])
     
     E[[s,1]] <- matrix(rnorm(p.vec[s]*n), nrow = p.vec[s], ncol = n)
     
@@ -1214,8 +1218,6 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   # -------------------------------------------------------------------------
   
   if (is.null(s2n)) {
-    joint.structure.scale <- joint.structure
-    indiv.structure.scale <- indiv.structure
     s2n_coef <- NULL
   }
   
@@ -1241,7 +1243,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   data <- matrix(list(), nrow = q, ncol = 1)
   
   for (s in 1:q) {
-    data[s,1][[1]] <- joint.structure.scale[[s,1]] + indiv.structure.scale[[s,1]] + E[[s,1]]
+    data[s,1][[1]] <- joint.structure[[s,1]] + indiv.structure[[s,1]] + E[[s,1]]
   }
   
   # -------------------------------------------------------------------------
@@ -1249,7 +1251,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   # -------------------------------------------------------------------------
   
   if (is.null(response)) {
-    Y <- Y_missing <- beta <- tau2 <- matrix(list(), nrow = 1, ncol = 1)
+    Y <- EY <- Y_missing <- beta <- tau2 <- matrix(list(), nrow = 1, ncol = 1)
   }
   
   if (!is.null(response)) {
@@ -1274,8 +1276,8 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
       Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
       EY[[1,1]] <- VStar %*% beta[[1,1]]
       tau2 <- matrix(list(), nrow = 1, ncol = 1)
-      tau2[[1,1]] <- matrix(1/rgamma(1, shape = a, rate = b))
-      Y[[1,1]] <- matrix(EY[[1,1]] + rnorm(n, mean = 0, sd = sqrt(tau2[[1,1]])), ncol = 1)
+      tau2[[1,1]] <- matrix(1/rgamma(1, shape = shape, rate = rate)) 
+      Y[[1,1]] <- matrix(rnorm(n, mean = EY[[1,1]], sd = sqrt(tau2[[1,1]])), ncol = 1)
     }
   }
   
@@ -1349,8 +1351,8 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
        missing_obs = missing_obs, # Missing data 
        Y_missing = Y_missing, missing_obs_Y = missing_obs_Y, # Missing data 
        s2n = s2n, s2n_coef = s2n_coef, # Scaling for s2n
-       joint.structure.scale = joint.structure.scale, # Joint structure
-       indiv.structure.scale = indiv.structure.scale, # Individual structure
+       joint.structure = joint.structure, # Joint structure
+       indiv.structure = indiv.structure, # Individual structure
        beta = beta, tau2 = tau2, EY = EY)
 }
 
@@ -1765,6 +1767,16 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
 }
 
 # Checking convergence
-convergence <- function(U.draw, V.draw, W.draw, Vs.draw) {
+convergence <- function(nsim, U.draw, V.draw, W.draw, Vs.draw, Y = NULL, beta.draw = NULL, tau2.draw = NULL) {
+  # Check if there is a response
+  response_given <- !is.null(Y)
   
+  if (!response_given) {
+    apply(U.draw, 1, function(row) {
+      sapply(row, function(i) {
+        log(pnorm(i, mean = 0, sd = sqrt(sigma2_joint)))
+      })
+    })
+    
+  }
 }
