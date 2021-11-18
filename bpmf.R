@@ -28,20 +28,20 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
   # Extracting the dimensions
   # ---------------------------------------------------------------------------
   
-  q <- nrow(data)
-  p.vec <- apply(data, 1, function(source) nrow(source[[1]]))
-  p <- sum(p.vec)
-  n <- ncol(data[[1,1]])
+  q <- nrow(data) # Number of sources
+  p.vec <- apply(data, 1, function(source) nrow(source[[1]])) # Number of features per source
+  p <- sum(p.vec) # Total number of features
+  n <- ncol(data[[1,1]]) # Number of subjects
   
   # ---------------------------------------------------------------------------
   # Extracting the model parameters
   # ---------------------------------------------------------------------------
   
-  error_vars <- model_params$error_vars
-  sigma2_joint <- joint_var <- model_params$joint_var
-  sigma2_indiv <- indiv_vars <- model_params$indiv_vars
-  beta_vars <- model_params$beta_vars
-  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2]
+  error_vars <- model_params$error_vars # Error variances
+  sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
+  sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
+  beta_vars <- model_params$beta_vars # Variances on betas
+  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
   
   # ---------------------------------------------------------------------------
   # Check for missingness in data
@@ -235,18 +235,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
   
   if (!response_given) {
     # Error variance for X. 
-    SigmaInv <- matrix(list(), nrow = q, ncol = q)
-    
-    for (s in 1:q) {
-      SigmaInv[[s,s]] <- diag(rep(1/error_vars[s], p.vec[s]))
-      
-      # Fill in the off-diagonal entries
-      for (ss in 1:q) {
-        if (ss != s) {
-          SigmaInv[[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = p.vec[ss])
-        }
-      }
-    }
+    SigmaVInv <- diag(rep(1/error_vars, p.vec))
   }
   
   if (response_given) {
@@ -344,13 +333,13 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     if (response_given) {
       if (response_type == "continuous") {
         # For V - Combined error variances between X1, X2, and Y
-        SigmaVInv <- diag(c(rep(1/error_vars, p.vec), tau2.iter[[1,1]]))
+        SigmaVInv <- diag(c(rep(1/error_vars, p.vec), 1/tau2.iter[[1,1]]))
         
         # For Vs
         SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
         
         for (s in 1:q) {
-          SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), tau2.iter[[1,1]]))
+          SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), 1/tau2.iter[[1,1]]))
         }
       }
     }
@@ -362,8 +351,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     if (!response_given) {
       # Concatenating Ui's together
       U.iter.combined <- do.call(rbind, U.iter)
-      SigmaInvV <- data.rearrange(SigmaInv)$out
-      tU_Sigma <- crossprod(U.iter.combined, SigmaInvV)
+      tU_Sigma <- crossprod(U.iter.combined, SigmaVInv)
       
       # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
       tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
@@ -403,12 +391,11 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
       }
       
       if (response_type == "continuous") {
+        # The combined centered Xis with the latent response vector
+        X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+                        t(Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
         V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
-          # The combined centered Xis with the latent response vector
-          X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                          (Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
-          
           bv <- tU_Sigma %*% X.iter[,i]
           
           Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
@@ -484,7 +471,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
                            t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
                                do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
           
-          Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
+          Bvs <- solve(tW_Sigma_W + (1/indiv_vars[s]) * diag(r.vec[s]))
           Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
             bvs <- tW_Sigma %*% Xs.iter[, i]
             
@@ -497,6 +484,9 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     
     # Update the current value of V
     Vs.iter <- Vs.draw[[iter+1]]
+    
+    # Combine current values of V and V_\cdot
+    VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
     
     # -------------------------------------------------------------------------
     # Posterior sample for W
@@ -526,9 +516,6 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
     # -------------------------------------------------------------------------
     
     if (response_given) {
-      # Combine current values of V and V_\cdot
-      VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
-      
       if (response_type == "binary") {
         Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- t(VStar.iter) %*% Z.iter
@@ -769,12 +756,23 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     }
     
     if (!is.null(response)) {
-      EY.burnin <- lapply(1:(burnin+1), function(res) {
-        mat <- matrix(list(), nrow = 1, ncol = 1)
-        VStar.iter <- cbind(1, do.call(cbind, V.burnin[[res]]), do.call(cbind, Vs.burnin[[res]]))
-        mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
-        mat
-      })
+      if (response == "continuous") {
+        EY.burnin <- lapply(1:(burnin+1), function(res) {
+          mat <- matrix(list(), nrow = 1, ncol = 1)
+          VStar.iter <- cbind(1, do.call(cbind, V.burnin[[res]]), do.call(cbind, Vs.burnin[[res]]))
+          mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
+          mat
+        })
+      }
+      
+      if (response == "binary") {
+        EY.burnin <- lapply(1:(burnin+1), function(res) {
+          mat <- matrix(list(), nrow = 1, ncol = 1)
+          VStar.iter <- cbind(1, do.call(cbind, V.burnin[[res]]), do.call(cbind, Vs.burnin[[res]]))
+          mat[[1,1]] <- pnorm(VStar.iter %*% beta.burnin[[res]][[1,1]])
+          mat
+        })
+      }
     }
     
     # -------------------------------------------------------------------------
@@ -848,7 +846,6 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
 # Helper functions for initializing with BIDIFAC
 # -----------------------------------------------------------------------------
 
-# functions
 frob <- function(X){ sum(X^2,na.rm=T) }
 
 diag2 <- function(x) {
@@ -1277,7 +1274,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
       EY[[1,1]] <- VStar %*% beta[[1,1]]
       tau2 <- matrix(list(), nrow = 1, ncol = 1)
       tau2[[1,1]] <- matrix(1/rgamma(1, shape = shape, rate = rate)) 
-      Y[[1,1]] <- matrix(rnorm(n, mean = EY[[1,1]], sd = sqrt(tau2[[1,1]])), ncol = 1)
+      Y[[1,1]] <- matrix(EY[[1,1]] + rnorm(n, mean = 0, sd = sqrt(tau2[[1,1]])), ncol = 1)
     }
   }
   
