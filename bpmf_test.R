@@ -43,7 +43,7 @@ for (s in 1:q) {
 model_params <- true_params <- list(error_vars = c(1,1),
                                     joint_var = 1,
                                     indiv_vars = c(1,1),
-                                    beta_vars = c(100, 1, rep(1, q)), # Use the same variance for all the effects from each source
+                                    beta_vars = c(10, 1, rep(1, q)), # Use the same variance for all the effects from each source
                                     response_vars = c(shape = 1,rate = 1))
 
 # -----------------------------------------------------------------------------
@@ -51,5 +51,5 @@ model_params <- true_params <- list(error_vars = c(1,1),
 # -----------------------------------------------------------------------------
 
 ## Here is where the problem is
-test_with_response_continuous <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
+test_with_response_continuous <- bpmf_sim(nsample = 1000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
 
