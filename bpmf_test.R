@@ -23,32 +23,9 @@ model_params <- true_params <- list(error_vars = c(1,1),
                                     response_vars = c(shape = 1,rate = 1))
 
 # Generating example data
-data <- matrix(list(), ncol = 1, nrow = q)
-
-V <- matrix(list(), nrow = 1, ncol = 1)
-V[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(10)), nrow = n, ncol = r)
-
-U <- matrix(list(), nrow = q, ncol = 1)
-Vs <- matrix(list(), nrow = 1, ncol = q)
-W <- matrix(list(), nrow = q, ncol = q)
-
-for (s in 1:q) {
-  U[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(10)), nrow = p.vec[s], ncol = r)
-
-  Vs[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(5)), nrow = n, ncol = r.vec[s])
-
-  W[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(5)), nrow = p.vec[s], ncol = r.vec[s])
-
-  for (ss in 1:q) {
-    if (ss != s) {
-      W[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
-    }
-  }
-}
-
-for (s in 1:q) {
-  data[s,1][[1]] <- U[[s,1]] %*% t(V[[1,1]]) + W[[s,s]] %*% t(Vs[[1,s]]) + matrix(rnorm(p.vec[s]*n), nrow = p.vec[s], ncol = n)
-}
+data <- bpmf_data(p.vec, n, ranks, true_params, response = "continuous", missingness = NULL, entrywise = NULL, prop_missing = NULL)
+X <- data$data
+y <- data$Y
 
 # -----------------------------------------------------------------------------
 # Testing the coverage
@@ -101,6 +78,42 @@ plot(log_joint_density_over_iters)
 # How much difference is there between each point at the tail end?
 diff(log_joint_density_over_iters)
 
+# -----------------------------------------------------------------------------
+# Testing obtaining structure from a different method and then inputting it into
+# the model function
+# -----------------------------------------------------------------------------
 
+# Running the BIDIFAC model
+bidifac.test <- BIDIFAC(X, rmt = TRUE, pbar = FALSE)
 
+# Saving the column structure (the joint structure)
+bidifac.joint <- lapply(1:q, function(source) {
+  bidifac.test$C[[source,1]]
+})
+bidifac.joint.rank <- rankMatrix(bidifac.test$C[[1,1]])[1]
+
+# Saving the individual structure 
+bidifac.individual <- lapply(1:q, function(source) {
+  bidifac.test$I[[source,1]]
+})
+bidifac.indiv.rank <- sapply(bidifac.test$I, function(source) {
+  rankMatrix(source)[1]
+}) # Not sure this is the most generalizable approach
+
+# Obtaining the joint scores
+bidifac.joint.scores <- svd(bidifac.joint[[1]])$v[,1:bidifac.joint.rank]
+
+# Obtaining the individual scores
+bidifac.indiv.scores <- do.call(cbind, lapply(1:q, function(source) {
+  svd.source <- svd(bidifac.individual[[source]])
+  svd.source$v[,1:bidifac.indiv.rank[source]]
+}))
+
+# Combining the scores together
+bidifac.all.scores <- cbind.data.frame(y[[1,1]], bidifac.joint.scores, bidifac.indiv.scores)
+colnames(bidifac.all.scores) <- c("y", "joint1", "indiv1", "indiv2")
+
+# Fitting the Bayesian linear model
+bidifac.bayes <- bpmf(data = X, Y = y, nninit = FALSE, model_params = model_params, 
+                      ranks = ranks, scores = as.matrix(bidifac.all.scores[,-1]), nsample = 1000)
 
