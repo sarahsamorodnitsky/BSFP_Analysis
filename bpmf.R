@@ -14,15 +14,23 @@ library(truncnorm)
 # Bayesian PMF functions
 # -----------------------------------------------------------------------------
 
-bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress = TRUE) {
+bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
-  # 
+  
+  # ---------------------------------------------------------------------------
   # Arguments: 
+  # 
   # data = matrix with list entries corresponding to each data source
   # Y = column vector with outcome or NULL
   # nninit = should the model be initialized with a nuclear norm penalized objective? if FALSE, provide ranks
   # model_params = (error_vars, joint_vars, indiv_vars, beta_vars = NULL, response_vars)
+  # ranks = joint and individual ranks (1st entry = joint rank, kth for k>1 is the individual rank for the k-1'st source)
+  # scores = if using structure from another method to fit a linear model, provide joint and individual scores here.
+  #   in this case, ranks should be provided and nninit = FALSE, Y != NULL
+  # nsample = number of Gibbs sampling iterations
+  # progress = should the progress of the sampler be displayed? 
+  # ---------------------------------------------------------------------------
   
   # ---------------------------------------------------------------------------
   # Extracting the dimensions
@@ -256,6 +264,14 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
   }
   
   # ---------------------------------------------------------------------------
+  # If structure from another method is given, save the scores as VStar
+  # ---------------------------------------------------------------------------
+  
+  if (!is.null(scores)) {
+    VStar <- cbind(1, scores)
+  }
+  
+  # ---------------------------------------------------------------------------
   # Start Gibbs sampling!
   # ---------------------------------------------------------------------------
   
@@ -344,172 +360,182 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
       }
     }
     
-    # -------------------------------------------------------------------------
-    # Posterior sample for V
-    # -------------------------------------------------------------------------
     
-    if (!response_given) {
-      # Concatenating Ui's together
-      U.iter.combined <- do.call(rbind, U.iter)
-      tU_Sigma <- crossprod(U.iter.combined, SigmaVInv)
+    # If estimating the underlying structure
+    if (is.null(scores)) {
+      # -------------------------------------------------------------------------
+      # Posterior sample for V
+      # -------------------------------------------------------------------------
       
-      # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
-      tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
-      
-      # The combined centered Xis with the latent response vector
-      X.iter <- do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
-      Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
-      
-      V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
-        bv <-  tU_Sigma %*% X.iter[,i]
+      if (!response_given) {
+        # Concatenating Ui's together
+        U.iter.combined <- do.call(rbind, U.iter)
+        tU_Sigma <- crossprod(U.iter.combined, SigmaVInv)
         
-        Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-        Vi
-      }), nrow = r))
-    }
-    
-    if (response_given) {
-      # Concatenating Ui's together
-      U.iter.combined <- rbind(do.call(rbind, U.iter), t(beta_joint.iter))
-      
-      # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
-      tU_Sigma <- crossprod(U.iter.combined, SigmaVInv) 
-      tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
-      
-      if (response_type == "binary") {
-        Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
-        V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
-          # The combined centered Xis with the latent response vector
-          X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                          (Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
-          
-          bv <- tU_Sigma %*% X.iter[,i]
-          
-          Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-          Vi
-        }), nrow = r))
-      }
-      
-      if (response_type == "continuous") {
+        # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
+        tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
+        
         # The combined centered Xis with the latent response vector
-        X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                        t(Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
+        X.iter <- do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
+        
         V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
-          bv <- tU_Sigma %*% X.iter[,i]
+          bv <-  tU_Sigma %*% X.iter[,i]
           
           Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
           Vi
         }), nrow = r))
       }
-    }
-    
-    # Updating the value of V
-    V.iter <- V.draw[[iter+1]]
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for Us
-    # -------------------------------------------------------------------------
-    
-    for (s in 1:q) {
-      Xs.iter <- X_complete[[s,1]] - W.iter[[s,s]] %*% t(Vs.iter[[1,s]])
-      Bu <- solve((1/error_vars[s]) * t(V.iter[[1,1]]) %*% V.iter[[1,1]] + (1/sigma2_joint) * diag(r))
-      U.draw[[iter+1]][[s,1]] <- t(matrix(sapply(1:p.vec[s], function(j) {
-        bu <- (1/error_vars[s]) * t(V.iter[[1,1]]) %*% Xs.iter[j, ]
+      
+      if (response_given) {
+        # Concatenating Ui's together
+        U.iter.combined <- rbind(do.call(rbind, U.iter), t(beta_joint.iter))
         
-        U1j <- mvrnorm(1, mu = Bu %*% bu, Sigma = Bu)
-        U1j
-      }), nrow = r))
-    }
-
-    U.iter <- U.draw[[iter+1]]
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for Vs, s=1,...,q
-    # -------------------------------------------------------------------------
-    
-    if (!response_given) {
-      for (s in 1:q) {
-        Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
-        Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
-        
-        Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
-          bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
-          
-          Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
-          Vsi
-        }), nrow = r.vec[s]))
-      }
-    }
-    
-    if (response_given) {
-      for (s in 1:q) {
-        # Combined Ws and beta
-        W.iter.combined <- rbind(W.iter[[s,s]], t(beta_indiv.iter[[s,1]]))
-        
-        tW_Sigma <- crossprod(W.iter.combined, SigmaVsInv[[s,s]])
-        tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter.combined)
+        # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
+        tU_Sigma <- crossprod(U.iter.combined, SigmaVInv) 
+        tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
         
         if (response_type == "binary") {
-          # Combined centered Xs and Z
-          Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
-                          t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
-                              do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
-          
-          Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
-          Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
-            bvs <- tW_Sigma %*% Xs.iter[, i]
+          Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
+          V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
+            # The combined centered Xis with the latent response vector
+            X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+                            (Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
             
-            Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
-            Vsi
-          }), nrow = r.vec[s]))
+            bv <- tU_Sigma %*% X.iter[,i]
+            
+            Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+            Vi
+          }), nrow = r))
         }
         
         if (response_type == "continuous") {
-          # Combined centered Xs and Y
-          Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
-                           t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
-                               do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
+          # The combined centered Xis with the latent response vector
+          X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+                          t(Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
+          Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
+          V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
+            bv <- tU_Sigma %*% X.iter[,i]
+            
+            Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+            Vi
+          }), nrow = r))
+        }
+      }
+      
+      # Updating the value of V
+      V.iter <- V.draw[[iter+1]]
+      
+      # -------------------------------------------------------------------------
+      # Posterior sample for Us
+      # -------------------------------------------------------------------------
+      
+      for (s in 1:q) {
+        Xs.iter <- X_complete[[s,1]] - W.iter[[s,s]] %*% t(Vs.iter[[1,s]])
+        Bu <- solve((1/error_vars[s]) * t(V.iter[[1,1]]) %*% V.iter[[1,1]] + (1/sigma2_joint) * diag(r))
+        U.draw[[iter+1]][[s,1]] <- t(matrix(sapply(1:p.vec[s], function(j) {
+          bu <- (1/error_vars[s]) * t(V.iter[[1,1]]) %*% Xs.iter[j, ]
           
-          Bvs <- solve(tW_Sigma_W + (1/indiv_vars[s]) * diag(r.vec[s]))
+          U1j <- mvrnorm(1, mu = Bu %*% bu, Sigma = Bu)
+          U1j
+        }), nrow = r))
+      }
+  
+      U.iter <- U.draw[[iter+1]]
+      
+      # -------------------------------------------------------------------------
+      # Posterior sample for Vs, s=1,...,q
+      # -------------------------------------------------------------------------
+      
+      if (!response_given) {
+        for (s in 1:q) {
+          Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
+          Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
+          
           Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
-            bvs <- tW_Sigma %*% Xs.iter[, i]
+            bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
             
             Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
             Vsi
           }), nrow = r.vec[s]))
         }
       }
-    }
-    
-    # Update the current value of V
-    Vs.iter <- Vs.draw[[iter+1]]
-    
-    # Combine current values of V and V_\cdot
-    VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for W
-    # -------------------------------------------------------------------------
-    
-    for (s in 1:q) {
-      Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
-      Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
       
-      W.draw[[iter+1]][[s,s]] <- t(matrix(sapply(1:p.vec[s], function(j) {
-        bws <- (1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Xs.iter[j,] 
-        
-        Wsj <- mvrnorm(1, mu = Bws %*% bws, Sigma = Bws)
-        Wsj
-      }), nrow = r.vec[s]))
-      
-      for (ss in 1:q) {
-        if (ss != s) W.draw[[iter+1]][[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = r.vec[ss])
+      if (response_given) {
+        for (s in 1:q) {
+          # Combined Ws and beta
+          W.iter.combined <- rbind(W.iter[[s,s]], t(beta_indiv.iter[[s,1]]))
+          
+          tW_Sigma <- crossprod(W.iter.combined, SigmaVsInv[[s,s]])
+          tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter.combined)
+          
+          if (response_type == "binary") {
+            # Combined centered Xs and Z
+            Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
+                            t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
+                                do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
+            
+            Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
+            Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
+              bvs <- tW_Sigma %*% Xs.iter[, i]
+              
+              Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+              Vsi
+            }), nrow = r.vec[s]))
+          }
+          
+          if (response_type == "continuous") {
+            # Combined centered Xs and Y
+            Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
+                             t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
+                                 do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
+            
+            Bvs <- solve(tW_Sigma_W + (1/indiv_vars[s]) * diag(r.vec[s]))
+            Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
+              bvs <- tW_Sigma %*% Xs.iter[, i]
+              
+              Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+              Vsi
+            }), nrow = r.vec[s]))
+          }
+        }
       }
+      
+      # Update the current value of V
+      Vs.iter <- Vs.draw[[iter+1]]
+      
+      # Combine current values of V and V_\cdot
+      VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
+      
+      # -------------------------------------------------------------------------
+      # Posterior sample for W
+      # -------------------------------------------------------------------------
+      
+      for (s in 1:q) {
+        Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
+        Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
+        
+        W.draw[[iter+1]][[s,s]] <- t(matrix(sapply(1:p.vec[s], function(j) {
+          bws <- (1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Xs.iter[j,] 
+          
+          Wsj <- mvrnorm(1, mu = Bws %*% bws, Sigma = Bws)
+          Wsj
+        }), nrow = r.vec[s]))
+        
+        for (ss in 1:q) {
+          if (ss != s) W.draw[[iter+1]][[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = r.vec[ss])
+        }
+      }
+      
+      # Update the current value of W
+      W.iter <- W.draw[[iter+1]]
+    
     }
     
-    # Update the current value of W
-    W.iter <- W.draw[[iter+1]]
+    # If structure from another method is provided
+    if (!is.null(scores)) {
+      VStar.iter <- VStar
+    }
     
     # -------------------------------------------------------------------------
     # Posterior sample for beta
@@ -604,6 +630,7 @@ bpmf <- function(data, Y, nninit, model_params, ranks = NULL, nsample, progress 
         sigma.mat = sigma.mat, # Returning the scaling factors
         V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw,
         Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
+        scores = scores,
         tau2.draw = tau2.draw, beta.draw = beta.draw,
         ranks = c(r, r.vec))
 
