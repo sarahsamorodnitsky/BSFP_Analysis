@@ -730,7 +730,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(observed_data, Y_observed, nninit = nninit, model_params, ranks = ranks, nsample, progress = TRUE)
+    res <- bpmf(data = observed_data, Y = Y_observed, nninit = nninit, model_params = model_params, ranks = ranks, scores = NULL, nsample, progress = TRUE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
