@@ -1,5 +1,7 @@
 # -----------------------------------------------------------------------------
 # Model testing for various scenarios
+# * Assessing the coverage of the various parameters informally 
+# * Assessing if the log joint density function works
 # -----------------------------------------------------------------------------
 
 # Load in the helper functions
@@ -12,6 +14,15 @@ r <- 1
 r.vec <- c(1, 1)
 ranks <- c(r, r.vec)
 q <- 2
+
+# Setting up the model parameters
+model_params <- true_params <- list(error_vars = c(1,1),
+                                    joint_var = 1,
+                                    indiv_vars = c(1,1),
+                                    beta_vars = c(10, 1, rep(1, q)), # Use the same variance for all the effects from each source
+                                    response_vars = c(shape = 1,rate = 1))
+
+# Generating example data
 data <- matrix(list(), ncol = 1, nrow = q)
 
 V <- matrix(list(), nrow = 1, ncol = 1)
@@ -39,17 +50,57 @@ for (s in 1:q) {
   data[s,1][[1]] <- U[[s,1]] %*% t(V[[1,1]]) + W[[s,s]] %*% t(Vs[[1,s]]) + matrix(rnorm(p.vec[s]*n), nrow = p.vec[s], ncol = n)
 }
 
-# Setting up the model parameters
-model_params <- true_params <- list(error_vars = c(1,1),
-                                    joint_var = 1,
-                                    indiv_vars = c(1,1),
-                                    beta_vars = c(10, 1, rep(1, q)), # Use the same variance for all the effects from each source
-                                    response_vars = c(shape = 1,rate = 1))
-
 # -----------------------------------------------------------------------------
 # Testing the coverage
 # -----------------------------------------------------------------------------
 
-## Here is where the problem is
-test_with_response_continuous <- bpmf_sim(nsample = 1000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
+# No response
+test <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks)
+
+# Continuous response
+test_with_response_continuous <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
+
+# Binary response
+test_with_response_binary <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
+
+# Missing data
+test_with_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.1)
+test_with_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
+test_with_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
+test_with_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.7)
+test_with_missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.9)
+
+# Save results
+save(test, test_with_response_continuous, test_with_missing0.1, test_with_missing0.3, test_with_missing0.5,
+     test_with_missing0.7, test_with_missing0.9, file = "~/BayesianPMFWithGit/validation_testing/validation_results_1292021.rda")
+
+
+# -----------------------------------------------------------------------------
+# Testing the convergence function
+# -----------------------------------------------------------------------------
+
+# Running the Gibbs sampler
+bpmf_test <- bpmf(data, Y = NULL, nninit = TRUE, model_params = model_params, nsample = 2000)
+
+# Saving the parameters
+U.draw <- bpmf_test$U.draw
+V.draw <- bpmf_test$V.draw
+W.draw <- bpmf_test$W.draw
+Vs.draw <- bpmf_test$Vs.draw
+ranks <- bpmf_test$ranks
+
+# For each iteration, calculate the log joint density
+log_joint_density_over_iters <- c()
+for (iter in 1:2000) {
+  log_joint_density_over_iters[iter] <- log_joint_density(data = data, U.iter = U.draw[[iter]], V.iter = V.draw[[iter]], W.iter = W.draw[[iter]], Vs.iter = Vs.draw[[iter]], model_params = model_params, ranks = ranks)
+}
+
+# I think it looks good!
+plot(log_joint_density_over_iters)
+
+# How much difference is there between each point at the tail end?
+diff(log_joint_density_over_iters)
+
+
+
 

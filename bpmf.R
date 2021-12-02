@@ -1764,7 +1764,24 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
 }
 
 # Checking convergence
-convergence <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_params, nsim, Y = NULL, beta.iter = NULL, tau2.iter = NULL) {
+log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_params, ranks, Y = NULL, beta.iter = NULL, tau2.iter = NULL, Xm.draw = NULL) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  # 
+  # data = matrix of lists, the observed data 
+  # U.iter, V.iter, W.iter, Vs.iter = the values of the parameters at the 
+  #   current Gibbs sampling iteration
+  # model_params = the parameters in the model
+  # ranks = the ranks of the joint and individual structures
+  # Y = the response vector, if available
+  # beta.iter = the value of the coefficient vector at the current Gibbs 
+  #   sampling iteration
+  # tau2.iter = the value of the variance of the response if a continuous
+  #   response is given
+  # Xm.draw = the imputed values at the current Gibbs sampling iteration
+  # ---------------------------------------------------------------------------
+  
   # How many sources are there?
   q <- nrow(data)
   
@@ -1775,18 +1792,94 @@ convergence <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_params, nsi
   beta_vars <- model_params$beta_vars # Variances on betas
   response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
   
+  r <- ranks[1]
+  r.vec <- ranks[-1]
+  r_total <- r + sum(r.vec)
+  n_beta <- 1 + r_total
+  
+  Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
+  diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+  
   # Check if there is a response
   response_given <- !is.null(Y)
   
   # Check if there is missingness
-  missingness_in_data
+  missingness_in_data <- any(sapply(data[,1], function(source) any(is.na(source))))
+  
+  # Which entries are missing?
+  missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
+  
+  # If there is missingness, fill in the missing values with the current imputed values
+  if (missingness_in_data) {
+    # Creating the completed matrices. 
+    X_complete <- data
+    
+    # Fill in the completed matrices with the imputed values
+    for (s in 1:q) {
+      X_complete[[s,1]][missing_obs[[s]]] <- Xm.draw[[iter]][[s,1]]
+    }
+  }
+  
+  # If there is no missingness, rename the data
+  if (!missingness_in_data) {
+    X_complete <- data
+  }
+  
+  # Saving the contributions of each term to the joint density
+  like <- 0
   
   for (s in 1:q) {
-    data_s <- data[[s,1]]
-    prod(sapply(1:n, function(i) {
-      dnorm(data_s[,i], mean = U.iter[[s,1]] %*% t(V.iter[[1,1]])[,i], sd = sqrt(error_vars[s]))
+    # Contribution of the observed data to the joint density
+    data_s <- X_complete[[s,1]]
+    like <- like + sum(log(sapply(1:n, function(i) {
+      dnorm(data_s[,i], mean = (U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]))[,i], sd = sqrt(error_vars[s]))
+    })))
+    
+    # Contribution of Us to the joint density
+    like <- like + sum(log(sapply(1:r, function(rs) {
+      dnorm(U.iter[[s,1]][,rs], mean = 0, sd = sqrt(sigma2_joint))
+    })))
+    
+    # Contribution of Ws to the joint density
+    like <- like + prod(sapply(1:r.vec[s], function(rs) {
+      dnorm(W.iter[[s,s]][,rs], mean = 0, sd = sqrt(sigma2_indiv[s]))
     }))
+    
+    # Contribution of Vs to the joint density
+    like <- like + sum(log(sapply(1:r.vec[s], function(rs) {
+      dnorm(Vs.iter[[1,s]][,rs], mean = 0, sd = sqrt(sigma2_indiv[s]))
+    })))
+    
+    # If there is a response
+    if (response_given) {
+      VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
+      
+      # The contribution of beta to the joint density
+      like <- like + sum(log(sapply(1:n_beta, function(rs) {
+        dnorm(beta.iter[rs,], mean = 0, sd = sqrt(Sigma_beta[rs,rs]))
+      })))
+      
+      if (response_type == "continuous") {
+        # The contribution of the observed response to the joint density
+        like <- like + sum(log(sapply(1:n, function(i) {
+          dnorm(Y[i,], mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter))
+        })))
+        
+        # The contribution of tau2 to the joint density
+        like <- like + log(dinvgamma(tau2.iter, shape = shape, rate = rate))
+      }
+      
+      if (response_type == "binary") {
+        # The contribution of the observed response to the joint density
+        like <- like + sum(log(sapply(1:n, function(i) {
+          dbinom(Y[i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter))
+        })))
+      }
+    }
   }
+
+  # Return
+  like
   
 
 }
