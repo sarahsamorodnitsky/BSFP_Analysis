@@ -735,7 +735,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Generating the data
     # -------------------------------------------------------------------------
   
-    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing)
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing, sparsity)
     
     # Saving the data
     true_data <- sim_data$data
@@ -1261,7 +1261,7 @@ check_availability <- function(param, compare) {
 }
 
 # Generate fake data depending on conditions
-bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missingness, entrywise, prop_missing) {
+bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missingness, entrywise, prop_missing, sparsity) {
   # Generates fake data depending on the dims provided in p.vec, n, and ranks
   # and the true parameters provided in `true_params`
   
@@ -1276,6 +1276,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   # missingness = NULL, "missingness_in_data", "missingness_in_response"
   # entrywise = NULL if missingness = NULL, TRUE if entrywise missingness, FALSE if columnwise missingness
   # prop_missing = NULL if missingness = NULL, otherwise the proportion of entries missingness
+  # sparsity = TRUE if generate regression coefficients under spike-and-slab prior, FALSE otherwise
   # ---------------------------------------------------------------------------
   
   # -------------------------------------------------------------------------
@@ -1366,16 +1367,26 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   # -------------------------------------------------------------------------
   
   if (is.null(response)) {
-    Y <- EY <- Y_missing <- beta <- tau2 <- matrix(list(), nrow = 1, ncol = 1)
+    Y <- EY <- Y_missing <- beta <- tau2 <- gamma <- p.prior <- matrix(list(), nrow = 1, ncol = 1)
   }
   
   if (!is.null(response)) {
+    
     Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
     diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
     
-    # Generate betas
-    beta <- matrix(list(), nrow = 1, ncol = 1)
-    beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
+    if (!sparsity) {
+      # Generate betas
+      beta <- matrix(list(), nrow = 1, ncol = 1)
+      beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
+      p.prior <- gamma <- matrix(list(), nrow = 1, ncol = 1)
+    }
+    
+    if (sparsity) {
+      p.prior <- matrix(rbeta(n_beta, 1, 1), ncol = 1); p.prior[1,] <- 1
+      gamma <- matrix(rbinom(n_beta, size = 1, prob = p.prior), ncol = 1)
+      diag(Sigma_beta)[gamma == 0] <- 1/1000
+    }
     
     # Combine the Vs
     VStar <- cbind(1, do.call(cbind, V), do.call(cbind, Vs))
@@ -1468,7 +1479,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
        s2n = s2n, s2n_coef = s2n_coef, # Scaling for s2n
        joint.structure = joint.structure, # Joint structure
        indiv.structure = indiv.structure, # Individual structure
-       beta = beta, tau2 = tau2, EY = EY)
+       beta = beta, tau2 = tau2, EY = EY, gamma = gamma, p.prior = p.prior)
 }
 
 # Returns the true missing values
