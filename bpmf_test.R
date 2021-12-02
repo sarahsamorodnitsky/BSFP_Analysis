@@ -57,7 +57,7 @@ test_with_response_continuous_missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 1
 
 # Save results
 save(test, test_with_response_continuous, test_with_missing0.1, test_with_missing0.3, test_with_missing0.5,
-     test_with_missing0.7, test_with_missing0.9, file = "~/BayesianPMFWithGit/validation_testing/validation_results_1292021.rda")
+     test_with_missing0.7, test_with_missing0.9, test_with_response_binary, file = "~/BayesianPMFWithGit/validation_testing/validation_results_1292021.rda")
 
 
 # -----------------------------------------------------------------------------
