@@ -1434,10 +1434,14 @@ center_data <- function(data, structure) {
 # Checking coverage for coverage simulation
 check_coverage <- function(truth, draws, burnin) {
   # Checks whether the elements of truth are contained in the credible intervals
-  # based on res.
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
+  # 
   # truth = matrix with the true values
   # draws = list of matrix results from a Gibbs sampler after burn-in that the 
   #         credible intervals will be based on.
+  # ---------------------------------------------------------------------------
   
   # The dimensions of the true matrix
   N <- nrow(truth)
