@@ -14,7 +14,7 @@ library(truncnorm)
 # Bayesian PMF functions
 # -----------------------------------------------------------------------------
 
-bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE) {
+bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
   
@@ -143,6 +143,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   }
   
+  if (!sparsity) {
+    gamma.draw <- p.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+  }
+  
   if (response_given) {
     beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     
@@ -151,6 +155,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     tau2.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     
     Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    
+    if (sparsity) {
+      gamma.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+      p.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+    }
   }
   
   if (missingness_in_data) {
@@ -189,6 +198,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
     tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
+    
+    if (sparsity) {
+      p0 <- matrix(rep(0.5, n_beta), ncol = 1)
+      p0[1,] <- 1
+      gamma0 <- matrix(rbinom(n_beta, size = 1, prob = p0), ncol = 1)
+    }
   }
   
   # If there is missingness in the data, generate starting values for the missing entries
@@ -230,6 +245,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
 
     if (missingness_in_response) {
       Ym.draw[[1]][[1,1]] <- Ym0
+    }
+    
+    if (sparsity) {
+      gamma.draw[[1]][[1,1]] <- gamma0
+      p.draw[[1]][[1,1]] <- p0
     }
   }
   
@@ -325,6 +345,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       if (!missingness_in_response) {
         Y_complete <- Y
+      }
+      
+      if (sparsity) {
+        gamma.iter <- gamma.draw[[iter]][[1,1]]
+        p.iter <- p.draw[[iter]][[1,1]]
       }
     }
     
@@ -542,16 +567,36 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     # -------------------------------------------------------------------------
     
     if (response_given) {
-      if (response_type == "binary") {
-        Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-        bbeta <- t(VStar.iter) %*% Z.iter
-        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+      
+      if (!sparsity) {
+        if (response_type == "binary") {
+          Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+          bbeta <- t(VStar.iter) %*% Z.iter
+          beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+        }
+        
+        if (response_type == "continuous") {
+          Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+          bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
+          beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+        }
       }
       
-      if (response_type == "continuous") {
-        Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-        bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
-        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+      if (sparsity) {
+        # Change the variance of those betas under the spike
+        diag(SigmaBetaInv)[gamma.iter == 0] <- 1/1000 # Can change this 
+        
+        if (response_type == "binary") {
+          Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+          bbeta <- t(VStar.iter) %*% Z.iter
+          beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+        }
+        
+        if (response_type == "continuous") {
+          Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+          bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
+          beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+        }
       }
       
       # Update the current value of beta
@@ -569,6 +614,34 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
         if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
       }
+    }
+    
+    
+    # -------------------------------------------------------------------------
+    # Posterior sample for spike-and-slab indicators and probabilities
+    # -------------------------------------------------------------------------
+    
+    if (response_given & sparsity) {
+      # Calculate the likelihood for beta under the spike and slab
+      like_spike <- dnorm(beta.iter, mean = 0, sd = sqrt(1/1000), log = TRUE)
+      like_slab <- dnorm(beta.iter, mean = 0, sd = sqrt(beta_vars), log = TRUE)
+      
+      # Calculating the probability that each gamma equals 1
+      prob = sapply(1:n_beta, function(rs) {
+        x = log(p.iter[rs,]) + like_slab[rs,]
+        y = log(1 - p.iter[rs,]) + like_spike[rs,]
+        exp(x - logSum(c(x,y)))
+      })
+      prob[1] <- 1 # Always include the intercept
+      
+      # Generating the gammas
+      gamma.draw[[iter+1]][[1,1]] <- matrix(rbinom(n_beta, size = 1, prob = prob), ncol = 1)
+      
+      # Saving the current value of gamma
+      gamma.iter <- gamma.draw[[iter+1]][[1,1]]
+      
+      # Generating the prior probabilities
+      p.draw[[iter+1]][[1,1]] <- rbeta(1, 1 + sum(gamma.iter[-1,]), 1 + n_beta - sum(gamma.iter[-1,]))
     }
     
     # -------------------------------------------------------------------------
@@ -632,12 +705,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
         scores = scores,
         tau2.draw = tau2.draw, beta.draw = beta.draw,
-        ranks = c(r, r.vec))
+        ranks = c(r, r.vec), gamma.draw = gamma.draw, p.draw = p.draw)
 
 }
 
 bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2n = NULL, center = FALSE, nninit, ranks, 
-                     response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL) {
+                     response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE) {
   
   # ---------------------------------------------------------------------------
   # Check availability of parameters
@@ -730,7 +803,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data = observed_data, Y = Y_observed, nninit = nninit, model_params = model_params, ranks = ranks, scores = NULL, nsample, progress = TRUE)
+    res <- bpmf(data = observed_data, Y = Y_observed, nninit = nninit, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -1175,6 +1248,12 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
 # Helper functions for simulations
 # -----------------------------------------------------------------------------
 
+logSum <- function(l){
+  #given l=log(v), where v is a vector,
+  #computes log(sum(v))
+  max(l) + log(sum(exp(l-max(l))))
+}
+
 # Checks if a response is given (and what type) and if there is missingness (and what type)
 check_availability <- function(param, compare) {
   if (is.null(param)) return(FALSE)
@@ -1185,7 +1264,19 @@ check_availability <- function(param, compare) {
 bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missingness, entrywise, prop_missing) {
   # Generates fake data depending on the dims provided in p.vec, n, and ranks
   # and the true parameters provided in `true_params`
-  # s2n = desired signal-to-noise ratio 
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  # 
+  # p.vec = vector with the number of predictors in each source
+  # n = the sample size for each source (number of columns)
+  # true_params = list of parameters for the underlying data
+  # s2n = signal-to-noise ratio 
+  # response = NULL if no response is desired, "continuous", or "binary" 
+  # missingness = NULL, "missingness_in_data", "missingness_in_response"
+  # entrywise = NULL if missingness = NULL, TRUE if entrywise missingness, FALSE if columnwise missingness
+  # prop_missing = NULL if missingness = NULL, otherwise the proportion of entries missingness
+  # ---------------------------------------------------------------------------
   
   # -------------------------------------------------------------------------
   # Setting the dimensions and latent components
