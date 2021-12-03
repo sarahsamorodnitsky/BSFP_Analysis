@@ -887,9 +887,9 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
                   Xm = Xm.burnin,
                   Ym = Ym.burnin)
     
-    # Return the imputed values, if any
-    Xm <- return_missing(observed_data, true_data, missing_obs)
-    Ym <- return_missing(Y_observed, Y, missing_obs_Y)
+    # Return the missing values, if any
+    Xm <- return_missing(true_data, missing_obs)
+    Ym <- return_missing(Y, missing_obs_Y)
     
     # Saving the truth together for comparison
     truth <- list(joint.structure = joint.structure,
@@ -1427,7 +1427,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
     
     if (missingness == "missingness_in_response" | missingness == "both") {
       missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
-      missing_obs_Y[[1,1]] <- sample(1:n, size = prop_missing * n, replace = FALSE)
+      missing_obs_Y[[1,1]] <- sort(sample(1:n, size = prop_missing * n, replace = FALSE))
       
       Y_missing <- Y
       Y_missing[[1,1]][missing_obs_Y[[1,1]],] <- NA
@@ -1483,7 +1483,16 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
 }
 
 # Returns the true missing values
-return_missing <- function(observed_param, true_param, missing_obs_inds) {
+return_missing <- function(true_param, missing_obs_inds) {
+  # Returns the values in X or Y that were missing in the true data
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
+  #
+  # true_param = the true value of X or Y
+  # missing_obs_inds = the indices of the missing values in X or Y
+  # ---------------------------------------------------------------------------
+  
   any_missing <- !is.null(unlist(missing_obs_inds))
   
   if (!any_missing) {
@@ -1821,6 +1830,22 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
                                                               avg_mse = mean(avg_mse_missing_source),
                                                               avg_ci_width = mean(avg_ci_width_missing_source)))
                                                
+            }
+            
+            if (missingness = "missingness_in_response") {
+              # Calculate the average coverage
+              avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[s,1]]
+              
+              # Calculate the average MSE
+              avg_mse_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[2]]))/denominator[[param]][[s,1]]
+              
+              # Calculate the average CI width
+              avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/denominator[[param]][[s,1]]
+              
+              # Save the results
+              results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
+                                               avg_mse = mean(avg_mse_source),
+                                               avg_ci_width = mean(avg_ci_width_source))
             }
           }
         }
