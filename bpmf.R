@@ -2041,3 +2041,91 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   
 
 }
+
+
+# -----------------------------------------------------------------------------
+# Create tables for results
+# -----------------------------------------------------------------------------
+
+create_validation_table <- function(results_list, condition) {
+  # Create a set of rows in the validation table for the validation simulation
+  
+  # -----------------------------------------------------------------------------
+  # Arguments:
+  # 
+  # results_list = contains list of results, some of which may be NULL
+  # condition (string) = name of the validation condition
+  # -----------------------------------------------------------------------------
+  
+  # Create a 3-row dataframe to return
+  dt <- data.frame(Condition = rep(condition, 3),
+                   Metric = c("Coverage", "MSE", "CI Width"),
+                   Joint = numeric(3),
+                   Indiv = numeric(3),
+                   EY = numeric(3),
+                   tau2 = numeric(3),
+                   Xm = numeric(3),
+                   Ym = numeric(3))
+  
+  # Fill in the table --
+  
+  # Joint structure
+  dt$Joint <- c(mean(sapply(results_list$`joint structure`, function(source) source$avg_coverage)),
+                mean(sapply(results_list$`joint structure`, function(source) source$avg_mse)),
+                mean(sapply(results_list$`joint structure`, function(source) source$avg_ci_width)))
+  
+  # Individual structure
+  dt$Indiv <- c(mean(sapply(results_list$`indiv structure`, function(source) source$avg_coverage)),
+                mean(sapply(results_list$`indiv structure`, function(source) source$avg_mse)),
+                mean(sapply(results_list$`indiv structure`, function(source) source$avg_ci_width)))
+  
+  # E(Y)
+  if (is.null(results_list$EY[[1,1]])) {
+    dt$EY <- NA
+  }
+  
+  if (!is.null(results_list$EY[[1,1]])) {
+    dt$EY <- c(results_list$EY[[1,1]]$avg_coverage, results_list$EY[[1,1]]$avg_mse, results_list$EY[[1,1]]$avg_ci_width)
+  }
+  
+  # tau2
+  if (is.null(results_list$tau2[[1,1]])) {
+    dt$tau2 <- NA
+  }
+  
+  if (!is.null(results_list$tau2[[1,1]])) {
+    dt$tau2 <- c(results_list$tau2[[1,1]]$avg_coverage, results_list$tau2[[1,1]]$avg_mse, results_list$tau2[[1,1]]$avg_ci_width)
+  }
+  
+  # Xm
+  if (is.null(results_list$Xm[[1,1]])) {
+    dt$Xm <- NA
+  }
+  
+  if (!is.null(results_list$Xm[[1,1]])) {
+    dt$Xm <- c(mean(sapply(results_list$Xm, function(source) source$avg_coverage)),
+               mean(sapply(results_list$Xm, function(source) source$avg_mse)),
+               mean(sapply(results_list$Xm, function(source) source$avg_ci_width)))
+  }
+  
+  # Ym
+  if (is.null(results_list$Ym[[1,1]])) {
+    dt$Ym <- NA
+  }
+  
+  if (!is.null(results_list$Ym[[1,1]])) {
+    dt$Ym <- c(results_list$Ym[[1,1]]$avg_coverage, results_list$Ym[[1,1]]$avg_mse, results_list$Ym[[1,1]]$avg_ci_width)
+  }
+  
+  # Return
+  dt
+}
+
+
+
+
+
+
+
+
+
