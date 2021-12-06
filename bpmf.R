@@ -995,106 +995,6 @@ data.rearrange=function(data,rmt=F,sigma=NULL){
   return(list(out=out, nrows=m.vec, ncols=n.vec, sigma.mat=sigma))
 }
 
-BIDsim=function(m.vec, n.vec, 
-                rkG=1, rkC=1, rkR=1, rkI=1, SNR=1){
-  p=length(m.vec); q=length(n.vec)
-  
-  m.vec.end=cumsum(m.vec)
-  m.vec.start=c(1,m.vec.end[-p]+1)
-  n.vec.end=cumsum(n.vec)
-  n.vec.start=c(1,n.vec.end[-q]+1)
-  
-  X=S=G=R=C=I=matrix(list(), p,q)
-  
-  if (length(rkR)==1){rkR=rep(rkR, p)}
-  if (length(rkC)==1){rkC=rep(rkC, q)}
-  if (length(rkI)==1){rkI=matrix(rkI, p,q)}
-  vec.rk=c(rkG, rkR, rkC, rkI)
-  sum.rk=sum(vec.rk)
-  
-  rk.ind.end=cumsum(vec.rk)
-  rk.ind.start=c(1,rk.ind.end[-((p+1)*(q+1))]+1)
-  
-  sigma.mat=1/sqrt(tcrossprod(m.vec,n.vec))/SNR
-  
-  m=sum(m.vec); n=sum(n.vec)
-  svdX=svd(matrix(rnorm(m*n),m,n))
-  min.mn=min(m,n)
-  
-  if (sum.rk>min.mn) stop("the rank of the signal is too high")
-  
-  ind=sample(min.mn, sum.rk)
-  svdX.u=svdX$u[,ind]
-  svdX.d=svdX$d[1:sum.rk]/sqrt(frob(svdX$d[1:sum.rk]))
-  svdX.v=svdX$v[,ind]
-  
-  #generate G
-  ind.G=rk.ind.start[1]:rk.ind.end[1]
-  for (i in 1:p){
-    U.g=svdX.u[m.vec.start[i]:m.vec.end[i],ind.G]
-    for (j in 1:q){
-      D.g=diag2(sample2(svdX$d[ind.G]))
-      V.g=svdX.v[n.vec.start[j]:n.vec.end[j], ind.G]
-      G[[i,j]]=tcrossprod(U.g, tcrossprod(V.g,D.g))
-    }
-  }
-  rk.ind.start=rk.ind.start[-1]
-  rk.ind.end=rk.ind.end[-1]
-  
-  #generate R
-  for (i in 1:p){
-    ind.R=rk.ind.start[i]:rk.ind.end[i]
-    U.r=svdX.u[m.vec.start[i]:m.vec.end[i],ind.R]
-    for (j in 1:q){
-      D.r=diag2(sample2(svdX$d[ind.R]))
-      V.r=svdX.v[n.vec.start[j]:n.vec.end[j], ind.R]
-      R[[i,j]]=tcrossprod(U.r, tcrossprod(V.r,D.r))
-    }
-  }
-  rk.ind.start=rk.ind.start[-(1:p)]
-  rk.ind.end=rk.ind.end[-(1:p)]
-  
-  #generate C
-  for (j in 1:q){
-    ind.C=rk.ind.start[j]:rk.ind.end[j]
-    V.c=svdX.v[n.vec.start[j]:n.vec.end[j], ind.C]
-    for (i in 1:p){
-      D.c=diag2(sample2(svdX$d[ind.C]))
-      U.c=svdX.u[m.vec.start[i]:m.vec.end[i],ind.C]
-      C[[i,j]]=tcrossprod(U.c, tcrossprod(V.c,D.c))
-    }
-  }
-  rk.ind.start=matrix(rk.ind.start[-(1:q)],p)
-  rk.ind.end=matrix(rk.ind.end[-(1:q)],p)
-  
-  #generate I
-  for (i in 1:p){
-    for (j in 1:q){
-      ind.I=rk.ind.start[i,j]:rk.ind.end[i,j]
-      U.i=svdX.u[m.vec.start[i]:m.vec.end[i],ind.I]
-      D.i=diag2(sample2(svdX$d[ind.I]))
-      V.i=svdX.v[n.vec.start[j]:n.vec.end[j], ind.I]
-      I[[i,j]]=tcrossprod(U.i, tcrossprod(V.i,D.i))
-    }
-  }
-  
-  for (i in 1:p){
-    for (j in 1:q){
-      d=svd(G[[i,j]]+R[[i,j]]+C[[i,j]]+I[[i,j]])
-      G[[i,j]]=G[[i,j]]/sqrt(frob(d$d))
-      R[[i,j]]=R[[i,j]]/sqrt(frob(d$d))
-      C[[i,j]]=C[[i,j]]/sqrt(frob(d$d))
-      I[[i,j]]=I[[i,j]]/sqrt(frob(d$d))
-      
-      d$d=d$d/sqrt(frob(d$d))
-      S[[i,j]]=d$u%*%diag(d$d)%*%t(d$v)
-      X[[i,j]]=S[[i,j]]+replicate(n.vec[j],rnorm(m.vec[i],0,sigma.mat[i,j] ))
-    }
-  }
-  
-  return(list(X=X,S=S,G=G,R=R,C=C,I=I,sigma=sigma.mat))
-}
-
 estim_sigma <- function (X, k = NA, method = c("LN", "MAD"), center = "TRUE") {
   method <- match.arg(method, c("LN", "MAD", "ln", "mad", "Ln", 
                                 "Mad"), several.ok = T)[1]
@@ -1435,8 +1335,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
     
     if (missingness == "missingness_in_data" | missingness == "both") {
       
-      missing_obs <- matrix(list(), nrow = q, ncol = 1)
-      missing_data <- matrix(list(), nrow = q, ncol = 1)
+      missing_obs <- missing_data <- missing_cols <- matrix(list(), nrow = q, ncol = 1)
       
       if (entrywise) { # if removing observations entrywise
         for (s in 1:q) {
@@ -1452,16 +1351,17 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
         
         for (s in 1:q) {
           # These are counters going down the columns of X. So 9 would be the 9th entry counting down. 
-          missing_obs[[s,1]] <- sort(sample(x=1:n, size = n*prop_missing, replace = FALSE))
+          missing_cols[[s,1]] <- sort(sample(x=1:n, size = n*prop_missing, replace = FALSE))
           
           if (s != 1) {
-            avail_obs <- c(1:n)[!(c(1:n) %in% unlist(missing_obs[1:(s-1)]))]
-            missing_obs[[s]] <- sample(x=avail_obs, size = n*prop_missing, replace = FALSE)
+            avail_obs <- c(1:n)[!(c(1:n) %in% unlist(missing_cols[1:(s-1),]))]
+            missing_cols[[s,1]] <- sample(x=avail_obs, size = n*prop_missing, replace = FALSE)
           }
           
           # Duplicate Xs so that I have one with the full data and one with the missing data
           missing_data[[s,1]] <- data[[s,1]]
-          missing_data[[s,1]][,missing_obs[[s,1]]] <- NA
+          missing_data[[s,1]][,missing_cols[[s,1]]] <- NA
+          missing_obs[[s,1]] <- sort(which(is.na(missing_data[[s,1]])))
         }
       }
     }
@@ -1832,7 +1732,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
                                                
             }
             
-            if (missingness = "missingness_in_response") {
+            if (missingness == "missingness_in_response") {
               # Calculate the average coverage
               avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[s,1]]
               
@@ -2070,14 +1970,28 @@ create_validation_table <- function(results_list, condition) {
   # Fill in the table --
   
   # Joint structure
-  dt$Joint <- c(mean(sapply(results_list$`joint structure`, function(source) source$avg_coverage)),
-                mean(sapply(results_list$`joint structure`, function(source) source$avg_mse)),
-                mean(sapply(results_list$`joint structure`, function(source) source$avg_ci_width)))
+  if (length(results_list$`joint structure`[[1,1]]) != 2) {
+    dt$Joint <- c(mean(sapply(results_list$`joint structure`, function(source) source$avg_coverage)),
+                  mean(sapply(results_list$`joint structure`, function(source) source$avg_mse)),
+                  mean(sapply(results_list$`joint structure`, function(source) source$avg_ci_width)))
+    
+    # Individual structure
+    dt$Indiv <- c(mean(sapply(results_list$`indiv structure`, function(source) source$avg_coverage)),
+                  mean(sapply(results_list$`indiv structure`, function(source) source$avg_mse)),
+                  mean(sapply(results_list$`indiv structure`, function(source) source$avg_ci_width)))
+  }
   
-  # Individual structure
-  dt$Indiv <- c(mean(sapply(results_list$`indiv structure`, function(source) source$avg_coverage)),
-                mean(sapply(results_list$`indiv structure`, function(source) source$avg_mse)),
-                mean(sapply(results_list$`indiv structure`, function(source) source$avg_ci_width)))
+  if (length(results_list$`joint structure`[[1,1]]) == 2) {
+    dt$Joint <- c(mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_coverage)),
+                  mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_mse)),
+                  mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_ci_width)))
+    
+    # Individual structure
+    dt$Indiv <- c(mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_coverage)),
+                  mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_mse)),
+                  mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_ci_width)))
+  }
+  
   
   # E(Y)
   if (is.null(results_list$EY[[1,1]])) {
