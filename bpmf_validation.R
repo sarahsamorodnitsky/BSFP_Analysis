@@ -23,12 +23,6 @@ model_params <- true_params <- list(error_vars = c(1,1),
                                     beta_vars = c(10, 1, rep(1, q)), # Use the same variance for all the effects from each source
                                     response_vars = c(shape = 1,rate = 1))
 
-# Generating example data
-data <- bpmf_data(p.vec, n, ranks, true_params, response = "continuous", missingness = NULL, entrywise = NULL, prop_missing = NULL)
-X <- data$data
-y <- data$Y
-
-
 # -----------------------------------------------------------------------------
 # Coverage simulations
 # -----------------------------------------------------------------------------
@@ -43,42 +37,75 @@ response_continuous <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_par
 response_binary <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
 
 # Missing continuous response
-response_continuous_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.1)
+# response_continuous_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.1)
 response_continuous_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
 response_continuous_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
 response_continuous_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
-response_continuous_missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.9)
+# response_continuous_missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.9)
 
-# Missing data
-missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.1)
+# Missing binary response
+# response_binary_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.1)
+response_binary_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
+response_binary_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
+response_binary_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
+# response_binary_missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.9)
+
+# Entrywise missing data
+# missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.1)
 missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
 missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
 missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.7)
-missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.9)
+# missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.9)
 
-# Save results
-save(test, test_with_response_continuous, test_with_missing0.1, test_with_missing0.3, test_with_missing0.5,
-     test_with_missing0.7, test_with_missing0.9, test_with_response_binary, file = "~/BayesianPMFWithGit/validation_testing/validation_results_1292021.rda")
+# Columnwise missing data
+# missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.1)
+columnwise_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.3)
+columnwise_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.5)
+columnwise_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.7)
+# missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.9)
 
+save(no_response_no_missing, response_continuous, response_binary, 
+     response_continuous_missing0.3, response_continuous_missing0.5, response_continuous_missing0.7,
+     missing0.3, missing0.5, missing0.7, response_binary_missing0.3, response_binary_missing0.5,
+     response_binary_missing0.7, columnwise_missing0.3,
+     file = "~/BayesianPMFWithGit/validation_results/validation_sim_12062021.rda")
 
 # -----------------------------------------------------------------------------
 # Creating the results table
 # -----------------------------------------------------------------------------
 
 # Create the dataframe
-validation_results <- data.frame(Condition = character(), Metric = character(1), Joint = numeric(), 
+validation_results <- data.frame(Condition = character(), Metric = character(), Joint = numeric(), 
                                  Indiv = numeric(), EY = numeric(), tau2 = numeric(), Xm = numeric(), 
                                  Ym = numeric())
 
 # No response, no missing
-validation_results <- rbind.data.frame(validation_results,
-                                       create_validation_table(test, condition = "No Response, No Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(no_response_no_missing, condition = "No Response, No Missing"))
 
 
 # Continuous response, no missing
-validation_results <- rbind.data.frame(validation_results,
-                                       create_validation_table(response_continuous, condition = "Continuous Response"))
-try <- validation_results %>% gather(key = Type, value = Measurement, Joint:Ym)
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous, condition = "Continuous Response"))
+
+# Binary response, no missing
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary, condition = "Binary Response"))
+
+# Entrywise missingness in data
+validation_results <- rbind.data.frame(validation_results, create_validation_table(missing0.3, condition = "30% Entrywise Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(missing0.5, condition = "50% Entrywise Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(missing0.7, condition = "70% Entrywise Missing"))
+
+# Missing continuous response
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous_missing0.3, condition = "30% Continuous Response Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous_missing0.5, condition = "50% Continuous Response Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous_missing0.7, condition = "70% Continuous Response Missing"))
+
+# Missing binary response
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.3, condition = "30% Binary Response Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.5, condition = "50% Binary Response Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.7, condition = "70% Binary Response Missing"))
+
+# Removing MSE for now
+validation_results %<>% filter(Metric != "MSE")
 
 # Exporting the table to LaTeX
 library(xtable)
@@ -86,11 +113,8 @@ library(magrittr)
 library(tidyverse)
 
 # Basic
-xtable(validation_results, digits = 4)
+print(xtable(validation_results, digits = 4), include.rownames = FALSE)
 
-validation_tbl <- ftable(Type ~ Condition + Metric, data =  try)
-validation_ht <- as_hux(validation_tbl)
-  
 
 
 
