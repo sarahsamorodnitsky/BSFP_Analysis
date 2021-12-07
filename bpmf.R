@@ -1487,6 +1487,7 @@ mse <- function(truth, draws) {
   # }))/sum(truth^2)
   
   Reduce("+", lapply(draws, function(iter.val) {(iter.val - truth)^2/truth^2}))/length(draws)
+  # sapply(draws, function(iter.val) {sum((iter.val - truth)^2)/sum(truth^2)})
 }
 
 # Computing credible interval width
