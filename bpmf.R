@@ -833,7 +833,9 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     Xm.burnin <- Xm.draw[burnin:nsample]
     Ym.burnin <- Ym.draw[burnin:nsample]
     
+    # -------------------------------------------------------------------------
     # Computing the underlying structure for each Xs after burn-in from the sampler
+    # -------------------------------------------------------------------------
     joint.structure.burnin <- lapply(1:(burnin+1), function(res) {
       mat <- matrix(list(), nrow = q, ncol = 1)
       for (s in 1:q) {
@@ -850,7 +852,9 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
       mat
     })
     
+    # -------------------------------------------------------------------------
     # Calculating the estimate for E(Y) at each iteration
+    # -------------------------------------------------------------------------
     if (is.null(response)) {
       EY.burnin <- lapply(1:(burnin+1), function(res) matrix(list(), nrow = 1, ncol = 1))
     }
@@ -876,7 +880,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     }
     
     # -------------------------------------------------------------------------
-    # Checking the coverage
+    # Saving the results from the Gibbs sampler
     # -------------------------------------------------------------------------
     
     # Saving the draws from the sampler together
@@ -887,11 +891,15 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
                   Xm = Xm.burnin,
                   Ym = Ym.burnin)
     
-    # Return the missing values, if any
+    # -------------------------------------------------------------------------
+    # Saving the truth together for comparison
+    # -------------------------------------------------------------------------
+    
+    # Returns the true values that were not observed in the data (X. and y)
+    # If no missing data, Xm <- Ym <- NULL
     Xm <- return_missing(true_data, missing_obs)
     Ym <- return_missing(Y, missing_obs_Y)
     
-    # Saving the truth together for comparison
     truth <- list(joint.structure = joint.structure,
                   indiv.structure = indiv.structure,
                   EY = EY,
@@ -899,7 +907,10 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
                   Xm = Xm,
                   Ym = Ym)
     
-    # Adding up the coverage, MSE, and CI width from this iteration
+    # -------------------------------------------------------------------------
+    # Checking coverage, MSE, and CI width
+    # -------------------------------------------------------------------------
+    
     sim_iter_results <- get_results(truth, draws, burnin, results_available, missing_obs)
     
     # ---------------------------------------------------------------------------
@@ -923,7 +934,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   # Averaging the results
   # ---------------------------------------------------------------------------
   
-  # Calculate the denominator for when the results are averaged
+  # Calculate the denominator for the average
   denominator <- calculate_denominator(sim_results, q, p.vec, n, nsim, results_available)
 
   # Taking the averages of all the results
@@ -1382,7 +1393,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
        beta = beta, tau2 = tau2, EY = EY, gamma = gamma, p.prior = p.prior)
 }
 
-# Returns the true missing values
+# Returns the entries in the true data that were not observed
 return_missing <- function(true_param, missing_obs_inds) {
   # Returns the values in X or Y that were missing in the true data
   
@@ -1478,12 +1489,19 @@ check_coverage <- function(truth, draws, burnin) {
   return(Contained_Matrix)
 }
 
-# Computing the MSE 
+# Computing the MSE
 mse <- function(truth, draws) {
   # Computes the MSE between Gibbs sampling draws after burn-in and the 
-  # true component being estimated. 
+  # true component being estimated. Returns a single value. 
   
-  # Average the draws across the iterations
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  # 
+  # truth = true value of the parameter
+  # draws = list of Gibbs samples for paramter
+  # ---------------------------------------------------------------------------
+  
+  # Calculate the posterior mean for the draws after burn-in
   avg_res <- Reduce("+", draws)/length(draws)
   
   # Calculate the relative MSE
@@ -1518,10 +1536,23 @@ ci_width <- function(draws, burnin) {
 
 # Combining checking coverage, MSE, and CI width calculations in one function
 get_results <- function(truth, draws, burnin, results_available, missing_obs) {
+  # Combining checking coverage, MSE, and CI width calculations in one function
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
+  # 
+  # truth = list of true values for each parameter
+  # draws = list of Gibbs samples for each parameter
+  # burnin = number of samples used in burn-in
+  # results_available = vector that checks which parameters are present under
+  #     current simulation condition
+  # missing_obs = list with the indices of the missing entries in X.
+  # ---------------------------------------------------------------------------
+  
   # Save the number of model parameters to check coverage for
   n_param <- length(draws)
   
-  # Save the results 
+  # Create a list to save the results 
   results <- lapply(1:n_param, function(i) list())
   names(results) <- names(truth)
   
@@ -1530,49 +1561,64 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs) {
     # Check the dimension of the current parameter
     dim_param <- nrow(truth[[param]])
     
-    # If no results are available:
-    results[[param]] <- matrix(list(), nrow = 1, ncol = 1)
+    # Creating a matrix to store the results. 
+    # (This is what will be returned if no results are available) 
+    results[[param]] <- matrix(list(), nrow = dim_param, ncol = 1) 
     
+    # Only calculate results if there are results
     if (results_available[param]) {
-      # Only calculate results if there are results
-      results[[param]] <- matrix(list(), nrow = dim_param, ncol = 1)
       
+      # Iterate through the sources
       for (s in 1:dim_param) {
+        # Save the samples for this source
         current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
         
-        # Check the results
+        # Calculate coverage
         coverage_s <- check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin)
+        
+        # Calculate CI width
         ci_width_s <- ci_width(current_draws, burnin = burnin)
         
-        # If there is missingness, calculate the MSE separately for missing and not missing entries
-        # in the structure
+        # Calculate MSE
+        # (Calculate the MSE separately for missing and not missing entries in the structure)
         if (param == 1 | param == 2) {
-          if (is.null(missing_obs[[1,1]])) { # If there is no missing data
+          if (!results_available[5]) { # If there is NO missing data
             mse_s_observed <- mse(truth[[param]][[s,1]], current_draws)
             mse_s_missing <- NULL
             mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
           }
           
-          if (!is.null(missing_obs[[1,1]])) {
-            # For the entries in the structure that are observed
+          if (results_available[5]) { # If there IS missing data
+            # For the entries in the structure that ARE observed -- 
             obs_inds <- 1:length(truth[[param]][[s,1]])
+            
+            # Save the true values that correspond to observed entries
             truth_observed <- truth[[param]][[s,1]][obs_inds[!(obs_inds %in% missing_obs[[s,1]])]]
+            
+            # Save the Gibbs samples corresponding to observed entries
             draws_observed <- lapply(current_draws, function(sim_iter) sim_iter[obs_inds[!(obs_inds %in% missing_obs[[s,1]])]])
+            
+            # MSE
             mse_s_observed <- mse(truth_observed, draws_observed)
             
-            # For the entries in the structure that are not observed
+            # For the entries in the structure that are NOT observed --
+            
+            # Save the true values that correspond to missing entries
             truth_missing <- truth[[param]][[s,1]][missing_obs[[s,1]]]
+            
+            # Save the Gibbs samples corresponding to missing entries
             draws_missing <- lapply(current_draws, function(sim_iter) sim_iter[missing_obs[[s,1]]])
+            
+            # MSE
             mse_s_missing <- mse(truth_missing, draws_missing)
             
+            # Save
             mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
           }
         }
         
         # For all other parameters
-        if (param != 1 & param != 2) {
-          mse_s <- mse(truth[[param]][[s,1]], current_draws)
-        }
+        if (param != 1 & param != 2) mse_s <- mse(truth[[param]][[s,1]], current_draws)
         
         # Save the results
         results[[param]][[s,1]] <- list(coverage_s, mse_s, ci_width_s)
@@ -1611,25 +1657,32 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
   for (param in 1:n_param) {
     if (results_available[param]) {
       
+      # Counting how many times entries in the underlying structure corresponded to missing X.
       if (param %in% c(1, 2)) {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
         for (s in 1:q) {
+          # Vector of indices for each entry
           obs_inds <- 1:(p.vec[s] * n) 
+          
+          # Initialize counter for how many times each entry was NOT missing
           counts[[param]][[s,1]] <- rep(0, length(obs_inds))
           
           for (sim_iter in 1:nsim) {
-            current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs[[s]]
+            # Saving the missing entries for sim_iter simulation replication
+            current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs[[s]] # CHECK IF THIS IS A LIST WHEN THERE IS MISSINGNESS
             counts[[param]][[s,1]] <- counts[[param]][[s,1]] + !(obs_inds %in% current_missing_obs)
           }
         }
       }
       
+      # For E(Y) and tau2, return the number of simulation replications 
       if (param %in% c(3, 4)) {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
       }
       
+      # For Xm, count how many times in X. each entry was missing
       if (param == 5) {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
@@ -1644,6 +1697,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
         }
       }
       
+      # For Ym, count how many times in y each entry was missing
       if (param == 6) {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         obs_inds <- 1:n
