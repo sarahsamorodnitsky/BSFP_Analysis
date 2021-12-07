@@ -900,7 +900,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
                   Ym = Ym)
     
     # Adding up the coverage, MSE, and CI width from this iteration
-    sim_iter_results <- get_results(truth, draws, burnin, results_available)
+    sim_iter_results <- get_results(truth, draws, burnin, results_available, missing_obs)
     
     # ---------------------------------------------------------------------------
     # Returning the results at the end of the loop
@@ -1482,12 +1482,16 @@ check_coverage <- function(truth, draws, burnin) {
 mse <- function(truth, draws) {
   # Computes the MSE between Gibbs sampling draws after burn-in and the 
   # true component being estimated. 
-  # Reduce('+', lapply(draws, function(iter.val) {
-  #   (iter.val - truth)^2
-  # }))/sum(truth^2)
   
-  Reduce("+", lapply(draws, function(iter.val) {(iter.val - truth)^2/truth^2}))/length(draws)
-  # sapply(draws, function(iter.val) {sum((iter.val - truth)^2)/sum(truth^2)})
+  # Average the draws across the iterations
+  avg_res <- Reduce("+", draws)/length(draws)
+  
+  # Calculate the relative MSE
+  rel_mse <- frob(truth - avg_res)/frob(truth)
+  
+  # Return
+  rel_mse
+  
 }
 
 # Computing credible interval width
@@ -1513,7 +1517,7 @@ ci_width <- function(draws, burnin) {
 }
 
 # Combining checking coverage, MSE, and CI width calculations in one function
-get_results <- function(truth, draws, burnin, results_available) {
+get_results <- function(truth, draws, burnin, results_available, missing_obs) {
   # Save the number of model parameters to check coverage for
   n_param <- length(draws)
   
@@ -1535,9 +1539,43 @@ get_results <- function(truth, draws, burnin, results_available) {
       
       for (s in 1:dim_param) {
         current_draws <- lapply(1:(burnin+1), function(iter) draws[[param]][[iter]][[s,1]])
-        results[[param]][[s,1]] <- list(check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin),
-                                        mse(truth[[param]][[s,1]], current_draws),
-                                        ci_width(current_draws, burnin = burnin))
+        
+        # Check the results
+        coverage_s <- check_coverage(truth[[param]][[s,1]], current_draws, burnin = burnin)
+        ci_width_s <- ci_width(current_draws, burnin = burnin)
+        
+        # If there is missingness, calculate the MSE separately for missing and not missing entries
+        # in the structure
+        if (param == 1 | param == 2) {
+          if (is.null(missing_obs[[1,1]])) { # If there is no missing data
+            mse_s_observed <- mse(truth[[param]][[s,1]], current_draws)
+            mse_s_missing <- NULL
+            mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
+          }
+          
+          if (!is.null(missing_obs[[1,1]])) {
+            # For the entries in the structure that are observed
+            obs_inds <- 1:length(truth[[param]][[s,1]])
+            truth_observed <- truth[[param]][[s,1]][obs_inds[!(obs_inds %in% missing_obs[[s,1]])]]
+            draws_observed <- lapply(current_draws, function(sim_iter) sim_iter[obs_inds[!(obs_inds %in% missing_obs[[s,1]])]])
+            mse_s_observed <- mse(truth_observed, draws_observed)
+            
+            # For the entries in the structure that are not observed
+            truth_missing <- truth[[param]][[s,1]][missing_obs[[s,1]]]
+            draws_missing <- lapply(current_draws, function(sim_iter) sim_iter[missing_obs[[s,1]]])
+            mse_s_missing <- mse(truth_missing, draws_missing)
+            
+            mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
+          }
+        }
+        
+        # For all other parameters
+        if (param != 1 & param != 2) {
+          mse_s <- mse(truth[[param]][[s,1]], current_draws)
+        }
+        
+        # Save the results
+        results[[param]][[s,1]] <- list(coverage_s, mse_s, ci_width_s)
       }
     }
   }
@@ -1546,8 +1584,23 @@ get_results <- function(truth, draws, burnin, results_available) {
   results
 }
 
-# Count the number of times each parameter corresponded to an observed value
+# Count the number of times each entry in each parameter was observed (i.e. not missing)
 calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_available) {
+  # Count the number of times each entry in each parameter was observed for the 
+  # underlying structure and how many times each entry in X and Y were missing. 
+  # For parameters that are not missing, return the number of simulation replications
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  #
+  # sim_results = coverage, MSE, and CI width for each parameter at each sim replication
+  # q = number of sources
+  # p.vec = number of features per source
+  # n = number of samples
+  # nsim = number of times simulation was run
+  # results_available = which parameters were available under this sim condition?
+  # ---------------------------------------------------------------------------
+  
   # sim_results (list) = list of results from the simulation
   n_param <- length(results_available)
    
@@ -1611,10 +1664,12 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
   counts
 }
 
-# Create a function to compile missing data results
+# Returns a matrix with the coverage, MSE, and CI width for each entry when the entry was observed (observed = TRUE)
+# or unobserved (observed = FALSE)
 compile_missing_results <- function(param_by_sim_iter, s, dims, nsim, missing_obs_inds, type, observed = NULL) {
   # Create a matrix for the results from each metric
-  coverage_mat <- mse_mat <- ci_width_mat <- matrix(0, nrow = dims[1], ncol = dims[2])
+  coverage_mat <- ci_width_mat <- matrix(0, nrow = dims[1], ncol = dims[2])
+  mse_mat <- matrix(0, nrow = 1, ncol = 1)
   
   for (sim_iter in 1:nsim) {
     # Save the missing observations
@@ -1625,20 +1680,20 @@ compile_missing_results <- function(param_by_sim_iter, s, dims, nsim, missing_ob
         obs_inds <- 1:(dims[1] * dims[2])
         observed_obs_sim_iter <- obs_inds[!(obs_inds %in% missing_obs_sim_iter)]
         coverage_mat[observed_obs_sim_iter] <- coverage_mat[observed_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[1]][observed_obs_sim_iter]
-        mse_mat[observed_obs_sim_iter] <- mse_mat[observed_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[2]][observed_obs_sim_iter]
+        mse_mat <- mse_mat + param_by_sim_iter[[sim_iter]][[s,1]][[2]]$observed
         ci_width_mat[observed_obs_sim_iter] <- ci_width_mat[observed_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[3]][observed_obs_sim_iter]
       }
       
       if (!observed) {
         coverage_mat[missing_obs_sim_iter] <- coverage_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[1]][missing_obs_sim_iter]
-        mse_mat[missing_obs_sim_iter] <- mse_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[2]][missing_obs_sim_iter]
+        mse_mat <- mse_mat + param_by_sim_iter[[sim_iter]][[s,1]][[2]]$missing
         ci_width_mat[missing_obs_sim_iter] <- ci_width_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[3]][missing_obs_sim_iter]
       }
     }
     
     if (type != "structure") {
       coverage_mat[missing_obs_sim_iter] <- coverage_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[1]]
-      mse_mat[missing_obs_sim_iter] <- mse_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[2]]
+      mse_mat <- mse_mat + param_by_sim_iter[[sim_iter]][[s,1]][[2]]
       ci_width_mat[missing_obs_sim_iter] <- ci_width_mat[missing_obs_sim_iter] + param_by_sim_iter[[sim_iter]][[s,1]][[3]]
     }
   }
@@ -1686,7 +1741,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
             avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[s,1]]
             
             # Calculate the average MSE
-            avg_mse_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[2]]))/denominator[[param]][[s,1]]
+            avg_mse_source <- mean(sapply(results_by_source, function(sim_iter) sim_iter[[2]]$observed)) # Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[2]]))/denominator[[param]][[s,1]]
             
             # Calculate the average CI width
             avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/denominator[[param]][[s,1]]
@@ -1699,7 +1754,12 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
           
           if (!is.null(missingness)) {
             if (missingness == "missingness_in_data" | missingness == "both") {
-              # Check the results for structure corresponding to non-missing entries in each dataset
+              
+              # ---------------------------------------------------------------
+              # Check the results for structure corresponding to missing 
+              # entries in each dataset 
+              # ---------------------------------------------------------------
+              
               missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs[[s,1]])
               results_compiled_missing <- compile_missing_results(param_by_sim_iter, s, dims = c(p.vec[s], n), nsim, missing_obs_inds, type = "structure", observed = FALSE)       
               
@@ -1707,18 +1767,23 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
               avg_coverage_missing_source <- results_compiled_missing[[1]]/(nsim - denominator[[param]][[s,1]])
               
               # Calculate the average MSE
-              avg_mse_missing_source <- results_compiled_missing[[2]]/(nsim - denominator[[param]][[s,1]])
+              avg_mse_missing_source <- results_compiled_missing[[2]]/nsim
               
               # Calculate the average CI width
               avg_ci_width_missing_source <- results_compiled_missing[[3]]/(nsim - denominator[[param]][[s,1]])
               
-              # Check the results for structure corresponding to missing entries in each dataset
+              # ---------------------------------------------------------------
+              # Check the results for structure corresponding to non-missing 
+              # entries in each dataset 
+              # ---------------------------------------------------------------
+              
               results_compiled_observed <- compile_missing_results(param_by_sim_iter, s, dims = c(p.vec[s], n), nsim, missing_obs_inds, type = "structure", observed = TRUE)
-              # Calculate the average
+             
+               # Calculate the average
               avg_coverage_observed_source <- results_compiled_observed[[1]]/(denominator[[param]][[s,1]])
               
               # Calculate the average MSE
-              avg_mse_observed_source <- results_compiled_observed[[2]]/(denominator[[param]][[s,1]])
+              avg_mse_observed_source <- results_compiled_observed[[2]]/nsim
               
               # Calculate the average CI width
               avg_ci_width_observed_source <- results_compiled_observed[[3]]/(denominator[[param]][[s,1]])
@@ -1738,7 +1803,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
               avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[s,1]]
               
               # Calculate the average MSE
-              avg_mse_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[2]]))/denominator[[param]][[s,1]]
+              avg_mse_source <- mean(sapply(results_by_source, function(sim_iter) sim_iter[[2]]$observed)) # Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[2]]))/denominator[[param]][[s,1]]
               
               # Calculate the average CI width
               avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/denominator[[param]][[s,1]]
@@ -1798,7 +1863,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
         avg_coverage_source <- results_compiled[[1]]/(denominator[[param]][[1,1]])
         
         # Calculate the average MSE
-        avg_mse_source <- results_compiled[[2]]/(denominator[[param]][[1,1]])
+        avg_mse_source <- results_compiled[[2]]/nsim
         
         # Calculate the average CI width
         avg_ci_width_source <- results_compiled[[3]]/(denominator[[param]][[1,1]])
