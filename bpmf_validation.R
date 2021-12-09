@@ -65,7 +65,7 @@ columnwise_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_p
 # missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.9)
 
 # Sparsity
-continuous_response_sparsity <- bpmf_sim(nsample = 20, n_clust = 2, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks, response = "continuous", sparsity = TRUE)
+continuous_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks, response = "continuous", sparsity = TRUE)
 
 
 save(no_response_no_missing, response_continuous, response_binary, 
