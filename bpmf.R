@@ -4,7 +4,6 @@
 
 # Packages
 library(doParallel)
-library(doSNOW)
 library(foreach)
 library(Matrix)
 library(MASS)

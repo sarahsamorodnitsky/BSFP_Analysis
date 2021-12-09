@@ -11,3 +11,39 @@
 # Loading in the packages
 library(r.jive)
 library(MOFA2)
+
+# Load in helper functions
+source("~/BayesianPMFWithGit/bpmf.R")
+
+# Number of data sources
+q <- 2
+
+# Joint and individual ranks (ranks[1] = joint, ranks[2:r_total] = individual)
+ranks <- c(1,1,1)
+
+# Number of predictors for each source
+p.vec = c(10, 15)
+
+# Sample size 
+n = 25
+
+# Parameters for data generation
+true_params <- list(error_vars = c(1,1), # Error variance for each source
+                    joint_var = 1, # Variance for joint structure
+                    indiv_vars = c(1,1), # Variance for each individual structure
+                    beta_vars = c(10, 1, rep(1, q)), # Variance of intercept effect and each joint effect 
+                    response_vars = c(shape = 1,rate = 1)) # Hyperparameters for variance of response (if continuous)
+
+
+# -----------------------------------------------------------------------------
+# sJIVE
+# -----------------------------------------------------------------------------
+
+# Running sJIVE in parallel
+sJIVE_results <- foreach(sim_iter = 1:100, .verbose = TRUE) %dopar% {
+  # Generate data 
+  
+  # Run sJIVE on generated data
+  
+  # Save 
+}
