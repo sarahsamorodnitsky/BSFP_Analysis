@@ -1297,6 +1297,8 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
       p.prior <- matrix(rbeta(n_beta, 1, 1), ncol = 1); p.prior[1,] <- 1
       gamma <- matrix(rbinom(n_beta, size = 1, prob = p.prior), ncol = 1)
       diag(Sigma_beta)[gamma == 0] <- 1/1000
+      beta <- matrix(list(), nrow = 1, ncol = 1)
+      beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
     }
     
     # Combine the Vs
