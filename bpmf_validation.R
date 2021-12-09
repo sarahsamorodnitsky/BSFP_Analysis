@@ -64,11 +64,14 @@ columnwise_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_p
 columnwise_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.7)
 # missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.9)
 
+# Sparsity
+continuous_response_sparsity <- bpmf_sim(nsample = 20, n_clust = 2, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks, response = "continuous", sparsity = TRUE)
+
+
 save(no_response_no_missing, response_continuous, response_binary, 
      response_continuous_missing0.3, response_continuous_missing0.5, response_continuous_missing0.7,
-     missing0.3, missing0.5, missing0.7, response_binary_missing0.3, response_binary_missing0.5,
-     response_binary_missing0.7, columnwise_missing0.3,
-     file = "~/BayesianPMFWithGit/validation_results/validation_sim_12062021.rda")
+     missing0.3, missing0.5, missing0.7,
+     file = "~/BayesianPMFWithGit/validation_results/validation_sim_12092021.rda")
 
 # -----------------------------------------------------------------------------
 # Creating the results table
