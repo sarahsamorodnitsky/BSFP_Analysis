@@ -66,11 +66,11 @@ columnwise_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_p
 
 # Sparsity
 continuous_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks, response = "continuous", sparsity = TRUE)
-
+binary_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks, response = "binary", sparsity = TRUE)
 
 save(no_response_no_missing, response_continuous, response_binary, 
      response_continuous_missing0.3, response_continuous_missing0.5, response_continuous_missing0.7,
-     missing0.3, missing0.5, missing0.7,
+     missing0.3, missing0.5, missing0.7, continuous_response_sparsity, binary_response_sparsity, 
      file = "~/BayesianPMFWithGit/validation_results/validation_sim_12092021.rda")
 
 # -----------------------------------------------------------------------------
