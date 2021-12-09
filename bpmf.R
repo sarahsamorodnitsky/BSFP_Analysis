@@ -200,8 +200,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
     
     if (sparsity) {
-      p0 <- matrix(rep(0.5, n_beta), ncol = 1)
-      p0[1,] <- 1
+      p0 <- 0.5
       gamma0 <- matrix(rbinom(n_beta, size = 1, prob = p0), ncol = 1)
     }
   }
@@ -628,8 +627,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       # Calculating the probability that each gamma equals 1
       prob = sapply(1:n_beta, function(rs) {
-        x = log(p.iter[rs,]) + like_slab[rs,]
-        y = log(1 - p.iter[rs,]) + like_spike[rs,]
+        x = log(p.iter) + like_slab[rs,]
+        y = log(1 - p.iter) + like_spike[rs,]
         exp(x - logSum(c(x,y)))
       })
       prob[1] <- 1 # Always include the intercept
