@@ -55,8 +55,14 @@ all(colnames(somascan_normalized_clean_no_info_transpose_reorder) == colnames(la
 dim(somascan_normalized_clean_no_info_transpose_reorder)
 dim(lavage_processed_no_info)
 
+# Combining the sources together
+hiv_copd_data <- matrix(list(), nrow = 2, ncol = 1)
+hiv_copd_data[[1,1]] <- lavage_processed_no_info_log_scale
+hiv_copd_data[[2,1]] <- somascan_normalized_clean_no_info_transpose_reorder
+
 # Preparing the response variable
-fev1pp <- subject_processed$FEV1_percent_predicted
+fev1pp <- matrix(list(), nrow = 1, ncol = 1)
+fev1pp[[1,1]] <- matrix(subject_processed$FEV1_percent_predicted, ncol = 1)
 
 # -----------------------------------------------------------------------------
 # Model parameters
@@ -100,9 +106,36 @@ model_params <- list(error_vars = c(sigma21, sigma22),
                      joint_var = sigma2_joint,
                      indiv_vars = c(sigma2_indiv1, sigma2_indiv2),
                      beta_vars = beta_vars,
-                     response_vars = list(shape = shape, rate = rate))
+                     response_vars = c(shape = shape, rate = rate))
 
 # Gibbs sampler parameters
 nsample <- 5000
 burnin <- nsample/2
 thinned_iters <- seq(burnin, nsample, by = 10)
+
+# -----------------------------------------------------------------------------
+# Training Data Model Fit
+# -----------------------------------------------------------------------------
+
+# Fitting the model without sparsity first
+fev1pp_training_fit_nonsparse <- bpmf(
+  data = hiv_copd_data,
+  Y = fev1pp,
+  nninit = TRUE,
+  model_params = model_params,
+  sparsity = FALSE,
+  nsample = nsample,
+  progress = TRUE
+)
+
+# Fitting the model with sparsity
+fev1pp_training_fit_sparse <- bpmf(
+  data = hiv_copd_data,
+  Y = fev1pp,
+  nninit = TRUE,
+  model_params = model_params,
+  sparsity = TRUE,
+  nsample = nsample,
+  progress = TRUE
+)
+
