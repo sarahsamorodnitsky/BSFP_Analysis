@@ -2169,6 +2169,88 @@ create_validation_table <- function(results_list, condition) {
 }
 
 
+# The label switching algorithm. 
+label_switching <- function(draws, pivot, loadings, betas = NULL, rank) {
+  # draws (list): the draws to swap according to the pivot
+  # pivot (matrix): the pivot sample to use to arrange the columns in the draws
+  # rank (int): number of columns to iterate through
+  # loadings (list): the corresponding loadings for each draw of the matrix to swap
+  # betas (double vec): list of vectors of the coefficients drawn at each iteration
+  
+  # Returning the swapped matrices
+  swapped_draws <- lapply(1:length(draws), function(iter) list())
+  swapped_loadings <- lapply(1:length(loadings), function(iter) list())
+  swapped_betas <- lapply(1:length(betas), function(iter) list())
+  
+  # Returning the swaps made so they can be undone
+  swaps_made <- lapply(1:length(draws), function(iter) list())
+  
+  # Storing the sign changes so they can be undone
+  signs_changed <- lapply(1:length(draws), function(iter) list())
+  
+  for (iter in 1:length(draws)) {
+    # For each iteration, arrange the columns of each draw to match that 
+    # of the pivot. 
+    
+    # Initializing the rearranged version
+    tilde_V <- matrix(nrow = nrow(draws[[1]]), ncol = ncol(draws[[1]]))
+    tilde_U <- matrix(nrow = nrow(loadings[[1]]), ncol = ncol(loadings[[1]]))
+    tilde_beta <- matrix(nrow = nrow(betas[[1]]), ncol = ncol(betas[[1]]))
+    
+    # Storing the current V, U, and beta
+    current_V <- draws[[iter]]
+    current_U <- loadings[[iter]]
+    current_beta <- betas[[iter]]
+    
+    # Storing the swaps
+    current_swaps <- c()
+    
+    # Storing the signs
+    current_signs <- c()
+    
+    for (k in 1:rank) {
+      # for each column in the pivot, rearrange the columns in draws to match the order
+      corrs <- apply(current_V, 2, function(current_col) cor(current_col, pivot[,k])) # compute correlation between each 
+      jk <- which.max(abs(corrs)) # storing the index of the highest correlation
+      ak <- sign(corrs[jk]) # storing the sign of that correlation
+      
+      # Setting the kth column of \tilde_V to be the ak*current_V[,jk] column. 
+      tilde_V[,k] <- ak*current_V[,jk]
+      
+      # Rearranging the corresponding column in U:
+      tilde_U[,k] <- ak*current_U[,jk]
+      
+      # Rearranging the corresponding rows in betas:
+      tilde_beta[k,] <- ak*current_beta[jk,]
+      
+      # Recording what swap was made. The first entry would be the column index
+      # of current_V that was moved to the first spot. The second index would be 
+      # the column index of current_V that was moved to the second column, etc. 
+      current_swaps[k] <- jk
+      
+      # Recording the sign change (if any) that was made
+      current_signs[k] <- ak
+      
+      # Removing the already-swapped columns in current_V from the running:
+      current_V[,jk] <- NA
+    }
+    
+    # Storing the swapped samples
+    swapped_draws[[iter]] <- tilde_V
+    swapped_loadings[[iter]] <- tilde_U
+    swapped_betas[[iter]] <- tilde_beta
+    
+    # Storing the swaps made
+    swaps_made[[iter]] <- current_swaps
+    
+    # Storing the signs changed
+    signs_changed[[iter]] <- current_signs
+  }
+  list(swapped_draws = swapped_draws, swapped_loadings = swapped_loadings, swapped_betas = swapped_betas,
+       swaps_made = swaps_made, signs_changed = signs_changed)
+}
+
+
 
 
 
