@@ -1154,7 +1154,7 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
 }
 
 # -----------------------------------------------------------------------------
-# Helper functions for simulations
+# Helper functions for validation simulations
 # -----------------------------------------------------------------------------
 
 logSum <- function(l){
@@ -2075,6 +2075,14 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
 
 }
 
+# -----------------------------------------------------------------------------
+# Helper functions for model simulations
+# -----------------------------------------------------------------------------
+
+# Run each model being compared in simulation study
+run_each_mod <- function(model, nsim, nsample) {
+  
+}
 
 # -----------------------------------------------------------------------------
 # Create tables for results
@@ -2167,6 +2175,8 @@ create_validation_table <- function(results_list, condition) {
   # Return
   dt
 }
+
+
 
 
 
