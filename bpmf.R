@@ -8,6 +8,7 @@ library(foreach)
 library(Matrix)
 library(MASS)
 library(truncnorm)
+library(MCMCpack)
 
 # -----------------------------------------------------------------------------
 # Bayesian PMF functions
@@ -2047,13 +2048,13 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
       
       # The contribution of beta to the joint density
       like <- like + sum(log(sapply(1:n_beta, function(rs) {
-        dnorm(beta.iter[rs,], mean = 0, sd = sqrt(Sigma_beta[rs,rs]))
+        dnorm(beta.iter[[1,1]][rs,], mean = 0, sd = sqrt(Sigma_beta[rs,rs]))
       })))
       
       if (response_type == "continuous") {
         # The contribution of the observed response to the joint density
         like <- like + sum(log(sapply(1:n, function(i) {
-          dnorm(Y[i,], mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter))
+          dnorm(Y[[1,1]][i,], mean = VStar.iter %*% beta.iter[[1,1]], sd = sqrt(tau2.iter[[1,1]]))
         })))
         
         # The contribution of tau2 to the joint density
@@ -2063,7 +2064,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
       if (response_type == "binary") {
         # The contribution of the observed response to the joint density
         like <- like + sum(log(sapply(1:n, function(i) {
-          dbinom(Y[i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter))
+          dbinom(Y[[1,1]][i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter[[1,1]]))
         })))
       }
     }

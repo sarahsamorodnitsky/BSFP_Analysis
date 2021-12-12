@@ -15,6 +15,7 @@ library(foreach)
 # Working directories
 data_wd <- "~/BayesianPMFWithGit/data/"
 model_wd <- "~/BayesianPMFWithGit/"
+results_wd <- "~/BayesianPMFWithGit/data_application_results/"
 
 # Loading in the model functions
 source(paste0(model_wd, "bpmf.R"))
@@ -111,7 +112,8 @@ model_params <- list(error_vars = c(sigma21, sigma22),
 # Gibbs sampler parameters
 nsample <- 5000
 burnin <- nsample/2
-thinned_iters <- seq(burnin, nsample, by = 10)
+thinned_iters <- seq(1, nsample, by = 10)
+thinned_iters_burnin <- seq(burnin, nsample, by = 10)
 
 # -----------------------------------------------------------------------------
 # Training Data Model Fit
@@ -138,4 +140,23 @@ fev1pp_training_fit_sparse <- bpmf(
   nsample = nsample,
   progress = TRUE
 )
+
+# Save the results
+save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(results_wd, "training_data_fit.rda"))
+
+# Assessing convergence for both model fits
+fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
+  # Calculate the log-joint density at each thinned iterations
+  log_joint_density(data = hiv_copd_data, 
+                    U.iter = fev1pp_training_fit_nonsparse$U.draw[[sim_iter]], 
+                    V.iter = fev1pp_training_fit_nonsparse$V.draw[[sim_iter]], 
+                    W.iter = fev1pp_training_fit_nonsparse$W.draw[[sim_iter]], 
+                    Vs.iter = fev1pp_training_fit_nonsparse$Vs.draw[[sim_iter]],
+                    model_params = model_params,
+                    ranks = fev1pp_training_fit_nonsparse$ranks,
+                    Y = fev1pp,
+                    beta.iter = fev1pp_training_fit_nonsparse$beta.draw[[sim_iter]],
+                    tau2.iter = fev1pp_training_fit_nonsparse$tau2.draw[[sim_iter]])
+})
+
 
