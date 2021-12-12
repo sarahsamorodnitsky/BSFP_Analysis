@@ -159,4 +159,20 @@ fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
                     tau2.iter = fev1pp_training_fit_nonsparse$tau2.draw[[sim_iter]])
 })
 
+fev1pp_training_sparse_conv <- sapply(thinned_iters, function(sim_iter) {
+  # Calculate the log-joint density at each thinned iterations
+  log_joint_density(data = hiv_copd_data, 
+                    U.iter = fev1pp_training_fit_sparse$U.draw[[sim_iter]], 
+                    V.iter = fev1pp_training_fit_sparse$V.draw[[sim_iter]], 
+                    W.iter = fev1pp_training_fit_sparse$W.draw[[sim_iter]], 
+                    Vs.iter = fev1pp_training_fit_sparse$Vs.draw[[sim_iter]],
+                    model_params = model_params,
+                    ranks = fev1pp_training_fit_sparse$ranks,
+                    Y = fev1pp,
+                    beta.iter = fev1pp_training_fit_sparse$beta.draw[[sim_iter]],
+                    tau2.iter = fev1pp_training_fit_sparse$tau2.draw[[sim_iter]])
+})
 
+# Plotting the log-joint densities
+plot(fev1pp_training_nonsparse_conv)
+plot(fev1pp_training_sparse_conv)
