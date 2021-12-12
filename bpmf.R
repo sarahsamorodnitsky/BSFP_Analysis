@@ -1155,7 +1155,7 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
 }
 
 # -----------------------------------------------------------------------------
-# Helper functions for simulations
+# Helper functions for validation simulations
 # -----------------------------------------------------------------------------
 
 logSum <- function(l){
@@ -2076,6 +2076,14 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
 
 }
 
+# -----------------------------------------------------------------------------
+# Helper functions for model simulations
+# -----------------------------------------------------------------------------
+
+# Run each model being compared in simulation study
+run_each_mod <- function(model, nsim, nsample) {
+  
+}
 
 # -----------------------------------------------------------------------------
 # Create tables for results
@@ -2250,6 +2258,8 @@ label_switching <- function(draws, pivot, loadings, betas = NULL, rank) {
   list(swapped_draws = swapped_draws, swapped_loadings = swapped_loadings, swapped_betas = swapped_betas,
        swaps_made = swaps_made, signs_changed = signs_changed)
 }
+
+
 
 
 
