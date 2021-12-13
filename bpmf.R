@@ -2023,42 +2023,42 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   for (s in 1:q) {
     # Contribution of the observed data to the joint density
     data_s <- X_complete[[s,1]]
-    like <- like + sum(log(sapply(1:n, function(i) {
-      dnorm(data_s[,i], mean = (U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]))[,i], sd = sqrt(error_vars[s]))
-    })))
+    like <- like + sum(sapply(1:n, function(i) {
+      dnorm(data_s[,i], mean = (U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]))[,i], sd = sqrt(error_vars[s]), log = TRUE)
+    }))
     
     # Contribution of Us to the joint density
-    like <- like + sum(log(sapply(1:r, function(rs) {
-      dnorm(U.iter[[s,1]][,rs], mean = 0, sd = sqrt(sigma2_joint))
-    })))
+    like <- like + sum(sapply(1:r, function(rs) {
+      dnorm(U.iter[[s,1]][,rs], mean = 0, sd = sqrt(sigma2_joint), log = TRUE)
+    }))
     
     # Contribution of Ws to the joint density
-    like <- like + prod(sapply(1:r.vec[s], function(rs) {
-      dnorm(W.iter[[s,s]][,rs], mean = 0, sd = sqrt(sigma2_indiv[s]))
+    like <- like + sum(sapply(1:r.vec[s], function(rs) {
+      dnorm(W.iter[[s,s]][,rs], mean = 0, sd = sqrt(sigma2_indiv[s]), log = TRUE)
     }))
     
     # Contribution of Vs to the joint density
-    like <- like + sum(log(sapply(1:r.vec[s], function(rs) {
-      dnorm(Vs.iter[[1,s]][,rs], mean = 0, sd = sqrt(sigma2_indiv[s]))
-    })))
+    like <- like + sum(sapply(1:r.vec[s], function(rs) {
+      dnorm(Vs.iter[[1,s]][,rs], mean = 0, sd = sqrt(sigma2_indiv[s]), log = TRUE)
+    }))
     
     # If there is a response
     if (response_given) {
       VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
       
       # The contribution of beta to the joint density
-      like <- like + sum(log(sapply(1:n_beta, function(rs) {
-        dnorm(beta.iter[[1,1]][rs,], mean = 0, sd = sqrt(Sigma_beta[rs,rs]))
-      })))
+      like <- like + sum(sapply(1:n_beta, function(rs) {
+        dnorm(beta.iter[[1,1]][rs,], mean = 0, sd = sqrt(Sigma_beta[rs,rs]), log = TRUE)
+      }))
       
       if (response_type == "continuous") {
         # The contribution of the observed response to the joint density
-        like <- like + sum(log(sapply(1:n, function(i) {
-          dnorm(Y[[1,1]][i,], mean = VStar.iter %*% beta.iter[[1,1]], sd = sqrt(tau2.iter[[1,1]]))
-        })))
+        like <- like + sum(sapply(1:n, function(i) {
+          dnorm(Y[[1,1]][i,], mean = VStar.iter %*% beta.iter[[1,1]], sd = sqrt(tau2.iter[[1,1]]), log = TRUE)
+        }))
         
         # The contribution of tau2 to the joint density
-        like <- like + log(dinvgamma(tau2.iter, shape = shape, rate = rate))
+        like <- like + log(dinvgamma(tau2.iter[[1,1]], shape = shape, scale = 1/rate))
       }
       
       if (response_type == "binary") {
@@ -2072,8 +2072,6 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
 
   # Return
   like
-  
-
 }
 
 # -----------------------------------------------------------------------------

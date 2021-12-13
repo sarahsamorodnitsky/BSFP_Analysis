@@ -144,7 +144,7 @@ fev1pp_training_fit_sparse <- bpmf(
 # Save the results
 save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(results_wd, "training_data_fit.rda"))
 
-# Assessing convergence for both model fits
+# Assessing convergence for both model fits --
 fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
   # Calculate the log-joint density at each thinned iterations
   log_joint_density(data = hiv_copd_data, 
@@ -159,4 +159,70 @@ fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
                     tau2.iter = fev1pp_training_fit_nonsparse$tau2.draw[[sim_iter]])
 })
 
+fev1pp_training_sparse_conv <- sapply(thinned_iters, function(sim_iter) {
+  # Calculate the log-joint density at each thinned iterations
+  log_joint_density(data = hiv_copd_data, 
+                    U.iter = fev1pp_training_fit_sparse$U.draw[[sim_iter]], 
+                    V.iter = fev1pp_training_fit_sparse$V.draw[[sim_iter]], 
+                    W.iter = fev1pp_training_fit_sparse$W.draw[[sim_iter]], 
+                    Vs.iter = fev1pp_training_fit_sparse$Vs.draw[[sim_iter]],
+                    model_params = model_params,
+                    ranks = fev1pp_training_fit_sparse$ranks,
+                    Y = fev1pp,
+                    beta.iter = fev1pp_training_fit_sparse$beta.draw[[sim_iter]],
+                    tau2.iter = fev1pp_training_fit_sparse$tau2.draw[[sim_iter]])
+})
 
+# Plotting the log-joint densities
+plot(fev1pp_training_nonsparse_conv, xlab = "Iteration", ylab = "Log Joint Density", main = "Log Joint Density for Non-Sparse Model")
+plot(fev1pp_training_sparse_conv, xlab = "Iteration", ylab = "Log Joint Density", main = "Log Joint Density for Sparse Model")
+
+# Assess predictive accuracy -- 
+EY_train_nonsparse <- sapply(thinned_iters_burnin, function(sim_iter) {
+  VStar.iter <- cbind(1, do.call(cbind, fev1pp_training_fit_nonsparse$V.draw[[sim_iter]]), do.call(cbind, fev1pp_training_fit_nonsparse$Vs.draw[[sim_iter]]))
+  beta.iter <- fev1pp_training_fit_nonsparse$beta.draw[[sim_iter]][[1,1]]
+  VStar.iter %*% beta.iter
+})
+
+EY_train_sparse <- sapply(thinned_iters_burnin, function(sim_iter) {
+  VStar.iter <- cbind(1, do.call(cbind, fev1pp_training_fit_sparse$V.draw[[sim_iter]]), do.call(cbind, fev1pp_training_fit_sparse$Vs.draw[[sim_iter]]))
+  beta.iter <- fev1pp_training_fit_sparse$beta.draw[[sim_iter]][[1,1]]
+  VStar.iter %*% beta.iter
+})
+
+# Calculating the correlation between the predicted outcomes and the true outcome
+mean(apply(EY_train_nonsparse, 2, function(sim_iter) cor(sim_iter, fev1pp[[1,1]])))
+mean(apply(EY_train_sparse, 2, function(sim_iter) cor(sim_iter, fev1pp[[1,1]])))
+
+# -----------------------------------------------------------------------------
+# Cross Validation Data Model Fit
+# -----------------------------------------------------------------------------
+
+# Sparse model --
+# Saving the index for each pair 
+ind_of_pairs <- seq(1, n, by = 2)
+n_pair <- length(ind_of_pairs)
+
+# Running each training and test run in parallel
+cl <- makeCluster(10)
+registerDoParallel(cl)
+fev1pp_cv_sparse <- foreach(pair = ind_of_pairs, .packages = c("MASS", "truncnorm", "EnvStats", "svMisc"), .verbose = TRUE) %dopar% {
+  # Create a new vector of the outcome with the current pair set to NA
+  fev1pp_cv <- fev1pp
+  fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
+
+  # Run the model
+  fev1pp_cv_fit_sparse <- bpmf(
+    data = hiv_copd_data,
+    Y = fev1pp_cv,
+    nninit = TRUE,
+    model_params = model_params,
+    sparsity = TRUE,
+    nsample = nsample,
+    progress = FALSE
+  )
+
+  # Save Output
+  
+}
+stopCluster(cl)
