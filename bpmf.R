@@ -2079,7 +2079,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
 # -----------------------------------------------------------------------------
 
 # Run each model being compared in simulation study
-run_each_mod <- function(model, p.vec, n, ranks, response, s2nX, s2nY, nsim, nsample, n_clust) {
+run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2nY, nsim, nsample, n_clust) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -2089,6 +2089,7 @@ run_each_mod <- function(model, p.vec, n, ranks, response, s2nX, s2nY, nsim, nsa
   # n = sample size
   # ranks = vector of joint and individual ranks = c(joint rank, indiv rank 1, indiv rank 2, ...)
   # response = string in c(NULL, "continuous", "binary")
+  # true_params = the list of true parameters under which to generate data
   # s2nX = signal-to-noise ratio in the data, X.
   # s2nY = signal-to-noise ratio in the response, Y. NULL if response == "binary"
   # nsim = number of simulations to run
@@ -2109,10 +2110,100 @@ run_each_mod <- function(model, p.vec, n, ranks, response, s2nX, s2nY, nsim, nsa
     # Set seed
     set.seed(sim_iter)
     
+    # -------------------------------------------------------------------------
     # Generate data 
+    # -------------------------------------------------------------------------
     sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing, sparsity = FALSE)
     
-    # Run model on generated data
+    # Saving the data
+    true_data <- sim_data$data
+    q <- length(p.vec)
+    joint.structure <- sim_data$joint.structure
+    indiv.structure <- sim_data$indiv.structure
+    
+    missing_data <- sim_data$missing_data
+    missing_obs <- sim_data$missing_obs
+    
+    # The response
+    Y <- sim_data$Y
+    Y_missing <- sim_data$Y_missing
+    missing_obs_Y <- sim_data$missing_obs_Y
+    
+    # The standardizing coefficients
+    s2n_coef <- sim_data$s2n_coef
+    
+    # The response parameters
+    beta <- sim_data$beta
+    tau2 <- sim_data$tau2
+    EY <- sim_data$EY
+    
+    # -------------------------------------------------------------------------
+    # Fit each model on generated data to obtain estimate of underlying structure
+    # -------------------------------------------------------------------------
+    
+    if (mod == "sJIVE") {
+    
+    }
+    
+    if (mod == "BIDIFAC+") {
+      # Run model
+      mod.out <- BIDIFAC(sim_data, rmt = TRUE, pbar = FALSE)
+      
+      # Saving the column structure (the joint structure)
+      mod.joint <- lapply(1:q, function(source) {
+        mod.out$C[[source,1]]
+      })
+      joint.rank <- rankMatrix(mod.out$C[[1,1]])[1]
+      
+      # Saving the individual structure 
+      mod.individual <- lapply(1:q, function(source) {
+        mod.out$I[[source,1]]
+      })
+      indiv.rank <- sapply(mod.out$I, function(source) {
+        rankMatrix(source)[1]
+      }) # Not sure this is the most generalizable approach
+      
+      # Obtaining the joint scores
+      joint.scores <- svd(mod.out[[1]])$v[,1:joint.rank]
+      
+      # Obtaining the individual scores
+      indiv.scores <- do.call(cbind, lapply(1:q, function(source) {
+        svd.source <- svd(mod.individual[[source]])
+        svd.source$v[,1:indiv.rank[source]]
+      }))
+      
+      # Combining all scores together
+      all.scores <- cbind.data.frame(y, joint.scores, indiv.scores)
+      colnames(all.scores) <- c("y", "joint1", "indiv1", "indiv2")
+    }
+    
+    if (mod == "JIVE") {
+      
+    }
+    
+    if (mod == "MOFA") {
+      
+    }
+    
+    if (mod == "BPMF") {
+      
+    }
+    
+    # -------------------------------------------------------------------------
+    # As applicable, use structure in Bayesian linear model
+    # -------------------------------------------------------------------------
+    
+    if (mod == "BIDIFAC+") {
+      
+    }
+    
+    if (mod == "JIVE") {
+      
+    }
+    
+    if (mod == "MOFA") {
+      
+    }
     
     # Save 
   }
