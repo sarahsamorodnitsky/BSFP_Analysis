@@ -39,11 +39,3 @@ true_params <- list(error_vars = c(1,1), # Error variance for each source
 # sJIVE
 # -----------------------------------------------------------------------------
 
-# Running sJIVE in parallel
-sJIVE_results <- foreach(sim_iter = 1:100, .verbose = TRUE) %dopar% {
-  # Generate data 
-  
-  # Run sJIVE on generated data
-  
-  # Save 
-}
