@@ -185,10 +185,16 @@ plot(fev1pp_training_sparse_conv)
 ind_of_pairs <- seq(1, n, by = 2)
 n_pair <- length(ind_of_pairs)
 
+# For running in parallel
+funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
+           "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+           "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
+
 # Running each training and test run in parallel
 cl <- makeCluster(3)
 registerDoParallel(cl)
-fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix"), .verbose = TRUE) %dopar% {
+fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
   # Create a new vector of the outcome with the current pair set to NA
   fev1pp_cv <- fev1pp
   fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
