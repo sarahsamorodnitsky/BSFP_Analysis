@@ -192,7 +192,7 @@ funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
 packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
 
 # Running each training and test run in parallel
-cl <- makeCluster(3)
+cl <- makeCluster(5)
 registerDoParallel(cl)
 fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
   # Create a new vector of the outcome with the current pair set to NA
