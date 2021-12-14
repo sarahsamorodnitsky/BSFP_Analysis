@@ -71,11 +71,14 @@ binary_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, tru
 save(no_response_no_missing, response_continuous, response_binary, 
      response_continuous_missing0.3, response_continuous_missing0.5, response_continuous_missing0.7,
      missing0.3, missing0.5, missing0.7, continuous_response_sparsity, binary_response_sparsity, 
-     file = "~/BayesianPMFWithGit/validation_results/validation_sim_12092021.rda")
+     columnwise_missing0.3, columnwise_missing0.5,
+     file = "~/BayesianPMFWithGit/validation_results/validation_sim_12132021.rda")
 
 # -----------------------------------------------------------------------------
 # Creating the results table
 # -----------------------------------------------------------------------------
+
+load("~/BayesianPMFWithGit/validation_results/validation_sim_12092021.rda")
 
 # Create the dataframe
 validation_results <- data.frame(Condition = character(), Metric = character(), Joint = numeric(), 
@@ -102,13 +105,9 @@ validation_results <- rbind.data.frame(validation_results, create_validation_tab
 validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous_missing0.5, condition = "50% Continuous Response Missing"))
 validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous_missing0.7, condition = "70% Continuous Response Missing"))
 
-# Missing binary response
-validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.3, condition = "30% Binary Response Missing"))
-validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.5, condition = "50% Binary Response Missing"))
-validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.7, condition = "70% Binary Response Missing"))
-
-# Removing MSE for now
-validation_results %<>% filter(Metric != "MSE")
+# Sparsity
+validation_results <- rbind.data.frame(validation_results, create_validation_table(continuous_response_sparsity, condition = "Continuous Response with Sparsity"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(binary_response_sparsity, condition = "Binary Response with Sparsity"))
 
 # Exporting the table to LaTeX
 library(xtable)

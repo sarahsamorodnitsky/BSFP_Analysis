@@ -8,7 +8,7 @@ library(foreach)
 library(Matrix)
 library(MASS)
 library(truncnorm)
-library(MCMCpack)
+# library(MCMCpack)
 
   # -----------------------------------------------------------------------------
 # Bayesian PMF functions
@@ -1721,7 +1721,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
 
 # Returns a matrix with the coverage, MSE, and CI width for each entry when the entry was observed (observed = TRUE)
 # or unobserved (observed = FALSE)
-compile_missing_results <- function(param_by_sim_iter, s, dims, nsim, missing_obs_inds, type, observed = NULL) {
+compile_missing_results <- function(param_by_sim_iter, s, dims, nsim, missing_obs_inds, type, observed) {
   # Create a matrix for the results from each metric
   coverage_mat <- ci_width_mat <- matrix(0, nrow = dims[1], ncol = dims[2])
   
