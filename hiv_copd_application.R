@@ -211,7 +211,7 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
   )
 
   # Save Output
-  saveRDS(fev1pp_cv_fit_sparse, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
+  saveRDS(fev1pp_cv_fit_sparse, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rds"))
 }
 stopCluster(cl)
 
