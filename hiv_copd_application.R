@@ -15,7 +15,7 @@ library(foreach)
 # Working directories
 data_wd <- "~/BayesianPMFWithGit/data/"
 model_wd <- "~/BayesianPMFWithGit/"
-results_wd <- "~/BayesianPMFWithGit/data_application_results/"
+results_wd <- "~/BayesianPMF/04DataApplication/"
 
 # Loading in the model functions
 source(paste0(model_wd, "bpmf.R"))
