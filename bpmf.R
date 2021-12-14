@@ -2079,7 +2079,46 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
 # -----------------------------------------------------------------------------
 
 # Run each model being compared in simulation study
-run_each_mod <- function(model, nsim, nsample) {
+run_each_mod <- function(model, p.vec, n, ranks, response, s2nX, s2nY, nsim, nsample, n_clust) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  #
+  # model = string in c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
+  # p.vec = number of features per source
+  # n = sample size
+  # ranks = vector of joint and individual ranks = c(joint rank, indiv rank 1, indiv rank 2, ...)
+  # response = string in c(NULL, "continuous", "binary")
+  # s2nX = signal-to-noise ratio in the data, X.
+  # s2nY = signal-to-noise ratio in the response, Y. NULL if response == "binary"
+  # nsim = number of simulations to run
+  # nsample = number of Gibbs sampling iterations to draw for the linear model
+  # n_clust = how many clusters to run simulation in parallel?
+  # ---------------------------------------------------------------------------
+  
+  # The model options
+  models <- c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
+  
+  cl <- makeCluster(n_clust)
+  registerDoSNOW(cl)
+  funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
+             "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+  packs <- c("Matrix", "MASS", "truncnorm")
+  sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+    # Set seed
+    set.seed(sim_iter)
+    
+    # Generate data 
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing, sparsity = FALSE)
+    
+    # Run model on generated data
+    
+    # Save 
+  }
+  stopCluster(cl)
+
+  
   
 }
 
