@@ -20,7 +20,6 @@ results_wd <- "~/BayesianPMF/04DataApplication/"
 # Loading in the model functions
 source(paste0(model_wd, "bpmf.R"))
 
-
 # -----------------------------------------------------------------------------
 # Preparing the data
 # -----------------------------------------------------------------------------
@@ -176,3 +175,38 @@ fev1pp_training_sparse_conv <- sapply(thinned_iters, function(sim_iter) {
 # Plotting the log-joint densities
 plot(fev1pp_training_nonsparse_conv)
 plot(fev1pp_training_sparse_conv)
+
+
+# -----------------------------------------------------------------------------
+# Cross Validated Model Fit
+# -----------------------------------------------------------------------------
+
+# Saving the index for each pair 
+ind_of_pairs <- seq(1, n, by = 2)
+n_pair <- length(ind_of_pairs)
+
+# Running each training and test run in parallel
+cl <- makeCluster(3)
+registerDoParallel(cl)
+fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix"), .verbose = TRUE) %dopar% {
+  # Create a new vector of the outcome with the current pair set to NA
+  fev1pp_cv <- fev1pp
+  fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
+  
+  # Run the model with the above pair's continuous outcome missing
+  fev1pp_cv_fit_sparse <- bpmf(
+    data = hiv_copd_data,
+    Y = fev1pp_cv,
+    nninit = TRUE,
+    model_params = model_params,
+    sparsity = TRUE,
+    nsample = nsample,
+    progress = TRUE
+  )
+
+  # Save Output
+  saveRDS(fev1pp_cv_fit_sparse, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
+}
+stopCluster(cl)
+
+
