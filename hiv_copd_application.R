@@ -226,3 +226,8 @@ fev1pp_cv_sparse <- foreach(pair = ind_of_pairs, .packages = c("MASS", "truncnor
   
 }
 stopCluster(cl)
+
+# Plotting the log-joint densities
+plot(fev1pp_training_nonsparse_conv)
+plot(fev1pp_training_sparse_conv)
+
