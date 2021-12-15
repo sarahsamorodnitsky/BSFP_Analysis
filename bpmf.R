@@ -1502,11 +1502,20 @@ mse <- function(truth, draws) {
   # draws = list of Gibbs samples for paramter
   # ---------------------------------------------------------------------------
   
+  # Check if binary response
+  is_binary_response <- all(unique(truth) %in% c(0,1))
+  
   # Calculate the posterior mean for the draws after burn-in
   avg_res <- Reduce("+", draws)/length(draws)
   
   # Calculate the relative MSE
-  rel_mse <- frob(truth - avg_res)/frob(truth)
+  if (!is_binary_response) {
+    rel_mse <- frob(truth - avg_res)/frob(truth)
+  }
+  
+  if (is_binary_response) {
+    rel_mse <- frob(truth - avg_res)/frob(truth - mean(truth))
+  }
   
   # Return
   rel_mse
