@@ -20,8 +20,8 @@ q <- 2
 model_params <- true_params <- list(error_vars = c(1,1),
                                     joint_var = 1,
                                     indiv_vars = c(1,1),
-                                    beta_vars = c(10, 1, rep(1, q)), # Use the same variance for all the effects from each source
-                                    response_vars = c(shape = 1,rate = 1))
+                                    beta_vars = c(1, 1, rep(1, q)), # Use the same variance for all the effects from each source
+                                    response_vars = c(shape = 1, rate = 1))
 
 # -----------------------------------------------------------------------------
 # Coverage simulations
