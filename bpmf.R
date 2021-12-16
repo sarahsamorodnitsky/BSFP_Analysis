@@ -1692,7 +1692,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
         counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
       }
       
-      # For Xm, count how many times in X. each entry was missing
+      # For Xm, count how many times in X. each entry WAS missing
       if (param == 5) {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
@@ -1707,7 +1707,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
         }
       }
       
-      # For Ym, count how many times in y each entry was missing
+      # For Ym, count how many times in y each entry WAS missing
       if (param == 6) {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         obs_inds <- 1:n
