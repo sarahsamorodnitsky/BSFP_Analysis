@@ -1329,11 +1329,11 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   }
   
   if (!is.null(missingness)) {
-    if (missingness != "missingness_in_data" | missingness != "both") {
+    if (missingness != "missingness_in_data" & missingness != "both") {
       missing_data <- missing_obs <- matrix(list(), nrow = q, ncol = 1)
     }
     
-    if (missingness != "missingness_in_response" | missingness != "both") {
+    if (missingness != "missingness_in_response" & missingness != "both") {
       Y_missing <- missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
     }
     
@@ -1692,7 +1692,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
         counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
       }
       
-      # For Xm, count how many times in X. each entry was missing
+      # For Xm, count how many times in X. each entry WAS missing
       if (param == 5) {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
@@ -1707,7 +1707,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
         }
       }
       
-      # For Ym, count how many times in y each entry was missing
+      # For Ym, count how many times in y each entry WAS missing
       if (param == 6) {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         obs_inds <- 1:n
@@ -1880,9 +1880,9 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
               results_for_param[[s,1]] <- list(observed = list(avg_coverage = mean(avg_coverage_observed_source),
                                                           avg_mse = mean(avg_mse_observed_source),
                                                           avg_ci_width = mean(avg_ci_width_observed_source)),
-                                               missing = list(avg_coverage = mean(avg_coverage_missing_source),
+                                               missing = list(avg_coverage = mean(avg_coverage_missing_source[!is.nan(avg_coverage_missing_source)]),
                                                               avg_mse = mean(avg_mse_missing_source),
-                                                              avg_ci_width = mean(avg_ci_width_missing_source)))
+                                                              avg_ci_width = mean(avg_ci_width_missing_source[!is.nan(avg_ci_width_missing_source)])))
                                                
             }
           }
@@ -1925,9 +1925,9 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
           avg_ci_width_source <- results_compiled[[3]]/(denominator[[param]][[s,1]])
           
           # Save the results
-          results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
+          results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source[!is.nan(avg_coverage_source)]),
                                            avg_mse = mean(avg_mse_source),
-                                           avg_ci_width = mean(avg_ci_width_source))
+                                           avg_ci_width = mean(avg_ci_width_source[!is.nan(avg_ci_width_source)]))
         }
       }
         
