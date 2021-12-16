@@ -10,7 +10,7 @@ library(MASS)
 library(truncnorm)
 # library(MCMCpack)
 
-  # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Bayesian PMF functions
 # -----------------------------------------------------------------------------
 
@@ -2087,6 +2087,39 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
 # Helper functions for model simulations
 # -----------------------------------------------------------------------------
 
+# Calculate the predicted Y
+Y_predicted <- function(scores.draw, beta.draw, nsample) {
+  # Calculates the predicted Y value at each iteration of the Gibbs sampler
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  #
+  # scores.draw = VStar (with intercept) at each Gibbs sampling iteration
+  # beta.draw = coefficients at each Gibbs sampling iteration
+  # nsample = number of Gibbs sampling iterations
+  # ---------------------------------------------------------------------------
+  
+  # Is Y continuous or binary?
+  response_type <- if (all(unique(Y) %in% c(0, 1, NA))) "binary" else "continuous"
+  
+  # If Y is continuous:
+  if (response_type == "continuous") {
+    pred_y <- lapply(1:nsample, function(iter) {
+      scores.draw[[iter]] %*% beta.draw[[iter]][[1,1]]
+    })
+  }
+  
+  # If Y is binary:
+  if (response_type == "binary") {
+    pred_y <- sapply(1:nsample, function(iter) {
+      pnorm(scores.draw[[iter]] %*% beta.draw[[iter]][[1,1]])
+    })
+  }
+  
+  # Return
+  pred_y
+}
+
 # Run each model being compared in simulation study
 run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2nY, nsim, nsample, n_clust) {
   
@@ -2126,6 +2159,7 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
     
     # Saving the data
     true_data <- sim_data$data
+    true_data_list <-  list(data1 = true_data[[1,1]], data2 = true_data[[2,1]])
     q <- length(p.vec)
     joint.structure <- sim_data$joint.structure
     indiv.structure <- sim_data$indiv.structure
@@ -2151,29 +2185,45 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
     # -------------------------------------------------------------------------
     
     if (mod == "sJIVE") {
-    
+      # Running sJIVE
+      mod.out <- sJIVE(true_data_list, Y[[1,1]])
+      
+      # Saving the joint structure
+      mod.joint <- lapply(1:q, function(source) {
+        t(t(mod.out$U_I[[source]])) %*% mod.out$S_J
+      })
+      
+      # Saving the individual structure
+      mod.individual <- lapply(1:q, function(source) {
+        mod.out$W_I[[source]] %*% mod.out$S_I[[source]]
+      })
+      
+      # Saving the joint scores
+      joint.scores <- t(mod.out$S_J)
+      
+      # Saving the individual scores
+      indiv.scores <- do.call(cbind, lapply(mod.out$S_I, t))
+      
+      # Saving the joint rank
+      joint.rank <- mod.out$rankJ
+      
+      # Saving the individual ranks
+      indiv.rank <- mod.out$rankA
     }
     
     if (mod == "BIDIFAC+") {
       # Run model
-      mod.out <- BIDIFAC(sim_data, rmt = TRUE, pbar = FALSE)
+      mod.out <- BIDIFAC(true_data, rmt = TRUE, pbar = FALSE)
       
       # Saving the column structure (the joint structure)
       mod.joint <- lapply(1:q, function(source) {
         mod.out$C[[source,1]]
       })
-      joint.rank <- rankMatrix(mod.out$C[[1,1]])[1]
       
       # Saving the individual structure 
       mod.individual <- lapply(1:q, function(source) {
         mod.out$I[[source,1]]
       })
-      indiv.rank <- sapply(mod.out$I, function(source) {
-        rankMatrix(source)[1]
-      }) # Not sure this is the most generalizable approach
-      
-      # Combining the ranks
-      mod.ranks <- c(joint.rank, indiv.rank)
       
       # Obtaining the joint scores
       joint.scores <- svd(mod.out[[1]])$v[,1:joint.rank]
@@ -2184,22 +2234,112 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
         svd.source$v[,1:indiv.rank[source]]
       }))
       
-      # Combining all scores together
-      all.scores <- cbind.data.frame(y, joint.scores, indiv.scores)
-      colnames(all.scores) <- c("y", "joint1", "indiv1", "indiv2")
+      # Saving the joint rank
+      joint.rank <- rankMatrix(mod.out$C[[1,1]])[1]
+      
+      # Saving the individual ranks
+      indiv.rank <- sapply(mod.out$I, function(source) {
+        rankMatrix(source)[1]
+      }) # Not sure this is the most generalizable approach
     }
     
     if (mod == "JIVE") {
+      # Running JIVE
+      mod.out <- jive(true_data_list)
       
+      # Saving the joint structure
+      mod.joint <- mod.out$joint
+      
+      # Saving the individual structure
+      mod.individual <- jive.test$individual
+      
+      # Obtaining the joint scores
+      joint.scores <- svd(jive.joint[[1]])$v[,1:jive.joint.rank]
+      
+      # Obtaining the individual scores
+      indiv.scores <- do.call(cbind, lapply(1:q, function(source) {
+        svd.source <- svd(jive.individual[[source]])
+        svd.source$v[,1:jive.indiv.rank[source]]
+      }))
+      
+      # Saving the joint rank
+      joint.rank <- jive.test$rankJ
+      
+      # Saving the individual ranks
+      indiv.rank <- jive.test$rankA
     }
     
     if (mod == "MOFA") {
+      # Create the MOFA object
+      MOFAobject <- prepare_mofa(
+        object = create_mofa(true_data_list)
+      )
+    
+      # Train the MOFA model
+      mod.out <- run_mofa(MOFAobject)
       
+      # Determining for which views each factor is active
+      mod.var.exp <- get_variance_explained(mod.out)$r2_per_factor$group1 # variance explained by factor per view
+      joint.factors <- which(apply(mod.var.exp, 1, function(factor) all(factor > 0.002)))
+      indiv.factors <- lapply(1:q, function(source) {
+        which(apply(mod.var.exp, 1, function(factor) factor[source] > 0.002 & factor[c(1:q)[!c(1:q) %in% source]] < 0.002))
+      })
+      
+      # Save the underlying structure
+      mod.joint <- lapply(1:q, function(source) {
+        t(mod.out@expectations$Z$group1[, joint.factors, drop = FALSE] %*% t(mod.out@expectations$W[[source]][, joint.factors, drop = FALSE]))
+      })
+      mod.individual <- lapply(1:q, function(source) {
+        t(mod.out@expectations$Z$group1[, indiv.factors[[source]], drop = FALSE] %*% t(mod.out@expectations$W[[source]][, indiv.factors[[source]], drop = FALSE]))
+      })
+      
+      # Save the MOFA scores
+      mofa.scores <- get_factors(mod.out)$group1
+      
+      # Save the joint scores
+      joint.scores <- mofa.scores[,joint.factors, drop = FALSE]
+      
+      # Save the individual scores
+      indiv.scores <- mofa.scores[,unlist(indiv.factors), drop = FALSE]
+      
+      # Saving the joint rank
+      joint.rank <- length(joint.factors)
+      
+      # Saving the individual rank
+      indiv.rank <- sapply(indiv.factors, length)
     }
     
     if (mod == "BPMF") {
+      # Running BPMF
+      mod.out <- bpmf(true_data, Y = Y, nninit = TRUE, model_params = model_params, nsample = 1000)
       
+      # Saving the joint structure
+      mod.joint <- lapply(1:nsample, function(iter) {
+        lapply(1:q, function(source) {
+          mod.out$U.draw[[iter]][[source,1]] %*% t(mod.out$V.draw[[iter]][[1]])
+        })
+      })
+      
+      # Saving the individual structure
+      mod.individual <- lapply(1:nsample, function(iter) {
+        lapply(1:q, function(source) {
+          mod.joint$W.draw[[iter]][[source,source]] %*% t(mod.joint$Vs.draw[[iter]][[1,source]])
+        })
+      })
+      
+      # Saving the joint rank
+      joint.rank <- mod.out$ranks[1]
+      
+      # Saving the individual ranks
+      indiv.rank <- mod.out$ranks[-1]
     }
+    
+    # Combining the ranks
+    mod.ranks <- c(joint.rank, indiv.rank)
+    
+    # Combining all scores together
+    all.scores <- cbind.data.frame(Y[[1,1]], joint.scores, indiv.scores)
+    colnames(all.scores) <- c("y", rep("joint1", ncol(joint.scores)), paste0("indiv", 1:ncol(indiv.scores)))
     
     # -------------------------------------------------------------------------
     # As applicable, use structure in Bayesian linear model
@@ -2207,7 +2347,7 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
     
     if (mod %in% c("BIDIFAC+", "JIVE", "MOFA")) {
       # Fitting the Bayesian linear model
-      mod.bayes <- bpmf(data = X, Y = y, nninit = FALSE, model_params = model_params, 
+      mod.bayes <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, 
                         ranks = mod.ranks, scores = as.matrix(all.scores[,-1]), nsample = 1000)
     }
     
@@ -2215,8 +2355,18 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
     # Assess recovery of underlying joint and individual structure
     # -------------------------------------------------------------------------
     
+    # Joint structure
+    joint.recovery.structure <- mean(sapply(1:q, function(source) {
+      frob(mod.joint[[source]] - joint.structure[[source,1]])/frob(joint.structure[[source,1]])
+    }))
+    
+    # Individual structure
+    indiv.recovery.structure <- mean(sapply(1:q, function(source) {
+      frob(mod.individual[[source]] - indiv.structure[[source,1]])/frob(indiv.structure[[source,1]])
+    }))
+    
     # -------------------------------------------------------------------------
-    # Calculate prediction error for 
+    # Calculate prediction error for test data
     # -------------------------------------------------------------------------
     
     # Save 
