@@ -1880,9 +1880,9 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
               results_for_param[[s,1]] <- list(observed = list(avg_coverage = mean(avg_coverage_observed_source),
                                                           avg_mse = mean(avg_mse_observed_source),
                                                           avg_ci_width = mean(avg_ci_width_observed_source)),
-                                               missing = list(avg_coverage = mean(avg_coverage_missing_source),
+                                               missing = list(avg_coverage = mean(avg_coverage_missing_source[!is.nan(avg_coverage_missing_source)]),
                                                               avg_mse = mean(avg_mse_missing_source),
-                                                              avg_ci_width = mean(avg_ci_width_missing_source)))
+                                                              avg_ci_width = mean(avg_ci_width_missing_source)[!is.nan(avg_ci_width_missing_source)]))
                                                
             }
           }
