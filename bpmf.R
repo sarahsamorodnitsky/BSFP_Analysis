@@ -2172,6 +2172,9 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
         rankMatrix(source)[1]
       }) # Not sure this is the most generalizable approach
       
+      # Combining the ranks
+      mod.ranks <- c(joint.rank, indiv.rank)
+      
       # Obtaining the joint scores
       joint.scores <- svd(mod.out[[1]])$v[,1:joint.rank]
       
@@ -2202,17 +2205,19 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
     # As applicable, use structure in Bayesian linear model
     # -------------------------------------------------------------------------
     
-    if (mod == "BIDIFAC+") {
-      
+    if (mod %in% c("BIDIFAC+", "JIVE", "MOFA")) {
+      # Fitting the Bayesian linear model
+      mod.bayes <- bpmf(data = X, Y = y, nninit = FALSE, model_params = model_params, 
+                        ranks = mod.ranks, scores = as.matrix(all.scores[,-1]), nsample = 1000)
     }
     
-    if (mod == "JIVE") {
-      
-    }
+    # -------------------------------------------------------------------------
+    # Assess recovery of underlying joint and individual structure
+    # -------------------------------------------------------------------------
     
-    if (mod == "MOFA") {
-      
-    }
+    # -------------------------------------------------------------------------
+    # Calculate prediction error for 
+    # -------------------------------------------------------------------------
     
     # Save 
   }
