@@ -209,10 +209,37 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
     nsample = nsample,
     progress = TRUE
   )
+  
+  # Saving the predicted outcomes for the missing subjects
+  Ym.draw <- fev1pp_cv_fit_sparse$Ym.draw
+  ranks <- fev1pp_cv_fit_sparse$ranks
 
-  # Save Output
-  saveRDS(fev1pp_cv_fit_sparse, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rds"))
+  # Save just the relevant output
+  save(Ym.draw, ranks, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
 }
 stopCluster(cl)
+
+# Loading in the predicted outcome iteratively for each pair and computing
+# the posterior mean predicted outcome. Comparing to the true FEV1pp 
+
+fev1pp_cv_sparsity <- c()
+for (pair in ind_of_pairs) {
+  # Load in the results
+  load(paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
+  
+  # Combine the samples
+  samps <- do.call(cbind, do.call(cbind, Ym.draw))
+  
+  # Take a burn-in
+  samps_burnin <- samps[,thinned_iters_burnin]
+  
+  # Save in the vector
+  fev1pp_cv_sparsity[pair:(pair+1)] <- rowMeans(samps_burnin)
+}
+
+# Plotting the results
+plot(fev1pp_cv_sparsity, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp from Sparse Model")
+abline(a=0, b=1)
+cor(fev1pp_cv_sparsity, c(fev1pp[[1,1]]))
 
 
