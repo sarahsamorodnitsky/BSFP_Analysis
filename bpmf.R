@@ -1329,11 +1329,11 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   }
   
   if (!is.null(missingness)) {
-    if (missingness != "missingness_in_data" | missingness != "both") {
+    if (missingness != "missingness_in_data" & missingness != "both") {
       missing_data <- missing_obs <- matrix(list(), nrow = q, ncol = 1)
     }
     
-    if (missingness != "missingness_in_response" | missingness != "both") {
+    if (missingness != "missingness_in_response" & missingness != "both") {
       Y_missing <- missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
     }
     
