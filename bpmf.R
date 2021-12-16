@@ -1925,9 +1925,9 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
           avg_ci_width_source <- results_compiled[[3]]/(denominator[[param]][[s,1]])
           
           # Save the results
-          results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
+          results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source[!is.nan(avg_coverage_source)]),
                                            avg_mse = mean(avg_mse_source),
-                                           avg_ci_width = mean(avg_ci_width_source))
+                                           avg_ci_width = mean(avg_ci_width_source[!is.nan(avg_ci_width_source)]))
         }
       }
         
