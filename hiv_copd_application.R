@@ -240,6 +240,6 @@ for (pair in ind_of_pairs) {
 # Plotting the results
 plot(fev1pp_cv_sparsity, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp from Sparse Model")
 abline(a=0, b=1)
-cor(fev1pp_cv_sparsity, c(fev1pp[[1,1]]))
+cor.test(fev1pp_cv_sparsity, c(fev1pp[[1,1]]))
 
 
