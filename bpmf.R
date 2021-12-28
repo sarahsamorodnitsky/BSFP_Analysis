@@ -1545,7 +1545,7 @@ ci_width <- function(draws, burnin) {
 }
 
 # Combining checking coverage, MSE, and CI width calculations in one function
-get_results <- function(truth, draws, burnin, results_available, missing_obs) {
+get_results <- function(truth, draws, burnin, results_available, missing_obs, missing_obs_Y) {
   # Combining checking coverage, MSE, and CI width calculations in one function
   
   # ---------------------------------------------------------------------------
@@ -1627,8 +1627,44 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs) {
           }
         }
         
+        if (param == 3) {
+          if (!results_available[6]) { # If there is NO missing data
+            mse_s_observed <- mse(truth[[param]][[s,1]], current_draws)
+            mse_s_missing <- NULL
+            mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
+          }
+          
+          if (results_available[6]) { # If there IS missing data
+            # For the entries in the structure that ARE observed -- 
+            obs_inds <- 1:length(truth[[param]][[s,1]])
+            
+            # Save the true values that correspond to observed entries
+            truth_observed <- truth[[param]][[s,1]][obs_inds[!(obs_inds %in% missing_obs_Y[[s,1]])]]
+            
+            # Save the Gibbs samples corresponding to observed entries
+            draws_observed <- lapply(current_draws, function(sim_iter) sim_iter[obs_inds[!(obs_inds %in% missing_obs_Y[[s,1]])]])
+            
+            # MSE
+            mse_s_observed <- mse(truth_observed, draws_observed)
+            
+            # For the entries in the structure that are NOT observed --
+            
+            # Save the true values that correspond to missing entries
+            truth_missing <- truth[[param]][[s,1]][missing_obs_Y[[s,1]]]
+            
+            # Save the Gibbs samples corresponding to missing entries
+            draws_missing <- lapply(current_draws, function(sim_iter) sim_iter[missing_obs_Y[[s,1]]])
+            
+            # MSE
+            mse_s_missing <- mse(truth_missing, draws_missing)
+            
+            # Save
+            mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
+          }
+        }
+        
         # For all other parameters
-        if (param != 1 & param != 2) mse_s <- mse(truth[[param]][[s,1]], current_draws)
+        if (param != 1 & param != 2 & param != 3) mse_s <- mse(truth[[param]][[s,1]], current_draws)
         
         # Save the results
         results[[param]][[s,1]] <- list(coverage_s, mse_s, ci_width_s)
