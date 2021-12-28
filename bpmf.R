@@ -1703,7 +1703,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
   for (param in 1:n_param) {
     if (results_available[param]) {
       
-      # Counting how many times entries in the underlying structure corresponded to missing X.
+      # Counting how many times entries in the underlying structure corresponded to observed X.
       if (param %in% c(1, 2)) {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
@@ -1722,8 +1722,25 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
         }
       }
       
-      # For E(Y) and tau2, return the number of simulation replications 
-      if (param %in% c(3, 4)) {
+      # For E(Y), count how many times each entry corresponded to an observed response value
+      if (param == 3) {
+        counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
+        
+        # Vector of indices for each entry
+        obs_inds <- 1:n
+        
+        # Initialize counter for how many times each entry was NOT missing
+        counts[[param]][[1,1]] <- rep(0, length(obs_inds))
+        
+        for (sim_iter in 1:nsim) {
+          # Saving the missing entries for sim_iter simulation replication
+          current_missing_obs <- sim_results[[sim_iter]]$any_missing$missing_obs_Y[[1,1]] 
+          counts[[param]][[1,1]] <- counts[[param]][[1,1]] + !(obs_inds %in% current_missing_obs)
+        }
+      }
+      
+      # For tau2, return the number of simulation replications 
+      if (param == 4) {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
       }
