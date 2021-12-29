@@ -568,7 +568,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     if (response_given) {
       
       if (sparsity) {
-        # Change the variance of those betas under the spike
+        # Change the precision for the intercept
+        diag(SigmaBetaInv)[1] <- 1/beta_vars[1]
+        # Change the precision of those betas under the slab, excluding the intercept
+        diag(SigmaBetaInv)[-1][gamma.iter[-1] == 1] <- 1/(beta_vars[-1][gamma.iter[-1] == 1])
+        # Change the precision of those betas under the spike
         diag(SigmaBetaInv)[gamma.iter == 0] <- 1000 # Can change this 
       }
       
