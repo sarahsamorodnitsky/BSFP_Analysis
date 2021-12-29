@@ -2975,7 +2975,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       indiv.scores <- do.call(cbind, lapply(mod.out$S_I, t))
       
       # Saving the E(Y)
-      Yfit <- mod.out$fittedY
+      Y.fit <- mod.out$fittedY
     }
     
     if (mod == "BIDIFAC+") {
