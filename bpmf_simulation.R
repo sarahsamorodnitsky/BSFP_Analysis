@@ -8,10 +8,6 @@
 # Set up
 # -----------------------------------------------------------------------------
 
-# Loading in the packages
-library(r.jive)
-library(MOFA2)
-
 # Load in helper functions
 source("~/BayesianPMFWithGit/bpmf.R")
 
@@ -38,4 +34,7 @@ true_params <- model_params <- list(error_vars = c(1,1), # Error variance for ea
 # -----------------------------------------------------------------------------
 # sJIVE
 # -----------------------------------------------------------------------------
+
+run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, 
+             s2nX = 1, s2nY = 1, nsim = 100, nsample = 1000, n_clust = 10)
 

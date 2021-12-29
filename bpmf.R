@@ -2901,6 +2901,12 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
   # n_clust = how many clusters to run simulation in parallel?
   # ---------------------------------------------------------------------------
   
+  # Loading in the packages
+  library(r.jive)
+  library(MOFA2)
+  library(doParallel)
+  library(foreach)
+  
   # The model options
   models <- c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
   
@@ -2911,7 +2917,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "sJIVE", "sJIVE.converge", "sJIVE.predict", "sJIVE.ranks")
   packs <- c("Matrix", "MASS", "truncnorm")
-  sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+  sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
     set.seed(sim_iter)
     
@@ -2975,7 +2981,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       indiv.scores <- do.call(cbind, lapply(mod.out$S_I, t))
       
       # Saving the E(Y)
-      Y.fit <- mod.out$fittedY
+      Y.fit <- t(mod.out$fittedY)
     }
     
     if (mod == "BIDIFAC+") {
@@ -3146,7 +3152,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # -------------------------------------------------------------------------
     
     # Generate test data under the same conditions
-    test_out <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing, sparsity = FALSE)
+    test_out <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity = FALSE)
     
     # Saving the test data
     test_data <- sim_data$data
@@ -3155,7 +3161,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     indiv.structure <- test_data$indiv.structure
     
     # The test response
-    Y.test <- test_data$Y[[1,1]]
+    Y.test <- test_out$Y[[1,1]]
     
     # Comparing the predicted Y to the test Y
     mse_y <- frob(Y.fit - Y.test)/frob(Y.test)
