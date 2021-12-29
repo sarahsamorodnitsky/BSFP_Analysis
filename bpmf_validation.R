@@ -78,16 +78,17 @@ save(no_response_no_missing, response_continuous, response_binary,
 # Creating the results table
 # -----------------------------------------------------------------------------
 
-load("~/BayesianPMFWithGit/validation_results/validation_sim_12092021.rda")
+load("~/BayesianPMFWithGit/validation_results/validation_sim_12152021.rda", verbose = TRUE)
 
 # Create the dataframe
-validation_results <- data.frame(Condition = character(), Metric = character(), Joint = numeric(), 
-                                 Indiv = numeric(), EY = numeric(), tau2 = numeric(), Xm = numeric(), 
-                                 Ym = numeric())
+validation_results <- data.frame(Condition = character(), Metric = character(), 
+                                 Joint_Obs = numeric(), Indiv_Obs = numeric(), 
+                                 Joint_Mis = numeric(), Indiv_Obs = numeric(),
+                                 EY_Obs = numeric(), EY_Mis = numeric(),
+                                 tau2 = numeric(), Xm = numeric(), Ym = numeric())
 
 # No response, no missing
 validation_results <- rbind.data.frame(validation_results, create_validation_table(no_response_no_missing, condition = "No Response, No Missing"))
-
 
 # Continuous response, no missing
 validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous, condition = "Continuous Response"))
