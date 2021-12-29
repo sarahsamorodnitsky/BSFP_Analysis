@@ -2540,46 +2540,81 @@ create_validation_table <- function(results_list, condition) {
   # Create a 3-row dataframe to return
   dt <- data.frame(Condition = rep(condition, 3),
                    Metric = c("Coverage", "MSE", "CI Width"),
-                   Joint = numeric(3),
-                   Indiv = numeric(3),
-                   EY = numeric(3),
-                   tau2 = numeric(3),
-                   Xm = numeric(3),
-                   Ym = numeric(3))
+                   Joint_Obs = numeric(3),
+                   Indiv_Obs = numeric(3),
+                   Joint_Mis = numeric(3),
+                   Indiv_Mis = numeric(3),
+                   EY_Obs = numeric(3),
+                   EY_Mis = numeric(3),
+                   tau2 = numeric(3))
   
   # Fill in the table --
   
   # Joint structure
-  if (length(results_list$`joint structure`[[1,1]]) != 2) {
-    dt$Joint <- c(mean(sapply(results_list$`joint structure`, function(source) source$avg_coverage)),
-                  mean(sapply(results_list$`joint structure`, function(source) source$avg_mse)),
-                  mean(sapply(results_list$`joint structure`, function(source) source$avg_ci_width)))
+  if (length(results_list$`joint structure`[[1,1]]) != 2) { # If there is NOT missingness
+    dt$Joint_Obs <- c(mean(sapply(results_list$`joint structure`, function(source) source$avg_coverage)),
+                      mean(sapply(results_list$`joint structure`, function(source) source$avg_mse)),
+                      mean(sapply(results_list$`joint structure`, function(source) source$avg_ci_width)))
     
     # Individual structure
-    dt$Indiv <- c(mean(sapply(results_list$`indiv structure`, function(source) source$avg_coverage)),
-                  mean(sapply(results_list$`indiv structure`, function(source) source$avg_mse)),
-                  mean(sapply(results_list$`indiv structure`, function(source) source$avg_ci_width)))
+    dt$Indiv_Obs <- c(mean(sapply(results_list$`indiv structure`, function(source) source$avg_coverage)),
+                      mean(sapply(results_list$`indiv structure`, function(source) source$avg_mse)),
+                      mean(sapply(results_list$`indiv structure`, function(source) source$avg_ci_width)))
+    
+    dt$Joint_Mis <- NA
+    
+    dt$Indiv_Mis <- NA
   }
   
-  if (length(results_list$`joint structure`[[1,1]]) == 2) {
-    dt$Joint <- c(mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_coverage)),
-                  mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_mse)),
-                  mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_ci_width)))
+  if (length(results_list$`joint structure`[[1,1]]) == 2) { # If there IS missingness
+    # Observed joint structure
+    dt$Joint_Obs <- c(mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_coverage)),
+                      mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_mse)),
+                      mean(sapply(results_list$`joint structure`, function(source) source$observed$avg_ci_width)))
     
-    # Individual structure
-    dt$Indiv <- c(mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_coverage)),
-                  mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_mse)),
-                  mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_ci_width)))
+    # Observed individual structure
+    dt$Indiv_Obs <- c(mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_coverage)),
+                      mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_mse)),
+                      mean(sapply(results_list$`indiv structure`, function(source) source$observed$avg_ci_width)))
+    
+    # Missing joint structure
+    dt$Joint_Mis <- c(mean(sapply(results_list$`joint structure`, function(source) source$missing$avg_coverage)),
+                      mean(sapply(results_list$`joint structure`, function(source) source$missing$avg_mse)),
+                      mean(sapply(results_list$`joint structure`, function(source) source$missing$avg_ci_width)))
+    
+    # Missing individual structure
+    dt$Indiv_Mis <- c(mean(sapply(results_list$`indiv structure`, function(source) source$missing$avg_coverage)),
+                      mean(sapply(results_list$`indiv structure`, function(source) source$missing$avg_mse)),
+                      mean(sapply(results_list$`indiv structure`, function(source) source$missing$avg_ci_width)))
   }
   
   
   # E(Y)
   if (is.null(results_list$EY[[1,1]])) {
-    dt$EY <- NA
+    dt$EY_Obs <- NA
+    dt$EY_Mis <- NA
   }
   
   if (!is.null(results_list$EY[[1,1]])) {
-    dt$EY <- c(results_list$EY[[1,1]]$avg_coverage, results_list$EY[[1,1]]$avg_mse, results_list$EY[[1,1]]$avg_ci_width)
+    if (length(results_list$EY[[1,1]]) != 2) { # If there is NO missingness in response
+      dt$EY_Obs <- c(mean(sapply(results_list$EY, function(source) source$avg_coverage)),
+                     mean(sapply(results_list$EY, function(source) source$avg_mse)),
+                     mean(sapply(results_list$EY, function(source) source$avg_ci_width)))
+      
+      dt$EY_Mis <- NA
+    }
+    
+    if (length(results_list$EY[[1,1]]) == 2) { # If there IS missingness in response
+      # Observed joint structure
+      dt$EY_Obs <- c(mean(sapply(results_list$EY, function(source) source$observed$avg_coverage)),
+                     mean(sapply(results_list$EY, function(source) source$observed$avg_mse)),
+                     mean(sapply(results_list$EY, function(source) source$observed$avg_ci_width)))
+      
+      # Missing joint structure
+      dt$EY_Mis <- c(mean(sapply(results_list$EY, function(source) source$missing$avg_coverage)),
+                        mean(sapply(results_list$EY, function(source) source$missing$avg_mse)),
+                        mean(sapply(results_list$EY, function(source) source$missing$avg_ci_width)))
+    }
   }
   
   # tau2
@@ -2614,7 +2649,6 @@ create_validation_table <- function(results_list, condition) {
   # Return
   dt
 }
-
 
 # The label switching algorithm. 
 label_switching <- function(draws, pivot, loadings, betas = NULL, rank) {
