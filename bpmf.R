@@ -1161,7 +1161,7 @@ check_availability <- function(param, compare) {
 }
 
 # Generate fake data depending on conditions
-bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missingness, entrywise, prop_missing, sparsity) {
+bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness, entrywise, prop_missing, sparsity) {
   # Generates fake data depending on the dims provided in p.vec, n, and ranks
   # and the true parameters provided in `true_params`
   
@@ -1230,22 +1230,22 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   }
   
   # -------------------------------------------------------------------------
-  # Standardizing the variance of the signal
+  # Standardizing the variance of the signal in the data
   # -------------------------------------------------------------------------
   
-  if (is.null(s2n)) {
-    s2n_coef <- NULL
+  if (is.null(s2nX)) {
+    s2nX_coef <- NULL
   }
   
-  if (!is.null(s2n)) {
-    # Calculating the scaling coefficient so that the variance of the underlying structure = s2n * noise variance
-    s2n_coef <- rep(0, q)
+  if (!is.null(s2nX)) {
+    # Calculating the scaling coefficient so that the variance of the underlying structure = s2nX * noise variance
+    s2nX_coef <- rep(0, q)
     
     for (s in 1:q) {
-      s2n_coef[s] <- s2n * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
+      s2nX_coef[s] <- s2nX * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
       
-      joint.structure[[s,1]] <- s2n_coef[s] * joint.structure[[s,1]]
-      indiv.structure[[s,1]] <- s2n_coef[s] * indiv.structure[[s,1]]
+      joint.structure[[s,1]] <- s2nX_coef[s] * joint.structure[[s,1]]
+      indiv.structure[[s,1]] <- s2nX_coef[s] * indiv.structure[[s,1]]
     }
   }
   
@@ -1302,7 +1302,23 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
       EY[[1,1]] <- VStar %*% beta[[1,1]]
       tau2 <- matrix(list(), nrow = 1, ncol = 1)
       tau2[[1,1]] <- matrix(1/rgamma(1, shape = shape, rate = rate)) 
-      Y[[1,1]] <- matrix(EY[[1,1]] + rnorm(n, mean = 0, sd = sqrt(tau2[[1,1]])), ncol = 1)
+      error_y <- matrix(rnorm(n, mean = 0, sd = sqrt(tau2[[1,1]])), ncol = 1)
+      
+      # -------------------------------------------------------------------------
+      # Standardizing the variance of the signal in the response
+      # -------------------------------------------------------------------------
+      
+      if (is.null(s2nY)) {
+        s2nY_coef <- NULL
+      }
+      
+      if (!is.null(s2nY)) {
+        # Calculating the scaling coefficient so that the variance of the response = s2nY * noise variance
+        s2nY_coef <- s2nY * sd(error_y)/sd(EY[[1,1]])
+        EY[[1,1]] <- s2nY_coef * EY[[1,1]]
+      }
+      
+      Y[[1,1]] <- EY[[1,1]] + error_y
     }
   }
   
@@ -1375,7 +1391,8 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
        missing_data = missing_data, # Missing data 
        missing_obs = missing_obs, # Missing data 
        Y_missing = Y_missing, missing_obs_Y = missing_obs_Y, # Missing data 
-       s2n = s2n, s2n_coef = s2n_coef, # Scaling for s2n
+       s2nX = s2nX, s2nX_coef = s2n_coef, # Scaling for s2n in data
+       s2nY = s2nY, s2nY_coef = s2nY_coef, # Scaling for the response
        joint.structure = joint.structure, # Joint structure
        indiv.structure = indiv.structure, # Individual structure
        beta = beta, tau2 = tau2, EY = EY, gamma = gamma, p.prior = p.prior)
