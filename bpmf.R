@@ -567,35 +567,21 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     
     if (response_given) {
       
-      if (!sparsity) {
-        if (response_type == "binary") {
-          Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-          bbeta <- t(VStar.iter) %*% Z.iter
-          beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
-        }
-        
-        if (response_type == "continuous") {
-          Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-          bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
-          beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
-        }
-      }
-      
       if (sparsity) {
         # Change the variance of those betas under the spike
-        diag(SigmaBetaInv)[gamma.iter == 0] <- 1/1000 # Can change this 
-        
-        if (response_type == "binary") {
-          Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-          bbeta <- t(VStar.iter) %*% Z.iter
-          beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
-        }
-        
-        if (response_type == "continuous") {
-          Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-          bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
-          beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
-        }
+        diag(SigmaBetaInv)[gamma.iter == 0] <- 1000 # Can change this 
+      }
+      
+      if (response_type == "binary") {
+        Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+        bbeta <- t(VStar.iter) %*% Z.iter
+        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+      }
+      
+      if (response_type == "continuous") {
+        Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+        bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
+        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
       
       # Update the current value of beta
