@@ -698,7 +698,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
 
 }
 
-bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2n = NULL, center = FALSE, nninit, ranks, 
+bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, center = FALSE, nninit, ranks, 
                      response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE) {
   
   # ---------------------------------------------------------------------------
@@ -724,7 +724,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Generating the data
     # -------------------------------------------------------------------------
   
-    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing, sparsity)
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity)
     
     # Saving the data
     true_data <- sim_data$data
@@ -741,7 +741,8 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     missing_obs_Y <- sim_data$missing_obs_Y
     
     # The standardizing coefficients
-    s2n_coef <- sim_data$s2n_coef
+    s2nX_coef <- sim_data$s2nX_coef
+    s2nY_coef <- sim_data$s2nY_coef
     
     # The response parameters
     beta <- sim_data$beta
