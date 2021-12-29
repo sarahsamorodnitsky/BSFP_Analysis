@@ -2626,26 +2626,6 @@ create_validation_table <- function(results_list, condition) {
     dt$tau2 <- c(results_list$tau2[[1,1]]$avg_coverage, results_list$tau2[[1,1]]$avg_mse, results_list$tau2[[1,1]]$avg_ci_width)
   }
   
-  # Xm
-  if (is.null(results_list$Xm[[1,1]])) {
-    dt$Xm <- NA
-  }
-  
-  if (!is.null(results_list$Xm[[1,1]])) {
-    dt$Xm <- c(mean(sapply(results_list$Xm, function(source) source$avg_coverage)),
-               mean(sapply(results_list$Xm, function(source) source$avg_mse)),
-               mean(sapply(results_list$Xm, function(source) source$avg_ci_width)))
-  }
-  
-  # Ym
-  if (is.null(results_list$Ym[[1,1]])) {
-    dt$Ym <- NA
-  }
-  
-  if (!is.null(results_list$Ym[[1,1]])) {
-    dt$Ym <- c(results_list$Ym[[1,1]]$avg_coverage, results_list$Ym[[1,1]]$avg_mse, results_list$Ym[[1,1]]$avg_ci_width)
-  }
-  
   # Return
   dt
 }
