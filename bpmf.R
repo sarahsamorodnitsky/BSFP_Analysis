@@ -1171,7 +1171,8 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   # p.vec = vector with the number of predictors in each source
   # n = the sample size for each source (number of columns)
   # true_params = list of parameters for the underlying data
-  # s2n = signal-to-noise ratio 
+  # s2nX = signal-to-noise ratio in the data
+  # s2nY = signal-to-noise ratio in the response (if continuous)
   # response = NULL if no response is desired, "continuous", or "binary" 
   # missingness = NULL, "missingness_in_data", "missingness_in_response"
   # entrywise = NULL if missingness = NULL, TRUE if entrywise missingness, FALSE if columnwise missingness
