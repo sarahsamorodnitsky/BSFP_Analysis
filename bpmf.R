@@ -2882,12 +2882,12 @@ sJIVE <- function(X, Y, rankJ = NULL, rankA=NULL,eta=NULL, max.iter=1000,
 }
 
 # Run each model being compared in simulation study
-run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2nY, nsim, nsample, n_clust) {
+run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY, nsim, nsample, n_clust) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
   #
-  # model = string in c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
+  # mod = string in c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
   # p.vec = number of features per source
   # n = sample size
   # ranks = vector of joint and individual ranks = c(joint rank, indiv rank 1, indiv rank 2, ...)
@@ -2907,7 +2907,8 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
   registerDoSNOW(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
-             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
+             "sJIVE", "sJIVE.converge", "sJIVE.predict", "sJIVE.ranks")
   packs <- c("Matrix", "MASS", "truncnorm")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
     # Set seed
@@ -2916,7 +2917,7 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
     # -------------------------------------------------------------------------
     # Generate data 
     # -------------------------------------------------------------------------
-    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2n, response, missingness, entrywise, prop_missing, sparsity = FALSE)
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity = FALSE)
     
     # Saving the data
     true_data <- sim_data$data
@@ -2934,7 +2935,8 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
     missing_obs_Y <- sim_data$missing_obs_Y
     
     # The standardizing coefficients
-    s2n_coef <- sim_data$s2n_coef
+    s2nX_coef <- sim_data$s2nX_coef
+    s2nY_coef <- sim_data$s2nY_coef
     
     # The response parameters
     beta <- sim_data$beta
@@ -3158,8 +3160,8 @@ run_each_mod <- function(model, p.vec, n, ranks, response, true_params, s2nX, s2
     mse_y <- frob(Y.fit - Y.test)/frob(Y.test)
     
     # Save 
-    save(joint.recovery.structure, indiv.recovery.structure, mse_y,
-         file = paste0(mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY))
+    # save(joint.recovery.structure, indiv.recovery.structure, mse_y,
+    #      file = paste0(mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY))
     
     res <- c(joint.recovery.structure, indiv.recovery.structure, mse_y)
     names(res) <- c("joint mse", "indiv mse", "y mse")
