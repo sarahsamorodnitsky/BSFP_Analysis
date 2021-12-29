@@ -1240,15 +1240,12 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2n = NULL, response, missin
   if (!is.null(s2n)) {
     # Calculating the scaling coefficient so that the variance of the underlying structure = s2n * noise variance
     s2n_coef <- rep(0, q)
-    joint.structure.scale <- joint.structure
-    indiv.structure.scale <- indiv.structure
-    Vs.scale <- Vs
     
     for (s in 1:q) {
       s2n_coef[s] <- s2n * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
       
-      joint.structure.scale[[s,1]] <- s2n_coef[s] * joint.structure[[s,1]]
-      indiv.structure.scale[[s,1]] <- s2n_coef[s] * indiv.structure[[s,1]]
+      joint.structure[[s,1]] <- s2n_coef[s] * joint.structure[[s,1]]
+      indiv.structure[[s,1]] <- s2n_coef[s] * indiv.structure[[s,1]]
     }
   }
   
