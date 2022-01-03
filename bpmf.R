@@ -98,7 +98,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     # Saving the results
     sigma.mat <- rank_init$sigma.mat
     C <- rank_init$C
-    r <- rankMatrix(C[[1,1]]) # Joint rank
+    r <- rankMatrix(C[[1,1]])[[1]] # Joint rank
     I <- rank_init$I
     r.vec <- sapply(1:q, function(s) rankMatrix(I[[s,1]])) # Individual ranks
     
@@ -267,7 +267,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   
   if (response_given) {
     if (response_type == "binary") {
-      # For V - Combined error variances between data and Z
+      # For V - Combined precisions between data and Z
       SigmaVInv <- diag(c(rep(1/error_vars, p.vec), 1))
       
       # For Vs
@@ -278,7 +278,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       }
     } 
     
-    # For beta - Combined error variances between intercept and all betas
+    # For beta - Combined precisions between intercept and all betas
     SigmaBetaInv <- solve(Sigma_beta)
   }
   
@@ -313,14 +313,24 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       # Creating a matrix of the joint and individual effects
       beta_indiv.iter <- matrix(list(), nrow = q, ncol = 1)
       
-      # Breaking beta down into the intercept, joint, and individual effects
+      # Breaking beta down into the intercept,
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
-      beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE]
+      
+      # Joint effect
+      if (r != 0) beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE] else beta_joint.iter <- matrix(0)
+      
+      # Individual effects
       beta_indiv.iter.temp <- beta.iter[(r+2):nrow(beta.iter),, drop = FALSE]
       
       for (s in 1:q) {
-        if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
-        if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        # If there is no individual effect
+        if (r.vec[s] == 0) beta_indiv.iter[[s, 1]] <- matrix(0)
+        
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE] 
+          if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
       }
       
       if (response_type == "binary") {
@@ -419,32 +429,26 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         tU_Sigma <- crossprod(U.iter.combined, SigmaVInv) 
         tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
         
+        Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
+        
         if (response_type == "binary") {
-          Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
-          V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
-            # The combined centered Xis with the latent response vector
-            X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                            (Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
-            
-            bv <- tU_Sigma %*% X.iter[,i]
-            
-            Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-            Vi
-          }), nrow = r))
+          # The combined centered Xis with the latent response vector
+          X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+                          t(Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
         }
         
         if (response_type == "continuous") {
           # The combined centered Xis with the latent response vector
           X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
                           t(Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
-          Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
-          V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
-            bv <- tU_Sigma %*% X.iter[,i]
-            
-            Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-            Vi
-          }), nrow = r))
         }
+        
+        V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
+          bv <- tU_Sigma %*% X.iter[,i]
+          
+          Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+          Vi
+        }), nrow = r))
       }
       
       # Updating the value of V
