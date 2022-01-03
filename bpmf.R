@@ -567,23 +567,25 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       if (sparsity) {
         # Change the precision for the intercept
         diag(SigmaBetaInv)[1] <- 1/beta_vars[1]
+        
         # Change the precision of those betas under the slab, excluding the intercept
         diag(SigmaBetaInv)[-1][gamma.iter[-1] == 1] <- 1/(beta_vars[-1][gamma.iter[-1] == 1])
+        
         # Change the precision of those betas under the spike
-        diag(SigmaBetaInv)[gamma.iter == 0] <- 1000 # Can change this 
+        diag(SigmaBetaInv)[gamma.iter == 0] <- 1000 # Can change this precision
       }
       
       if (response_type == "binary") {
         Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- t(VStar.iter) %*% Z.iter
-        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
       
       if (response_type == "continuous") {
         Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
-        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
+      
+      beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       
       # Update the current value of beta
       beta.iter <- beta.draw[[iter+1]][[1,1]]
@@ -591,14 +593,24 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       # Creating a matrix of the joint and individual effects
       beta_indiv.iter <- matrix(list(), ncol = 1, nrow = q)
       
-      # Breaking beta down into the intercept, joint, and individual effects
+      # Breaking beta down into the intercept
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
-      beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE]
+      
+      # Joint effect
+      if (r != 0) beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE] else beta_joint.iter <- matrix(0)
+      
+      # Individual effects
       beta_indiv.iter.temp <- beta.iter[(r+2):nrow(beta.iter),, drop = FALSE]
       
       for (s in 1:q) {
-        if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
-        if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        # If there is no individual effect
+        if (r.vec[s] == 0) beta_indiv.iter[[s, 1]] <- matrix(0)
+        
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE] 
+          if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
       }
     }
     
