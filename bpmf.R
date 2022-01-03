@@ -413,12 +413,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         X.iter <- do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
         
-        V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
+        V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
           bv <-  tU_Sigma %*% X.iter[,i]
           
           Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
           Vi
-        }), nrow = r))
+        }))
       }
       
       if (response_given) {
@@ -443,12 +443,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
                           t(Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
         }
         
-        V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
+        V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
           bv <- tU_Sigma %*% X.iter[,i]
           
           Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
           Vi
-        }), nrow = r))
+        }))
       }
       
       # Updating the value of V
@@ -461,12 +461,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       for (s in 1:q) {
         Xs.iter <- X_complete[[s,1]] - W.iter[[s,s]] %*% t(Vs.iter[[1,s]])
         Bu <- solve((1/error_vars[s]) * t(V.iter[[1,1]]) %*% V.iter[[1,1]] + (1/sigma2_joint) * diag(r))
-        U.draw[[iter+1]][[s,1]] <- t(matrix(sapply(1:p.vec[s], function(j) {
+        U.draw[[iter+1]][[s,1]] <- t(sapply(1:p.vec[s], function(j) {
           bu <- (1/error_vars[s]) * t(V.iter[[1,1]]) %*% Xs.iter[j, ]
           
           U1j <- mvrnorm(1, mu = Bu %*% bu, Sigma = Bu)
           U1j
-        }), nrow = r))
+        }))
       }
   
       U.iter <- U.draw[[iter+1]]
