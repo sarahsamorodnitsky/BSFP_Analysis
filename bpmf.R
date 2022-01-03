@@ -480,12 +480,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
           Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
           Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
           
-          Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
+          Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
             bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
             
             Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
             Vsi
-          }), nrow = r.vec[s]))
+          }))
         }
       }
       
@@ -497,19 +497,13 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
           tW_Sigma <- crossprod(W.iter.combined, SigmaVsInv[[s,s]])
           tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter.combined)
           
+          Bvs <- solve(tW_Sigma_W + (1/indiv_vars[s]) * diag(r.vec[s]))
+          
           if (response_type == "binary") {
             # Combined centered Xs and Z
             Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
                             t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
                                 do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
-            
-            Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
-            Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
-              bvs <- tW_Sigma %*% Xs.iter[, i]
-              
-              Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
-              Vsi
-            }), nrow = r.vec[s]))
           }
           
           if (response_type == "continuous") {
@@ -517,22 +511,21 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
             Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
                              t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
                                  do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
-            
-            Bvs <- solve(tW_Sigma_W + (1/indiv_vars[s]) * diag(r.vec[s]))
-            Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
-              bvs <- tW_Sigma %*% Xs.iter[, i]
-              
-              Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
-              Vsi
-            }), nrow = r.vec[s]))
           }
+          
+          Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
+            bvs <- tW_Sigma %*% Xs.iter[, i]
+            
+            Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+            Vsi
+          }))
         }
       }
       
       # Update the current value of V
       Vs.iter <- Vs.draw[[iter+1]]
       
-      # Combine current values of V and V_\cdot
+      # Combine current values of V and V.
       VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
       
       # -------------------------------------------------------------------------
