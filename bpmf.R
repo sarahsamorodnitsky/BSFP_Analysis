@@ -536,12 +536,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
         Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
         
-        W.draw[[iter+1]][[s,s]] <- t(matrix(sapply(1:p.vec[s], function(j) {
+        W.draw[[iter+1]][[s,s]] <- t(sapply(1:p.vec[s], function(j) {
           bws <- (1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Xs.iter[j,] 
           
           Wsj <- mvrnorm(1, mu = Bws %*% bws, Sigma = Bws)
           Wsj
-        }), nrow = r.vec[s]))
+        }))
         
         for (ss in 1:q) {
           if (ss != s) W.draw[[iter+1]][[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = r.vec[ss])
