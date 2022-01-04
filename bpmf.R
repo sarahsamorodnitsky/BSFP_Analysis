@@ -1291,8 +1291,9 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
     }
     
     if (sparsity) {
-      p.prior <- matrix(rbeta(n_beta, 1, 1), ncol = 1); p.prior[1,] <- 1
+      p.prior <- matrix(rbeta(1, 1, 1), ncol = 1)
       gamma <- matrix(rbinom(n_beta, size = 1, prob = p.prior), ncol = 1)
+      gamma[1,] <- 1 # Always include the intercept
       diag(Sigma_beta)[gamma == 0] <- 1/1000
       beta <- matrix(list(), nrow = 1, ncol = 1)
       beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
@@ -1344,15 +1345,15 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   }
   
   if (!is.null(missingness)) {
-    if (missingness != "missingness_in_data" & missingness != "both") {
+    if (missingness != "missingness_in_data" & missingness != "both") { # If missing in response
       missing_data <- missing_obs <- matrix(list(), nrow = q, ncol = 1)
     }
     
-    if (missingness != "missingness_in_response" & missingness != "both") {
+    if (missingness != "missingness_in_response" & missingness != "both") { # If missing in data
       Y_missing <- missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
     }
     
-    if (missingness == "missingness_in_response" | missingness == "both") {
+    if (missingness == "missingness_in_response" | missingness == "both") { # If missing in response
       missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
       missing_obs_Y[[1,1]] <- sort(sample(1:n, size = prop_missing * n, replace = FALSE))
       
@@ -1360,7 +1361,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
       Y_missing[[1,1]][missing_obs_Y[[1,1]],] <- NA
     }
     
-    if (missingness == "missingness_in_data" | missingness == "both") {
+    if (missingness == "missingness_in_data" | missingness == "both") { # If missing in data
       
       missing_obs <- missing_data <- missing_cols <- matrix(list(), nrow = q, ncol = 1)
       
