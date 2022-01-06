@@ -98,6 +98,12 @@ validation_results <- rbind.data.frame(validation_results, create_validation_tab
 validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous_missing0.5, condition = "50% Continuous Response Missing"))
 validation_results <- rbind.data.frame(validation_results, create_validation_table(response_continuous_missing0.7, condition = "70% Continuous Response Missing"))
 
+# Missing binary response
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.3, condition = "30% Binary Response Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.5, condition = "50% Binary Response Missing"))
+validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.7, condition = "70% Binary Response Missing"))
+
+
 # Sparsity
 validation_results <- rbind.data.frame(validation_results, create_validation_table(continuous_response_sparsity, condition = "Continuous Response with Sparsity"))
 validation_results <- rbind.data.frame(validation_results, create_validation_table(binary_response_sparsity, condition = "Binary Response with Sparsity"))

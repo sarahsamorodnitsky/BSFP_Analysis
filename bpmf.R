@@ -2934,7 +2934,9 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # -------------------------------------------------------------------------
     # Generate data 
     # -------------------------------------------------------------------------
-    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity = FALSE)
+    
+    # Generate 2*n samples to split into equally-sized training and test datasets
+    sim_data <- bpmf_data(p.vec, 2*n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity = FALSE)
     
     # Saving the data
     true_data <- sim_data$data
@@ -2942,14 +2944,9 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     q <- length(p.vec)
     joint.structure <- sim_data$joint.structure
     indiv.structure <- sim_data$indiv.structure
-    
-    missing_data <- sim_data$missing_data
-    missing_obs <- sim_data$missing_obs
-    
+
     # The response
     Y <- sim_data$Y
-    Y_missing <- sim_data$Y_missing
-    missing_obs_Y <- sim_data$missing_obs_Y
     
     # The standardizing coefficients
     s2nX_coef <- sim_data$s2nX_coef
@@ -2959,6 +2956,36 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     beta <- sim_data$beta
     tau2 <- sim_data$tau2
     EY <- sim_data$EY
+    
+    # -------------------------------------------------------------------------
+    # Split the data into a training and test set
+    # -------------------------------------------------------------------------
+    
+    # Training data
+    training_data <- matrix(list(), nrow = q, ncol = 1)
+    joint.structure_train <- matrix(list(), nrow = q, ncol = 1)
+    indiv.structure_train <- matrix(list(), nrow = q, ncol = 1)
+    
+    # Test data
+    test_data <- matrix(list(), nrow = q, ncol = 1)
+    joint.structure_test <- matrix(list(), nrow = q, ncol = 1)
+    indiv.structure_test <- matrix(list(), nrow = q, ncol = 1)
+    
+    for (s in 1:q) {
+      training_data[[s,1]] <- true_data[[s,1]][,1:n]
+      joint.structure_train[[s,1]] <- joint.structure[[s,1]][,1:n]
+      indiv.structure_train[[s,1]] <- indiv.structure[[s,1]][,1:n]
+      
+      test_data[[s,1]] <- true_data[[s,1]][,(n+1):(2*n)]
+      joint.structure_test[[s,1]] <- joint.structure[[s,1]][,(n+1):(2*n)]
+      indiv.structure_test[[s,1]] <- indiv.structure[[s,1]][,(n+1):(2*n)]
+    }
+    
+    Y_train <- matrix(list(), nrow = 1, ncol = 1)
+    Y_train[[1,1]] <- Y[[1,1]][1:n,]
+    
+    Y_test <- matrix(list(), nrow = 1, ncol = 1)
+    Y_test[[1,1]] <- Y[[1,1]][(n+1):(2*n),]
     
     # -------------------------------------------------------------------------
     # Fit each model on generated data to obtain estimate of underlying structure
