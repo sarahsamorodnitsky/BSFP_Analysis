@@ -98,7 +98,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     # Saving the results
     sigma.mat <- rank_init$sigma.mat
     C <- rank_init$C
-    r <- rankMatrix(C[[1,1]]) # Joint rank
+    r <- rankMatrix(C[[1,1]])[[1]] # Joint rank
     I <- rank_init$I
     r.vec <- sapply(1:q, function(s) rankMatrix(I[[s,1]])) # Individual ranks
     
@@ -267,7 +267,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   
   if (response_given) {
     if (response_type == "binary") {
-      # For V - Combined error variances between data and Z
+      # For V - Combined precisions between data and Z
       SigmaVInv <- diag(c(rep(1/error_vars, p.vec), 1))
       
       # For Vs
@@ -278,7 +278,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       }
     } 
     
-    # For beta - Combined error variances between intercept and all betas
+    # For beta - Combined precisions between intercept and all betas
     SigmaBetaInv <- solve(Sigma_beta)
   }
   
@@ -313,14 +313,24 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       # Creating a matrix of the joint and individual effects
       beta_indiv.iter <- matrix(list(), nrow = q, ncol = 1)
       
-      # Breaking beta down into the intercept, joint, and individual effects
+      # Breaking beta down into the intercept,
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
-      beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE]
+      
+      # Joint effect
+      if (r != 0) beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE] else beta_joint.iter <- matrix(0)
+      
+      # Individual effects
       beta_indiv.iter.temp <- beta.iter[(r+2):nrow(beta.iter),, drop = FALSE]
       
       for (s in 1:q) {
-        if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
-        if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        # If there is no individual effect
+        if (r.vec[s] == 0) beta_indiv.iter[[s, 1]] <- matrix(0)
+        
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE] 
+          if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
       }
       
       if (response_type == "binary") {
@@ -403,12 +413,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         X.iter <- do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
         Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
         
-        V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
+        V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
           bv <-  tU_Sigma %*% X.iter[,i]
           
           Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
           Vi
-        }), nrow = r))
+        }))
       }
       
       if (response_given) {
@@ -419,32 +429,26 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         tU_Sigma <- crossprod(U.iter.combined, SigmaVInv) 
         tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
         
+        Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
+        
         if (response_type == "binary") {
-          Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
-          V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
-            # The combined centered Xis with the latent response vector
-            X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                            (Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter))[i,])
-            
-            bv <- tU_Sigma %*% X.iter[,i]
-            
-            Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-            Vi
-          }), nrow = r))
+          # The combined centered Xis with the latent response vector
+          X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+                          t(Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
         }
         
         if (response_type == "continuous") {
           # The combined centered Xis with the latent response vector
           X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
                           t(Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
-          Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
-          V.draw[[iter+1]][[1]] <- t(matrix(sapply(1:n, function(i) {
-            bv <- tU_Sigma %*% X.iter[,i]
-            
-            Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
-            Vi
-          }), nrow = r))
         }
+        
+        V.draw[[iter+1]][[1]] <- t(sapply(1:n, function(i) {
+          bv <- tU_Sigma %*% X.iter[,i]
+          
+          Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+          Vi
+        }))
       }
       
       # Updating the value of V
@@ -457,12 +461,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       for (s in 1:q) {
         Xs.iter <- X_complete[[s,1]] - W.iter[[s,s]] %*% t(Vs.iter[[1,s]])
         Bu <- solve((1/error_vars[s]) * t(V.iter[[1,1]]) %*% V.iter[[1,1]] + (1/sigma2_joint) * diag(r))
-        U.draw[[iter+1]][[s,1]] <- t(matrix(sapply(1:p.vec[s], function(j) {
+        U.draw[[iter+1]][[s,1]] <- t(sapply(1:p.vec[s], function(j) {
           bu <- (1/error_vars[s]) * t(V.iter[[1,1]]) %*% Xs.iter[j, ]
           
           U1j <- mvrnorm(1, mu = Bu %*% bu, Sigma = Bu)
           U1j
-        }), nrow = r))
+        }))
       }
   
       U.iter <- U.draw[[iter+1]]
@@ -476,12 +480,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
           Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
           Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
           
-          Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
+          Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
             bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
             
             Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
             Vsi
-          }), nrow = r.vec[s]))
+          }))
         }
       }
       
@@ -493,19 +497,13 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
           tW_Sigma <- crossprod(W.iter.combined, SigmaVsInv[[s,s]])
           tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter.combined)
           
+          Bvs <- solve(tW_Sigma_W + (1/indiv_vars[s]) * diag(r.vec[s]))
+          
           if (response_type == "binary") {
             # Combined centered Xs and Z
             Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
                             t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
                                 do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
-            
-            Bvs <- solve(tW_Sigma_W + (1/error_vars[s]) * diag(r.vec[s]))
-            Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
-              bvs <- tW_Sigma %*% Xs.iter[, i]
-              
-              Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
-              Vsi
-            }), nrow = r.vec[s]))
           }
           
           if (response_type == "continuous") {
@@ -513,22 +511,21 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
             Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
                              t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
                                  do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
-            
-            Bvs <- solve(tW_Sigma_W + (1/indiv_vars[s]) * diag(r.vec[s]))
-            Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
-              bvs <- tW_Sigma %*% Xs.iter[, i]
-              
-              Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
-              Vsi
-            }), nrow = r.vec[s]))
           }
+          
+          Vs.draw[[iter+1]][[1,s]] <- t(sapply(1:n, function(i) {
+            bvs <- tW_Sigma %*% Xs.iter[, i]
+            
+            Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+            Vsi
+          }))
         }
       }
       
       # Update the current value of V
       Vs.iter <- Vs.draw[[iter+1]]
       
-      # Combine current values of V and V_\cdot
+      # Combine current values of V and V.
       VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
       
       # -------------------------------------------------------------------------
@@ -539,12 +536,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
         Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
         
-        W.draw[[iter+1]][[s,s]] <- t(matrix(sapply(1:p.vec[s], function(j) {
+        W.draw[[iter+1]][[s,s]] <- t(sapply(1:p.vec[s], function(j) {
           bws <- (1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Xs.iter[j,] 
           
           Wsj <- mvrnorm(1, mu = Bws %*% bws, Sigma = Bws)
           Wsj
-        }), nrow = r.vec[s]))
+        }))
         
         for (ss in 1:q) {
           if (ss != s) W.draw[[iter+1]][[s, ss]] <- matrix(0, nrow = p.vec[s], ncol = r.vec[ss])
@@ -570,23 +567,25 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       if (sparsity) {
         # Change the precision for the intercept
         diag(SigmaBetaInv)[1] <- 1/beta_vars[1]
+        
         # Change the precision of those betas under the slab, excluding the intercept
         diag(SigmaBetaInv)[-1][gamma.iter[-1] == 1] <- 1/(beta_vars[-1][gamma.iter[-1] == 1])
+        
         # Change the precision of those betas under the spike
-        diag(SigmaBetaInv)[gamma.iter == 0] <- 1000 # Can change this 
+        diag(SigmaBetaInv)[gamma.iter == 0] <- 1000 # Can change this precision
       }
       
       if (response_type == "binary") {
         Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- t(VStar.iter) %*% Z.iter
-        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
       
       if (response_type == "continuous") {
         Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
-        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
+      
+      beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       
       # Update the current value of beta
       beta.iter <- beta.draw[[iter+1]][[1,1]]
@@ -594,14 +593,24 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       # Creating a matrix of the joint and individual effects
       beta_indiv.iter <- matrix(list(), ncol = 1, nrow = q)
       
-      # Breaking beta down into the intercept, joint, and individual effects
+      # Breaking beta down into the intercept
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
-      beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE]
+      
+      # Joint effect
+      if (r != 0) beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE] else beta_joint.iter <- matrix(0)
+      
+      # Individual effects
       beta_indiv.iter.temp <- beta.iter[(r+2):nrow(beta.iter),, drop = FALSE]
       
       for (s in 1:q) {
-        if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE]
-        if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        # If there is no individual effect
+        if (r.vec[s] == 0) beta_indiv.iter[[s, 1]] <- matrix(0)
+        
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE] 
+          if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
       }
     }
     
@@ -711,7 +720,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   
   # sim_results <- lapply(1:nsim, function(i) list())
   cl <- makeCluster(n_clust)
-  registerDoSNOW(cl)
+  registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
@@ -1282,8 +1291,9 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
     }
     
     if (sparsity) {
-      p.prior <- matrix(rbeta(n_beta, 1, 1), ncol = 1); p.prior[1,] <- 1
+      p.prior <- matrix(rbeta(1, 1, 1), ncol = 1)
       gamma <- matrix(rbinom(n_beta, size = 1, prob = p.prior), ncol = 1)
+      gamma[1,] <- 1 # Always include the intercept
       diag(Sigma_beta)[gamma == 0] <- 1/1000
       beta <- matrix(list(), nrow = 1, ncol = 1)
       beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
@@ -1335,15 +1345,15 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   }
   
   if (!is.null(missingness)) {
-    if (missingness != "missingness_in_data" & missingness != "both") {
+    if (missingness != "missingness_in_data" & missingness != "both") { # If missing in response
       missing_data <- missing_obs <- matrix(list(), nrow = q, ncol = 1)
     }
     
-    if (missingness != "missingness_in_response" & missingness != "both") {
+    if (missingness != "missingness_in_response" & missingness != "both") { # If missing in data
       Y_missing <- missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
     }
     
-    if (missingness == "missingness_in_response" | missingness == "both") {
+    if (missingness == "missingness_in_response" | missingness == "both") { # If missing in response
       missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
       missing_obs_Y[[1,1]] <- sort(sample(1:n, size = prop_missing * n, replace = FALSE))
       
@@ -1351,7 +1361,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
       Y_missing[[1,1]][missing_obs_Y[[1,1]],] <- NA
     }
     
-    if (missingness == "missingness_in_data" | missingness == "both") {
+    if (missingness == "missingness_in_data" | missingness == "both") { # If missing in data
       
       missing_obs <- missing_data <- missing_cols <- matrix(list(), nrow = q, ncol = 1)
       
@@ -1951,93 +1961,91 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       
       # For E(Y)
       if (param == 3) {
-        for (s in 1:dim_param) {
-          # Save the results for source s
-          results_by_source <- lapply(param_by_sim_iter, function(sim_iter) sim_iter[[s,1]])
+        # Save the results for source s
+        results_by_source <- lapply(param_by_sim_iter, function(sim_iter) sim_iter[[1,1]])
+        
+        # If there is NO missingness
+        if (is.null(missingness)) {
+          # Calculate the average coverage
+          avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[1,1]]
           
-          # If there is NO missingness
-          if (is.null(missingness)) {
+          # Calculate the average MSE
+          avg_mse_source <- mean(sapply(results_by_source, function(sim_iter) sim_iter[[2]]$observed)) 
+          
+          # Calculate the average CI width
+          avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/denominator[[param]][[1,1]]
+          
+          # Save the results
+          results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage_source),
+                                           avg_mse = mean(avg_mse_source),
+                                           avg_ci_width = mean(avg_ci_width_source))
+        }
+        
+        # If there IS missingness 
+        if (!is.null(missingness)) {
+          # If missingness is in the data, calculate avg as if there is no missingness
+          if (missingness == "missingness_in_data") {
             # Calculate the average coverage
-            avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[s,1]]
+            avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[1,1]]
             
             # Calculate the average MSE
             avg_mse_source <- mean(sapply(results_by_source, function(sim_iter) sim_iter[[2]]$observed)) 
             
             # Calculate the average CI width
-            avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/denominator[[param]][[s,1]]
+            avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/denominator[[param]][[1,1]]
             
             # Save the results
-            results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
+            results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage_source),
                                              avg_mse = mean(avg_mse_source),
                                              avg_ci_width = mean(avg_ci_width_source))
           }
           
-          # If there IS missingness 
-          if (!is.null(missingness)) {
-            # If missingness is in the data, calculate avg as if there is no missingness
-            if (missingness == "missingness_in_data") {
-              # Calculate the average coverage
-              avg_coverage_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[1]]))/denominator[[param]][[s,1]]
-              
-              # Calculate the average MSE
-              avg_mse_source <- mean(sapply(results_by_source, function(sim_iter) sim_iter[[2]]$observed)) 
-              
-              # Calculate the average CI width
-              avg_ci_width_source <- Reduce("+", lapply(results_by_source, function(sim_iter) sim_iter[[3]]))/denominator[[param]][[s,1]]
-              
-              # Save the results
-              results_for_param[[s,1]] <- list(avg_coverage = mean(avg_coverage_source),
-                                               avg_mse = mean(avg_mse_source),
-                                               avg_ci_width = mean(avg_ci_width_source))
-            }
+          # If missingness is in the response, calculate avg separately for missing and non-missing response
+          if (missingness == "missingness_in_response" | missingness == "both") {
             
-            # If missingness is in the response, calculate avg separately for missing and non-missing response
-            if (missingness == "missingness_in_response" | missingness == "both") {
-              
-              # ---------------------------------------------------------------
-              # Check the results for structure corresponding to missing entries in each dataset 
-              # ---------------------------------------------------------------
-              
-              # Save the indices of underlying structure corresponding to missing X.
-              missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs_Y[[s,1]])
-              
-              # Save total coverage, MSE, and CI width across sim_iters for entries in structure corresponding to missing Y
-              results_compiled_missing <- compile_missing_results(param_by_sim_iter, s, dims = c(n, 1), nsim, missing_obs_inds, type = "structure", observed = FALSE)       
-              
-              # Calculate the average coverage for missing entries
-              avg_coverage_missing_source <- results_compiled_missing[[1]]/(nsim - denominator[[param]][[s,1]])
-              
-              # Calculate the average MSE for missing entries
-              avg_mse_missing_source <- results_compiled_missing[[2]]/nsim
-              
-              # Calculate the average CI width for missing entries
-              avg_ci_width_missing_source <- results_compiled_missing[[3]]/(nsim - denominator[[param]][[s,1]])
-              
-              # ---------------------------------------------------------------
-              # Check the results for structure corresponding to non-missing entries in each dataset 
-              # ---------------------------------------------------------------
-              
-              # Save total coverage, MSE, and CI width across sim_iters for entries in structure corresponding to observed X.
-              results_compiled_observed <- compile_missing_results(param_by_sim_iter, s, dims = c(p.vec[s], n), nsim, missing_obs_inds, type = "structure", observed = TRUE)
-              
-              # Calculate the average for observed entries
-              avg_coverage_observed_source <- results_compiled_observed[[1]]/(denominator[[param]][[s,1]])
-              
-              # Calculate the average MSE for observed entries
-              avg_mse_observed_source <- results_compiled_observed[[2]]/nsim
-              
-              # Calculate the average CI width for observed entries
-              avg_ci_width_observed_source <- results_compiled_observed[[3]]/(denominator[[param]][[s,1]])
-              
-              # Save the results
-              results_for_param[[s,1]] <- list(observed = list(avg_coverage = mean(avg_coverage_observed_source),
-                                                               avg_mse = mean(avg_mse_observed_source),
-                                                               avg_ci_width = mean(avg_ci_width_observed_source)),
-                                               missing = list(avg_coverage = mean(avg_coverage_missing_source[!is.nan(avg_coverage_missing_source)]),
-                                                              avg_mse = mean(avg_mse_missing_source),
-                                                              avg_ci_width = mean(avg_ci_width_missing_source[!is.nan(avg_ci_width_missing_source)])))
-              
-            }
+            # ---------------------------------------------------------------
+            # Check the results for structure corresponding to missing entries in each dataset 
+            # ---------------------------------------------------------------
+            
+            # Save the indices of underlying structure corresponding to missing X.
+            missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs_Y[[1,1]])
+            
+            # Save total coverage, MSE, and CI width across sim_iters for entries in structure corresponding to missing Y
+            results_compiled_missing <- compile_missing_results(param_by_sim_iter, s = 1, dims = c(n, 1), nsim, missing_obs_inds, type = "structure", observed = FALSE)       
+            
+            # Calculate the average coverage for missing entries
+            avg_coverage_missing_source <- results_compiled_missing[[1]]/(nsim - denominator[[param]][[1,1]])
+            
+            # Calculate the average MSE for missing entries
+            avg_mse_missing_source <- results_compiled_missing[[2]]/nsim
+            
+            # Calculate the average CI width for missing entries
+            avg_ci_width_missing_source <- results_compiled_missing[[3]]/(nsim - denominator[[param]][[1,1]])
+            
+            # ---------------------------------------------------------------
+            # Check the results for structure corresponding to non-missing entries in each dataset 
+            # ---------------------------------------------------------------
+            
+            # Save total coverage, MSE, and CI width across sim_iters for entries in structure corresponding to observed X.
+            results_compiled_observed <- compile_missing_results(param_by_sim_iter, s = 1, dims = c(n, 1), nsim, missing_obs_inds, type = "structure", observed = TRUE)
+            
+            # Calculate the average for observed entries
+            avg_coverage_observed_source <- results_compiled_observed[[1]]/(denominator[[param]][[1,1]])
+            
+            # Calculate the average MSE for observed entries
+            avg_mse_observed_source <- results_compiled_observed[[2]]/nsim
+            
+            # Calculate the average CI width for observed entries
+            avg_ci_width_observed_source <- results_compiled_observed[[3]]/(denominator[[param]][[1,1]])
+            
+            # Save the results
+            results_for_param[[1,1]] <- list(observed = list(avg_coverage = mean(avg_coverage_observed_source),
+                                                             avg_mse = mean(avg_mse_observed_source),
+                                                             avg_ci_width = mean(avg_ci_width_observed_source)),
+                                             missing = list(avg_coverage = mean(avg_coverage_missing_source[!is.nan(avg_coverage_missing_source)]),
+                                                            avg_mse = mean(avg_mse_missing_source),
+                                                            avg_ci_width = mean(avg_ci_width_missing_source[!is.nan(avg_ci_width_missing_source)])))
+            
           }
         }
       }
@@ -2099,9 +2107,9 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
         avg_ci_width_source <- results_compiled[[3]]/(denominator[[param]][[1,1]])
         
         # Save the results
-        results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage_source),
+        results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage_source[!is.nan(avg_coverage_source)]),
                                          avg_mse = mean(avg_mse_source),
-                                         avg_ci_width = mean(avg_ci_width_source))
+                                         avg_ci_width = mean(avg_ci_width_source[!is.nan(avg_ci_width_source)]))
       }
     }
     

@@ -34,7 +34,7 @@ no_response_no_missing <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_
 response_continuous <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
 
 # Binary response
-response_binary <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
+response_binary <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
 
 # Missing continuous response
 response_continuous_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
@@ -42,9 +42,9 @@ response_continuous_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, 
 response_continuous_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
 
 # Missing binary response
-response_binary_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
-response_binary_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
-response_binary_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
+response_binary_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
+response_binary_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
+response_binary_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
 
 # Entrywise missing data
 missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
@@ -63,14 +63,15 @@ binary_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, tru
 save(no_response_no_missing, response_continuous, response_binary, 
      response_continuous_missing0.3, response_continuous_missing0.5, response_continuous_missing0.7,
      missing0.3, missing0.5, missing0.7, continuous_response_sparsity, binary_response_sparsity, 
+     response_binary_missing0.3, response_binary_missing0.5, response_binary_missing0.7,
      columnwise_missing0.3, columnwise_missing0.5,
-     file = "~/BayesianPMFWithGit/validation_results/validation_sim_12292021.rda")
+     file = "~/BayesianPMFWithGit/validation_results/validation_sim_142022.rda")
 
 # -----------------------------------------------------------------------------
 # Creating the results table
 # -----------------------------------------------------------------------------
 
-load("~/BayesianPMFWithGit/validation_results/validation_sim_12152021.rda", verbose = TRUE)
+load("~/BayesianPMFWithGit/validation_results/validation_sim_12292021.rda", verbose = TRUE)
 
 # Create the dataframe
 validation_results <- data.frame(Condition = character(), Metric = character(), 
