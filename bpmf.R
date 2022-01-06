@@ -1276,6 +1276,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   
   if (is.null(response)) {
     Y <- EY <- Y_missing <- beta <- tau2 <- gamma <- p.prior <- matrix(list(), nrow = 1, ncol = 1)
+    s2nY_coef <- NULL
   }
   
   if (!is.null(response)) {
