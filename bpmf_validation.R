@@ -71,7 +71,7 @@ save(no_response_no_missing, response_continuous, response_binary,
 # Creating the results table
 # -----------------------------------------------------------------------------
 
-load("~/BayesianPMFWithGit/validation_results/validation_sim_12292021.rda", verbose = TRUE)
+load("~/BayesianPMFWithGit/validation_results/validation_sim_162022.rda", verbose = TRUE)
 
 # Create the dataframe
 validation_results <- data.frame(Condition = character(), Metric = character(), 
