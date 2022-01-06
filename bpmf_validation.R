@@ -77,8 +77,7 @@ load("~/BayesianPMFWithGit/validation_results/validation_sim_12292021.rda", verb
 validation_results <- data.frame(Condition = character(), Metric = character(), 
                                  Joint_Obs = numeric(), Indiv_Obs = numeric(), 
                                  Joint_Mis = numeric(), Indiv_Obs = numeric(),
-                                 EY_Obs = numeric(), EY_Mis = numeric(),
-                                 tau2 = numeric(), Xm = numeric(), Ym = numeric())
+                                 EY_Obs = numeric(), EY_Mis = numeric(), tau2 = numeric())
 
 # No response, no missing
 validation_results <- rbind.data.frame(validation_results, create_validation_table(no_response_no_missing, condition = "No Response, No Missing"))
