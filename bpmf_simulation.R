@@ -21,14 +21,14 @@ ranks <- c(2,2,2)
 p.vec = c(10, 15)
 
 # Sample size 
-n = 25
+n = 5
 
 # Parameters for data generation
 true_params <- model_params <- list(error_vars = c(1,1), # Error variance for each source
                                     joint_var = 1, # Variance for joint structure
                                     indiv_vars = c(1,1), # Variance for each individual structure
                                     beta_vars = c(10, 1, rep(1, q)), # Variance of intercept effect and each joint effect 
-                                    response_vars = c(shape = 1,rate = 1)) # Hyperparameters for variance of response (if continuous)
+                                    response_vars = c(shape = 1, rate = 1)) # Hyperparameters for variance of response (if continuous)
 
 
 # -----------------------------------------------------------------------------
