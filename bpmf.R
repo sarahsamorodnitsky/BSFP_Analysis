@@ -2940,7 +2940,6 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     # Saving the data
     true_data <- sim_data$data
-    true_data_list <-  list(data1 = true_data[[1,1]], data2 = true_data[[2,1]])
     q <- length(p.vec)
     joint.structure <- sim_data$joint.structure
     indiv.structure <- sim_data$indiv.structure
@@ -2963,20 +2962,24 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     # Training data
     training_data <- matrix(list(), nrow = q, ncol = 1)
+    training_data_list <- lapply(1:q, function(s) list())
     joint.structure_train <- matrix(list(), nrow = q, ncol = 1)
     indiv.structure_train <- matrix(list(), nrow = q, ncol = 1)
     
     # Test data
     test_data <- matrix(list(), nrow = q, ncol = 1)
+    test_data_list <- lapply(1:q, function(s) list())
     joint.structure_test <- matrix(list(), nrow = q, ncol = 1)
     indiv.structure_test <- matrix(list(), nrow = q, ncol = 1)
     
     for (s in 1:q) {
       training_data[[s,1]] <- true_data[[s,1]][,1:n]
+      training_data_list[[s]] <- training_data[[s,1]]
       joint.structure_train[[s,1]] <- joint.structure[[s,1]][,1:n]
       indiv.structure_train[[s,1]] <- indiv.structure[[s,1]][,1:n]
       
       test_data[[s,1]] <- true_data[[s,1]][,(n+1):(2*n)]
+      test_data_list[[s]] <- test_data[[s,1]]
       joint.structure_test[[s,1]] <- joint.structure[[s,1]][,(n+1):(2*n)]
       indiv.structure_test[[s,1]] <- indiv.structure[[s,1]][,(n+1):(2*n)]
     }
@@ -2988,12 +2991,31 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     Y_test[[1,1]] <- Y[[1,1]][(n+1):(2*n),]
     
     # -------------------------------------------------------------------------
+    # Scale X and y to have variance 1
+    # -------------------------------------------------------------------------
+    
+    for (s in 1:q) {
+      training_data[[s,1]] <- scale(training_data[[s,1]], center = FALSE, scale = TRUE)
+      training_data_list[[s]] <- scale(training_data_list[[s]], center = FALSE, scale = TRUE)
+      joint.structure_train[[s,1]] <- scale(joint.structure_train[[s,1]], center = FALSE, scale = TRUE)
+      indiv.structure_train[[s,1]] <- scale(indiv.structure_train[[s,1]], center = FALSE, scale = TRUE)
+      
+      test_data[[s,1]] <- scale(test_data[[s,1]], center = FALSE, scale = TRUE)
+      test_data_list[[s]] <- scale(test_data_list[[s]], center = FALSE, scale = TRUE)
+      joint.structure_test[[s,1]] <- scale(joint.structure_test[[s,1]], center = FALSE, scale = TRUE)
+      indiv.structure_test[[s,1]] <- scale(indiv.structure_test[[s,1]], center = FALSE, scale = TRUE)
+    }
+    
+    Y_train[[1,1]] <- scale(Y_train[[1,1]], center = FALSE, scale = TRUE)
+    Y_test[[1,1]] <- scale(Y_test[[1,1]], center = FALSE, scale = TRUE)
+    
+    # -------------------------------------------------------------------------
     # Fit each model on generated data to obtain estimate of underlying structure
     # -------------------------------------------------------------------------
     
     if (mod == "sJIVE") {
       # Running sJIVE
-      mod.out <- sJIVE(true_data_list, Y[[1,1]])
+      mod.out <- sJIVE(training_data_list, Y_train[[1,1]])
       
       # Saving the joint structure
       mod.joint <- lapply(1:q, function(source) {
@@ -3012,10 +3034,14 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       indiv.rank <- mod.out$rankA
       
       # Saving the joint scores
-      joint.scores <- t(mod.out$S_J)
+      if (joint.rank != 0) joint.scores <- t(mod.out$S_J)
+      if (joint.rank == 0) joint.scores <- NULL
       
       # Saving the individual scores
-      indiv.scores <- do.call(cbind, lapply(mod.out$S_I, t))
+      indiv.scores <- lapply(1:q, function(source) {
+        if (indiv.rank[source] != 0) t(mod.out$S_I[[source]])
+        if (indiv.rank[source] == 0) NULL
+      })
       
       # Saving the E(Y)
       Y.fit <- t(mod.out$fittedY)
@@ -3023,7 +3049,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     if (mod == "BIDIFAC+") {
       # Run model
-      mod.out <- BIDIFAC(true_data, rmt = TRUE, pbar = FALSE)
+      mod.out <- BIDIFAC(training_data, rmt = TRUE, pbar = FALSE)
       
       # Saving the column structure (the joint structure)
       mod.joint <- lapply(1:q, function(source) {
@@ -3044,18 +3070,23 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       }) # Not sure this is the most generalizable approach
       
       # Obtaining the joint scores
-      joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
+      if (joint.rank != 0) joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
+      if (joint.rank == 0) joint.scores <- NULL
       
       # Obtaining the individual scores
-      indiv.scores <- do.call(cbind, lapply(1:q, function(source) {
-        svd.source <- svd(mod.individual[[source]])
-        svd.source$v[,1:indiv.rank[source]]
-      }))
+      indiv.scores <- lapply(1:q, function(source) {
+        if (indiv.rank[source] != 0) {
+          svd.source <- svd(mod.individual[[source]])
+          svd.source$v[,1:indiv.rank[source]]
+        }
+        
+        if (indiv.rank[source] == 0) NULL
+      })
     }
     
     if (mod == "JIVE") {
       # Running JIVE
-      mod.out <- jive(true_data_list)
+      mod.out <- jive(training_data_list)
       
       # Saving the joint structure
       mod.joint <- mod.out$joint
@@ -3070,19 +3101,24 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       indiv.rank <- mod.out$rankA
       
       # Obtaining the joint scores
-      joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
+      if (joint.rank != 0) joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
+      if (joint.rank == 0) joint.scores <- NULL
       
       # Obtaining the individual scores
-      indiv.scores <- do.call(cbind, lapply(1:q, function(source) {
-        svd.source <- svd(mod.individual[[source]])
-        svd.source$v[,1:indiv.rank[source]]
-      }))
+      indiv.scores <- lapply(1:q, function(source) {
+        if (indiv.rank[source] != 0) {
+          svd.source <- svd(mod.individual[[source]])
+          svd.source$v[,1:indiv.rank[source]]
+        }
+        
+        if (indiv.rank[source] == 0) NULL
+      })
     }
     
     if (mod == "MOFA") {
       # Create the MOFA object
       MOFAobject <- prepare_mofa(
-        object = create_mofa(true_data_list)
+        object = create_mofa(training_data_list)
       )
     
       # Train the MOFA model
@@ -3094,6 +3130,12 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       indiv.factors <- lapply(1:q, function(source) {
         which(apply(mod.var.exp, 1, function(factor) factor[source] > 0.002 & factor[c(1:q)[!c(1:q) %in% source]] < 0.002))
       })
+      
+      # Saving the joint rank
+      joint.rank <- length(joint.factors)
+      
+      # Saving the individual rank
+      indiv.rank <- sapply(indiv.factors, length)
       
       # Save the underlying structure
       mod.joint <- lapply(1:q, function(source) {
@@ -3107,21 +3149,22 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       mofa.scores <- get_factors(mod.out)$group1
       
       # Save the joint scores
-      joint.scores <- mofa.scores[,joint.factors, drop = FALSE]
+      if (joint.rank != 0) joint.scores <- mofa.scores[,joint.factors, drop = FALSE]
+      if (joint.rank == 0) joint.scores <- NULL
       
       # Save the individual scores
-      indiv.scores <- mofa.scores[,unlist(indiv.factors), drop = FALSE]
-      
-      # Saving the joint rank
-      joint.rank <- length(joint.factors)
-      
-      # Saving the individual rank
-      indiv.rank <- sapply(indiv.factors, length)
+      indiv.scores <- lapply(1:q, function(source) {
+        if (indiv.rank[source] != 0) {
+          indiv.scores <- mofa.scores[,unlist(indiv.factors[[source]]), drop = FALSE]
+        }
+        
+        if (indiv.rank[source] == 0) NULL
+      })
     }
     
     if (mod == "BPMF") {
       # Running BPMF
-      mod.out <- bpmf(true_data, Y = Y, nninit = TRUE, model_params = model_params, nsample = 1000)
+      mod.out <- bpmf(training_data, Y = Y_train, nninit = TRUE, model_params = model_params, nsample = 1000)
       
       # Saving the joint structure
       mod.joint <- lapply(1:nsample, function(iter) {
@@ -3148,8 +3191,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     mod.ranks <- c(joint.rank, indiv.rank)
     
     # Combining all scores together
-    all.scores <- cbind(Y[[1,1]], joint.scores, indiv.scores)
-    colnames(all.scores) <- c("y", rep("joint1", ncol(joint.scores)), paste0("indiv", 1:ncol(indiv.scores)))
+    all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
+    colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
     
     # -------------------------------------------------------------------------
     # As applicable, use structure in Bayesian linear model
@@ -3157,7 +3200,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     if (mod %in% c("BIDIFAC+", "JIVE", "MOFA")) {
       # Fitting the Bayesian linear model
-      mod.bayes <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, 
+      mod.bayes <- bpmf(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
                         ranks = mod.ranks, scores = all.scores[,-1], nsample = 1000)
       
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
@@ -3188,20 +3231,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # Calculate prediction error for test data
     # -------------------------------------------------------------------------
     
-    # Generate test data under the same conditions
-    test_out <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity = FALSE)
-    
-    # Saving the test data
-    test_data <- sim_data$data
-    test_data_list <-  list(data1 = test_data[[1,1]], data2 = test_data[[2,1]])
-    joint.structure <- test_data$joint.structure
-    indiv.structure <- test_data$indiv.structure
-    
-    # The test response
-    Y.test <- test_out$Y[[1,1]]
-    
     # Comparing the predicted Y to the test Y
-    mse_y <- frob(Y.fit - Y.test)/frob(Y.test)
+    mse_y <- frob(Y.fit - Y_test[[1,1]])/frob(Y_test[[1,1]])
     
     # Save 
     # save(joint.recovery.structure, indiv.recovery.structure, mse_y,
