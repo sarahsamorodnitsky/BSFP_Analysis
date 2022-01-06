@@ -1297,6 +1297,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
       EY[[1,1]] <- pnorm(VStar %*% beta[[1,1]]) # True probability of being a case
       Y[[1,1]] <- matrix(rbinom(n, size = 1, prob = EY[[1,1]]), ncol = 1)
       tau2 <- matrix(list(), nrow = 1, ncol = 1)
+      s2nY_coef <- NULL
     }
     
     if (response == "continuous") {
@@ -1393,7 +1394,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
        missing_data = missing_data, # Missing data 
        missing_obs = missing_obs, # Missing data 
        Y_missing = Y_missing, missing_obs_Y = missing_obs_Y, # Missing data 
-       s2nX = s2nX, s2nX_coef = s2n_coef, # Scaling for s2n in data
+       s2nX = s2nX, s2nX_coef = s2nX_coef, # Scaling for s2n in data
        s2nY = s2nY, s2nY_coef = s2nY_coef, # Scaling for the response
        joint.structure = joint.structure, # Joint structure
        indiv.structure = indiv.structure, # Individual structure
