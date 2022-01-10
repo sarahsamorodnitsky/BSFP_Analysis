@@ -2940,6 +2940,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     # Saving the data
     true_data <- sim_data$data
+    true_data_list <- lapply(true_data, function(s) s)
     q <- length(p.vec)
     joint.structure <- sim_data$joint.structure
     indiv.structure <- sim_data$indiv.structure
@@ -2985,29 +2986,29 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     }
     
     Y_train <- matrix(list(), nrow = 1, ncol = 1)
-    Y_train[[1,1]] <- Y[[1,1]][1:n,]
+    Y_train[[1,1]] <- Y[[1,1]][1:n,, drop = FALSE]
     
     Y_test <- matrix(list(), nrow = 1, ncol = 1)
-    Y_test[[1,1]] <- Y[[1,1]][(n+1):(2*n),]
+    Y_test[[1,1]] <- Y[[1,1]][(n+1):(2*n),, drop = FALSE]
     
     # -------------------------------------------------------------------------
-    # Scale X and y to have variance 1
+    # Center and scale X and y to have variance 1
     # -------------------------------------------------------------------------
     
-    for (s in 1:q) {
-      training_data[[s,1]] <- scale(training_data[[s,1]], center = FALSE, scale = TRUE)
-      training_data_list[[s]] <- scale(training_data_list[[s]], center = FALSE, scale = TRUE)
-      joint.structure_train[[s,1]] <- scale(joint.structure_train[[s,1]], center = FALSE, scale = TRUE)
-      indiv.structure_train[[s,1]] <- scale(indiv.structure_train[[s,1]], center = FALSE, scale = TRUE)
-      
-      test_data[[s,1]] <- scale(test_data[[s,1]], center = FALSE, scale = TRUE)
-      test_data_list[[s]] <- scale(test_data_list[[s]], center = FALSE, scale = TRUE)
-      joint.structure_test[[s,1]] <- scale(joint.structure_test[[s,1]], center = FALSE, scale = TRUE)
-      indiv.structure_test[[s,1]] <- scale(indiv.structure_test[[s,1]], center = FALSE, scale = TRUE)
-    }
-    
-    Y_train[[1,1]] <- scale(Y_train[[1,1]], center = FALSE, scale = TRUE)
-    Y_test[[1,1]] <- scale(Y_test[[1,1]], center = FALSE, scale = TRUE)
+    # for (s in 1:q) {
+    #   training_data[[s,1]] <- scale(training_data[[s,1]], center = TRUE, scale = TRUE)
+    #   training_data_list[[s]] <- scale(training_data_list[[s]], center = TRUE, scale = TRUE)
+    #   joint.structure_train[[s,1]] <- scale(joint.structure_train[[s,1]], center = TRUE, scale = TRUE)
+    #   indiv.structure_train[[s,1]] <- scale(indiv.structure_train[[s,1]], center = TRUE, scale = TRUE)
+    # 
+    #   test_data[[s,1]] <- scale(test_data[[s,1]], center = TRUE, scale = TRUE)
+    #   test_data_list[[s]] <- scale(test_data_list[[s]], center = TRUE, scale = TRUE)
+    #   joint.structure_test[[s,1]] <- scale(joint.structure_test[[s,1]], center = TRUE, scale = TRUE)
+    #   indiv.structure_test[[s,1]] <- scale(indiv.structure_test[[s,1]], center = TRUE, scale = TRUE)
+    # }
+    # 
+    # Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = TRUE)
+    # Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = TRUE)
     
     # -------------------------------------------------------------------------
     # Fit each model on generated data to obtain estimate of underlying structure
@@ -3015,7 +3016,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     if (mod == "sJIVE") {
       # Running sJIVE
-      mod.out <- sJIVE(training_data_list, Y_train[[1,1]])
+      mod.out <- sJIVE(training_data_list, Y_train[[1,1]], method = "CV")
       
       # Saving the joint structure
       mod.joint <- lapply(1:q, function(source) {
@@ -3040,7 +3041,6 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       # Saving the individual scores
       indiv.scores <- lapply(1:q, function(source) {
         if (indiv.rank[source] != 0) t(mod.out$S_I[[source]])
-        if (indiv.rank[source] == 0) NULL
       })
       
       # Saving the E(Y)
@@ -3079,8 +3079,6 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
           svd.source <- svd(mod.individual[[source]])
           svd.source$v[,1:indiv.rank[source]]
         }
-        
-        if (indiv.rank[source] == 0) NULL
       })
     }
     
@@ -3110,8 +3108,6 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
           svd.source <- svd(mod.individual[[source]])
           svd.source$v[,1:indiv.rank[source]]
         }
-        
-        if (indiv.rank[source] == 0) NULL
       })
     }
     
@@ -3157,8 +3153,6 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
         if (indiv.rank[source] != 0) {
           indiv.scores <- mofa.scores[,unlist(indiv.factors[[source]]), drop = FALSE]
         }
-        
-        if (indiv.rank[source] == 0) NULL
       })
     }
     
@@ -3191,7 +3185,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     mod.ranks <- c(joint.rank, indiv.rank)
     
     # Combining all scores together
-    all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
+    all.scores <- cbind(Y_train[[1,1]], joint.scores, do.call(cbind, indiv.scores))
     colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
     
     # -------------------------------------------------------------------------
@@ -3219,12 +3213,12 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     # Joint structure
     joint.recovery.structure <- mean(sapply(1:q, function(source) {
-      frob(mod.joint[[source]] - joint.structure[[source,1]])/frob(joint.structure[[source,1]])
+      frob(mod.joint[[source]] - joint.structure_test[[source,1]])/frob(joint.structure_test[[source,1]])
     }))
     
     # Individual structure
     indiv.recovery.structure <- mean(sapply(1:q, function(source) {
-      frob(mod.individual[[source]] - indiv.structure[[source,1]])/frob(indiv.structure[[source,1]])
+      frob(mod.individual[[source]] - indiv.structure_test[[source,1]])/frob(indiv.structure_test[[source,1]])
     }))
     
     # -------------------------------------------------------------------------
@@ -3238,8 +3232,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # save(joint.recovery.structure, indiv.recovery.structure, mse_y,
     #      file = paste0(mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY))
     
-    res <- c(joint.recovery.structure, indiv.recovery.structure, mse_y)
-    names(res) <- c("joint mse", "indiv mse", "y mse")
+    res <- c(joint.recovery.structure, indiv.recovery.structure, mse_y, mod.ranks)
+    names(res) <- c("joint mse", "indiv mse", "y mse", "ranks")
     
     res
   }
