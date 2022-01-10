@@ -2920,6 +2920,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
   # The model options
   models <- c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
   
+  start <- Sys.time()
   cl <- makeCluster(n_clust)
   registerDoSNOW(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
@@ -3238,6 +3239,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     res
   }
   stopCluster(cl)
+  end <- Sys.time()
+  end - start
   
   # Return
   sim_results
