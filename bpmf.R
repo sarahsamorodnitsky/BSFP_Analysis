@@ -2937,7 +2937,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # -------------------------------------------------------------------------
     
     # Generate 2*n samples to split into equally-sized training and test datasets
-    sim_data <- bpmf_data(p.vec, 2*n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity = FALSE)
+    sim_data <- bpmf_data(p.vec, 2*n, ranks, true_params, s2nX, s2nY, response, missingness = NULL, entrywise = NULL, prop_missing = NULL, sparsity = FALSE)
     
     # Saving the data
     true_data <- sim_data$data
