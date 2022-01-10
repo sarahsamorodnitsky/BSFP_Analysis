@@ -2995,20 +2995,20 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # Center and scale X and y to have variance 1
     # -------------------------------------------------------------------------
     
-    # for (s in 1:q) {
-    #   training_data[[s,1]] <- scale(training_data[[s,1]], center = TRUE, scale = TRUE)
-    #   training_data_list[[s]] <- scale(training_data_list[[s]], center = TRUE, scale = TRUE)
-    #   joint.structure_train[[s,1]] <- scale(joint.structure_train[[s,1]], center = TRUE, scale = TRUE)
-    #   indiv.structure_train[[s,1]] <- scale(indiv.structure_train[[s,1]], center = TRUE, scale = TRUE)
-    # 
-    #   test_data[[s,1]] <- scale(test_data[[s,1]], center = TRUE, scale = TRUE)
-    #   test_data_list[[s]] <- scale(test_data_list[[s]], center = TRUE, scale = TRUE)
-    #   joint.structure_test[[s,1]] <- scale(joint.structure_test[[s,1]], center = TRUE, scale = TRUE)
-    #   indiv.structure_test[[s,1]] <- scale(indiv.structure_test[[s,1]], center = TRUE, scale = TRUE)
-    # }
-    # 
-    # Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = TRUE)
-    # Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = TRUE)
+    for (s in 1:q) {
+      training_data[[s,1]] <- scale(training_data[[s,1]], center = TRUE, scale = TRUE)
+      training_data_list[[s]] <- scale(training_data_list[[s]], center = TRUE, scale = TRUE)
+      joint.structure_train[[s,1]] <- scale(joint.structure_train[[s,1]], center = TRUE, scale = TRUE)
+      indiv.structure_train[[s,1]] <- scale(indiv.structure_train[[s,1]], center = TRUE, scale = TRUE)
+
+      test_data[[s,1]] <- scale(test_data[[s,1]], center = TRUE, scale = TRUE)
+      test_data_list[[s]] <- scale(test_data_list[[s]], center = TRUE, scale = TRUE)
+      joint.structure_test[[s,1]] <- scale(joint.structure_test[[s,1]], center = TRUE, scale = TRUE)
+      indiv.structure_test[[s,1]] <- scale(indiv.structure_test[[s,1]], center = TRUE, scale = TRUE)
+    }
+
+    Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = TRUE)
+    Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = TRUE)
     
     # -------------------------------------------------------------------------
     # Fit each model on generated data to obtain estimate of underlying structure
