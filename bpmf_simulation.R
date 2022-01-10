@@ -15,13 +15,13 @@ source("~/BayesianPMFWithGit/bpmf.R")
 q <- 2
 
 # Joint and individual ranks (ranks[1] = joint, ranks[2:r_total] = individual)
-ranks <- c(2,2,2)
+ranks <- c(1,1,1)
 
 # Number of predictors for each source
-p.vec = c(10, 15)
+p.vec = c(10, 10)
 
 # Sample size 
-n = 5
+n = 20
 
 # Parameters for data generation
 true_params <- model_params <- list(error_vars = c(1,1), # Error variance for each source
@@ -30,11 +30,80 @@ true_params <- model_params <- list(error_vars = c(1,1), # Error variance for ea
                                     beta_vars = c(10, 1, rep(1, q)), # Variance of intercept effect and each joint effect 
                                     response_vars = c(shape = 1, rate = 1)) # Hyperparameters for variance of response (if continuous)
 
+# Signal-to-noise ratios to consider
+s2nX.list <- s2nY.list <- c(0.99/0.01, 0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75, 0.1/0.9, 0.01/0.99)
 
 # -----------------------------------------------------------------------------
 # sJIVE
 # -----------------------------------------------------------------------------
 
-run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, 
-             s2nX = 1, s2nY = 1, nsim = 100, nsample = 1000, n_clust = 10)
+sJIVE.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
 
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, 
+                                     s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
+# -----------------------------------------------------------------------------
+# BIDIFAC+
+# -----------------------------------------------------------------------------
+
+BIDIFAC.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    BIDIFAC.res[[ind]] <- run_each_mod(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, 
+                                     s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
+# -----------------------------------------------------------------------------
+# JIVE
+# -----------------------------------------------------------------------------
+
+JIVE.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    JIVE.res[[ind]] <- run_each_mod(mod = "JIVE", p.vec, n, ranks, response = "continuous", true_params, 
+                                       s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
+# -----------------------------------------------------------------------------
+# MOFA
+# -----------------------------------------------------------------------------
+
+MOFA.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    MOFA.res[[ind]] <- run_each_mod(mod = "MOFA", p.vec, n, ranks, response = "continuous", true_params, 
+                                    s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
+# -----------------------------------------------------------------------------
+# BPMF
+# -----------------------------------------------------------------------------
+
+BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    BPMF.res[[ind]] <- run_each_mod(mod = "BPMF", p.vec, n, ranks, response = "continuous", true_params, 
+                                    s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+    ind <- ind + 1
+  }
+}
