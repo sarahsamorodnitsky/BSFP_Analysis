@@ -37,6 +37,8 @@ s2nX.list <- s2nY.list <- c(0.99/0.01, 0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75, 0
 # sJIVE
 # -----------------------------------------------------------------------------
 
+start <- Sys.time()
+
 sJIVE.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
@@ -47,6 +49,9 @@ for (s2nX in s2nX.list) {
     ind <- ind + 1
   }
 }
+
+end <- Sys.time()
+end-start
 
 # -----------------------------------------------------------------------------
 # BIDIFAC+
