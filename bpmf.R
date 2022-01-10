@@ -3229,8 +3229,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     mse_y <- frob(Y.fit - Y_test[[1,1]])/frob(Y_test[[1,1]])
     
     # Save 
-    # save(joint.recovery.structure, indiv.recovery.structure, mse_y,
-    #      file = paste0(mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY))
+    save(joint.recovery.structure, indiv.recovery.structure, mse_y, ranks,
+         file = paste0(mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY))
     
     res <- c(joint.recovery.structure, indiv.recovery.structure, mse_y, mod.ranks)
     names(res) <- c("joint mse", "indiv mse", "y mse", "ranks")
