@@ -2989,27 +2989,56 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     Y_train <- matrix(list(), nrow = 1, ncol = 1)
     Y_train[[1,1]] <- Y[[1,1]][1:n,, drop = FALSE]
     
+    EY_train <- matrix(list(), nrow = 1, ncol = 1)
+    EY_train[[1,1]] <- EY[[1,1]][1:n,, drop = FALSE]
+    
     Y_test <- matrix(list(), nrow = 1, ncol = 1)
-    Y_test[[1,1]] <- Y[[1,1]][(n+1):(2*n),, drop = FALSE]
+    Y_test[[1,1]] <- Y[[1,1]][1:n,, drop = FALSE]
+    
+    EY_test <- matrix(list(), nrow = 1, ncol = 1)
+    EY_test[[1,1]] <- EY[[1,1]][(n+1):(2*n),, drop = FALSE]
     
     # -------------------------------------------------------------------------
     # Center and scale X and y to have variance 1
     # -------------------------------------------------------------------------
     
     for (s in 1:q) {
+      # Center and scale the observed training data
       training_data[[s,1]] <- scale(training_data[[s,1]], center = TRUE, scale = TRUE)
       training_data_list[[s]] <- scale(training_data_list[[s]], center = TRUE, scale = TRUE)
-      joint.structure_train[[s,1]] <- scale(joint.structure_train[[s,1]], center = TRUE, scale = TRUE)
-      indiv.structure_train[[s,1]] <- scale(indiv.structure_train[[s,1]], center = TRUE, scale = TRUE)
-
+      
+      # Save the means and variances
+      col_means_train <- attr(training_data[[s,1]], "scaled:center")
+      col_sd_train <- attr(training_data[[s,1]], "scaled:scale")
+      
+      # Subtract each column by the same mean and divide by the same sd above
+      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 2, col_means_train)
+      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 2, col_sd_train, FUN = "/")
+      
+      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 2, col_means_train)
+      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 2, col_sd_train, FUN = "/")
+      
+      # Center and scale the observed test data
       test_data[[s,1]] <- scale(test_data[[s,1]], center = TRUE, scale = TRUE)
       test_data_list[[s]] <- scale(test_data_list[[s]], center = TRUE, scale = TRUE)
-      joint.structure_test[[s,1]] <- scale(joint.structure_test[[s,1]], center = TRUE, scale = TRUE)
-      indiv.structure_test[[s,1]] <- scale(indiv.structure_test[[s,1]], center = TRUE, scale = TRUE)
+      
+      # Save the means and variances
+      col_means_train <- attr(training_data[[s,1]], "scaled:center")
+      col_sd_train <- attr(training_data[[s,1]], "scaled:scale")
+      
+      # Subtract each column by the same mean and divide by the same sd above
+      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 2, col_means_test)
+      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 2, col_sd_test, FUN = "/")
+      
+      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 2, col_means_test)
+      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 2, col_sd_test, FUN = "/")
     }
 
     Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = TRUE)
+    EY_train[[1,1]] <- (EY_train[[1,1]] - attr(Y_train[[1,1]], "scaled:center"))/attr(Y_train[[1,1]], "scaled:scale")
+    
     Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = TRUE)
+    EY_test[[1,1]] <- (EY_test[[1,1]] - attr(Y_test[[1,1]], "scaled:center"))/attr(Y_test[[1,1]], "scaled:scale")
     
     # -------------------------------------------------------------------------
     # Fit each model on generated data to obtain estimate of underlying structure
