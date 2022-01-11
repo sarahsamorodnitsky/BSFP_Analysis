@@ -3436,7 +3436,9 @@ label_switching <- function(draws, pivot, loadings, betas = NULL, rank) {
 }
 
 
-
+test_function <- function(x,y) {
+  sum(x,y)
+}
 
 
 
