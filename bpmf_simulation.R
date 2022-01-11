@@ -18,10 +18,10 @@ q <- 2
 ranks <- c(1,1,1)
 
 # Number of predictors for each source
-p.vec = c(10, 10)
+p.vec = c(100, 100)
 
 # Sample size 
-n = 20
+n = 100
 
 # Parameters for data generation
 true_params <- model_params <- list(error_vars = c(1,1), # Error variance for each source
