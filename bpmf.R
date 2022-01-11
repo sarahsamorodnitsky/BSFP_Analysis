@@ -3231,7 +3231,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     # Save 
     save(joint.recovery.structure, indiv.recovery.structure, mse_y, ranks,
-         file = paste0("~/BayesianPMFWithGit/simulation_results/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY))
+         file = paste0("~/BayesianPMFWithGit/simulation_results/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda"))
     
     res <- c(joint.recovery.structure, indiv.recovery.structure, mse_y, mod.ranks)
     names(res) <- c("joint mse", "indiv mse", "y mse", "joint rank", paste("indiv rank", 1:q))
