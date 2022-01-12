@@ -62,7 +62,7 @@ columnwise_missing0.3 <- bpmf_sim(nsample = 20000, n_clust = 10, p.vec, n, true_
 
 # Sparsity
 continuous_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks, response = "continuous", sparsity = TRUE)
-binary_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks, response = "binary", sparsity = TRUE)
+binary_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks, response = "binary", sparsity = TRUE)
 
 save(no_response_no_missing, response_continuous, response_binary, 
      response_continuous_missing0.3, response_continuous_missing0.5, response_continuous_missing0.7,
