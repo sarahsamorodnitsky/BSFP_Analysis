@@ -123,7 +123,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   # If a response is given, set up the variance matrix for the prior of the betas using the ranks
   if (response_given) {
     Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
-    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+    beta_vars <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+    diag(Sigma_beta) <- beta_vars
   }
   
   # ---------------------------------------------------------------------------
@@ -572,7 +573,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         diag(SigmaBetaInv)[-1][gamma.iter[-1] == 1] <- 1/(beta_vars[-1][gamma.iter[-1] == 1])
         
         # Change the precision of those betas under the spike
-        diag(SigmaBetaInv)[gamma.iter == 0] <- 1000 # Can change this precision
+        diag(SigmaBetaInv)[-1][gamma.iter[-1] == 0] <- 1000 # Can change this precision
       }
       
       if (response_type == "binary") {
@@ -614,7 +615,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       }
     }
     
-    
     # -------------------------------------------------------------------------
     # Posterior sample for spike-and-slab indicators and probabilities
     # -------------------------------------------------------------------------
@@ -638,8 +638,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       # Saving the current value of gamma
       gamma.iter <- gamma.draw[[iter+1]][[1,1]]
       
-      # Generating the prior probabilities
-      p.draw[[iter+1]][[1,1]] <- rbeta(1, 1 + sum(gamma.iter[-1,]), 1 + n_beta - sum(gamma.iter[-1,]))
+      # Generating the prior probabilities (excluding the intercept, hence n_beta - 1 and sum(gamma[-1]))
+      p.draw[[iter+1]][[1,1]] <- rbeta(1, 1 + sum(gamma.iter[-1,]), 1 + (n_beta-1) - sum(gamma.iter[-1,]))
     }
     
     # -------------------------------------------------------------------------
