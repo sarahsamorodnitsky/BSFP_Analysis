@@ -53,9 +53,12 @@ missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, mode
 
 # Columnwise missing data
 columnwise_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.1)
-columnwise_missing0.3 <- bpmf_sim(nsample = 20000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.3)
+columnwise_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 10, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.3)
 columnwise_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.5)
 columnwise_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.7)
+
+# Considering columnwise missingness with many Gibbs sampling iterations
+columnwise_missing0.3 <- bpmf_sim(nsample = 20000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.3)
 
 # Sparsity
 continuous_response_sparsity <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2n = NULL, center = FALSE, nninit = FALSE, ranks, response = "continuous", sparsity = TRUE)
