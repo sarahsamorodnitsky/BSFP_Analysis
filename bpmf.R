@@ -2166,6 +2166,11 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   # Check if there is a response
   response_given <- !is.null(Y)
   
+  # If there is a response, what type of response is it?
+  if (response_given) {
+    response_type <- if (all(unique(Y) %in% c(0, 1, NA))) "binary" else "continuous"
+  }
+  
   # Check if there is missingness
   missingness_in_data <- any(sapply(data[,1], function(source) any(is.na(source))))
   
