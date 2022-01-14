@@ -144,6 +144,8 @@ fev1pp_training_fit_sparse <- bpmf(
 save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(results_wd, "training_data_fit.rda"))
 
 # Assessing convergence for both model fits
+load(paste0(results_wd, "training_data_fit.rda"))
+
 fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
   # Calculate the log-joint density at each thinned iterations
   log_joint_density(data = hiv_copd_data, 
@@ -173,9 +175,12 @@ fev1pp_training_sparse_conv <- sapply(thinned_iters, function(sim_iter) {
 })
 
 # Plotting the log-joint densities
-plot(fev1pp_training_nonsparse_conv)
-plot(fev1pp_training_sparse_conv)
+plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Non-Sparse Model")
+plot(fev1pp_training_sparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Sparse Model")
 
+# In sparse model, which factors were selected?
+mat_of_gammas <- do.call(cbind, lapply(fev1pp_training_fit_sparse$gamma.draw, function(iter) iter[[1,1]]))
+post_prob <- rowMeans(mat_of_gammas)
 
 # -----------------------------------------------------------------------------
 # Cross Validated Model Fit
@@ -216,6 +221,34 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
 
   # Save just the relevant output
   save(Ym.draw, ranks, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
+}
+stopCluster(cl)
+
+# Running the cross validation algorithm again, this time without sparsity
+cl <- makeCluster(3)
+registerDoParallel(cl)
+fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+  # Create a new vector of the outcome with the current pair set to NA
+  fev1pp_cv <- fev1pp
+  fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
+  
+  # Run the model with the above pair's continuous outcome missing
+  fev1pp_cv_fit_sparse <- bpmf(
+    data = hiv_copd_data,
+    Y = fev1pp_cv,
+    nninit = TRUE,
+    model_params = model_params,
+    sparsity = FALSE,
+    nsample = nsample,
+    progress = TRUE
+  )
+  
+  # Saving the predicted outcomes for the missing subjects
+  Ym.draw <- fev1pp_cv_fit_sparse$Ym.draw
+  ranks <- fev1pp_cv_fit_sparse$ranks
+  
+  # Save just the relevant output
+  save(Ym.draw, ranks, file = paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
 }
 stopCluster(cl)
 
