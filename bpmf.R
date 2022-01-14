@@ -2145,6 +2145,8 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   # Xm.draw = the imputed values at the current Gibbs sampling iteration
   # ---------------------------------------------------------------------------
   
+  library(invgamma)
+  
   # How many sources are there?
   q <- nrow(data)
   
