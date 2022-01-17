@@ -178,6 +178,8 @@ fev1pp_training_sparse_conv <- sapply(thinned_iters, function(sim_iter) {
 plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Non-Sparse Model")
 plot(fev1pp_training_sparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Sparse Model")
 
+# Applying the label switching algorithm to the training data fits
+
 # In sparse model, which factors were selected?
 mat_of_gammas <- do.call(cbind, lapply(fev1pp_training_fit_sparse$gamma.draw, function(iter) iter[[1,1]]))
 post_prob <- rowMeans(mat_of_gammas)
@@ -233,7 +235,7 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
   fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
   
   # Run the model with the above pair's continuous outcome missing
-  fev1pp_cv_fit_sparse <- bpmf(
+  fev1pp_cv_fit_nonsparse <- bpmf(
     data = hiv_copd_data,
     Y = fev1pp_cv,
     nninit = TRUE,
@@ -244,8 +246,8 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
   )
   
   # Saving the predicted outcomes for the missing subjects
-  Ym.draw <- fev1pp_cv_fit_sparse$Ym.draw
-  ranks <- fev1pp_cv_fit_sparse$ranks
+  Ym.draw <- fev1pp_cv_fit_nonsparse$Ym.draw
+  ranks <- fev1pp_cv_fit_nonsparse$ranks
   
   # Save just the relevant output
   save(Ym.draw, ranks, file = paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
@@ -274,5 +276,30 @@ for (pair in ind_of_pairs) {
 plot(fev1pp_cv_sparsity, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp from Sparse Model")
 abline(a=0, b=1)
 cor.test(fev1pp_cv_sparsity, c(fev1pp[[1,1]]))
+
+# Loading in the predicted outcome iteratively for each pair and computing
+# the posterior mean predicted outcome. Comparing to the true FEV1pp 
+# Using the non-sparse model
+
+fev1pp_cv <- c()
+for (pair in ind_of_pairs) {
+  # Load in the results
+  load(paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
+  
+  # Combine the samples
+  samps <- do.call(cbind, do.call(cbind, Ym.draw))
+  
+  # Take a burn-in
+  samps_burnin <- samps[,thinned_iters_burnin]
+  
+  # Save in the vector
+  fev1pp_cv[pair:(pair+1)] <- rowMeans(samps_burnin)
+}
+
+# Plotting the results
+plot(fev1pp_cv, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp from Model Without Sparsity")
+abline(a=0, b=1)
+cor.test(fev1pp_cv, c(fev1pp[[1,1]]))
+
 
 
