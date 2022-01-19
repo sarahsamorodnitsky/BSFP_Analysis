@@ -3030,8 +3030,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
       test_data_list[[s]] <- scale(test_data_list[[s]], center = TRUE, scale = TRUE)
       
       # Save the means and variances
-      col_means_train <- attr(training_data[[s,1]], "scaled:center")
-      col_sd_train <- attr(training_data[[s,1]], "scaled:scale")
+      col_means_test <- attr(test_data[[s,1]], "scaled:center")
+      col_sd_test <- attr(test_data[[s,1]], "scaled:scale")
       
       # Subtract each column by the same mean and divide by the same sd above
       joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 2, col_means_test)
@@ -3249,12 +3249,20 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # -------------------------------------------------------------------------
     
     # Joint structure
-    joint.recovery.structure <- mean(sapply(1:q, function(source) {
+    joint.recovery.structure.train <- mean(sapply(1:q, function(source) {
+      frob(mod.joint[[source]] - joint.structure_train[[source,1]])/frob(joint.structure_train[[source,1]])
+    }))
+    
+    joint.recovery.structure.test <- mean(sapply(1:q, function(source) {
       frob(mod.joint[[source]] - joint.structure_test[[source,1]])/frob(joint.structure_test[[source,1]])
     }))
     
     # Individual structure
-    indiv.recovery.structure <- mean(sapply(1:q, function(source) {
+    indiv.recovery.structure.train <- mean(sapply(1:q, function(source) {
+      frob(mod.individual[[source]] - indiv.structure_train[[source,1]])/frob(indiv.structure_train[[source,1]])
+    }))
+    
+    indiv.recovery.structure.test <- mean(sapply(1:q, function(source) {
       frob(mod.individual[[source]] - indiv.structure_test[[source,1]])/frob(indiv.structure_test[[source,1]])
     }))
     
@@ -3262,15 +3270,18 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # Calculate prediction error for test data
     # -------------------------------------------------------------------------
     
-    # Comparing the predicted Y to the test Y
-    mse_y <- frob(Y.fit - Y_test[[1,1]])/frob(Y_test[[1,1]])
+    # Comparing the predicted Y to the training and test Y
+    mse_y_train <- frob(Y.fit - Y_train[[1,1]])/frob(Y_train[[1,1]])
+    mse_y_test <- frob(Y.fit - Y_test[[1,1]])/frob(Y_test[[1,1]])
     
     # Save 
-    save(joint.recovery.structure, indiv.recovery.structure, mse_y, ranks,
+    save(joint.recovery.structure.train, indiv.recovery.structure.test, 
+         indiv.recovery.structure.train, indiv.recovery.structure.test, 
+         mse_y_train, mse_y_test, ranks,
          file = paste0("~/BayesianPMFWithGit/simulation_results/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda"))
     
-    res <- c(joint.recovery.structure, indiv.recovery.structure, mse_y, mod.ranks)
-    names(res) <- c("joint mse", "indiv mse", "y mse", "joint rank", paste("indiv rank", 1:q))
+    res <- c(joint.recovery.structure.train, joint.recovery.structure.test, indiv.recovery.structure.train, indiv.recovery.structure.test, mse_y_train, mse_y_test, mod.ranks)
+    names(res) <- c("joint mse (train)", "joint mse (test)", "indiv mse (train)", "indiv mse (test)", "y mse (train)", "y mse (test)", "joint rank", paste("indiv rank", 1:q))
     
     res
   }
