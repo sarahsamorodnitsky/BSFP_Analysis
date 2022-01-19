@@ -2972,23 +2972,27 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # Training data
     training_data <- matrix(list(), nrow = q, ncol = 1)
     training_data_list <- lapply(1:q, function(s) list())
+    
     joint.structure_train <- matrix(list(), nrow = q, ncol = 1)
     indiv.structure_train <- matrix(list(), nrow = q, ncol = 1)
     
     # Test data
     test_data <- matrix(list(), nrow = q, ncol = 1)
     test_data_list <- lapply(1:q, function(s) list())
+    
     joint.structure_test <- matrix(list(), nrow = q, ncol = 1)
     indiv.structure_test <- matrix(list(), nrow = q, ncol = 1)
     
     for (s in 1:q) {
       training_data[[s,1]] <- true_data[[s,1]][,1:n]
       training_data_list[[s]] <- training_data[[s,1]]
+      
       joint.structure_train[[s,1]] <- joint.structure[[s,1]][,1:n]
       indiv.structure_train[[s,1]] <- indiv.structure[[s,1]][,1:n]
       
       test_data[[s,1]] <- true_data[[s,1]][,(n+1):(2*n)]
       test_data_list[[s]] <- test_data[[s,1]]
+      
       joint.structure_test[[s,1]] <- joint.structure[[s,1]][,(n+1):(2*n)]
       indiv.structure_test[[s,1]] <- indiv.structure[[s,1]][,(n+1):(2*n)]
     }
@@ -3235,13 +3239,25 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
                         ranks = mod.ranks, scores = all.scores[,-1], nsample = 1000)
       
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
-      Y.fit <- lapply(1:nsample, function(iter) {
+      Y.fit.iter <- lapply(1:nsample, function(iter) {
         VStar.iter <- cbind(1, all.scores[,-1])
         beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]]
         VStar.iter %*% beta.iter
       })
       
-      Y.fit <- Reduce("+", Y.fit)/nsample
+      Y.fit <- Reduce("+", Y.fit.iter)/nsample
+      
+      # Calculate the coverage of training E(Y) and test E(Y)
+      Y.fit.iter <- do.call(cbind, Y.fit.iter)
+      ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
+      
+      coverage_EY_train <- mean(sapply(1:n, function(i) {
+        (EY_train[[1,1]][i,] >= ci_by_Y[1,i]) & (EY_train[[1,1]][i,] <= ci_by_Y[2,i])
+      }))
+      
+      coverage_EY_test <- mean(sapply(1:n, function(i) {
+        (EY_test[[1,1]][i,] >= ci_by_Y[1,i]) & (EY_test[[1,1]][i,] <= ci_by_Y[2,i])
+      }))
     }
     
     # -------------------------------------------------------------------------
@@ -3277,11 +3293,11 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     # Save 
     save(joint.recovery.structure.train, indiv.recovery.structure.test, 
          indiv.recovery.structure.train, indiv.recovery.structure.test, 
-         mse_y_train, mse_y_test, ranks,
-         file = paste0("~/BayesianPMFWithGit/simulation_results/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda"))
+         mse_y_train, mse_y_test, coverage_EY_test, coverage_EY_test, ranks, 
+         file = paste0("~/BayesianPMF/03Simulations/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda"))
     
-    res <- c(joint.recovery.structure.train, joint.recovery.structure.test, indiv.recovery.structure.train, indiv.recovery.structure.test, mse_y_train, mse_y_test, mod.ranks)
-    names(res) <- c("joint mse (train)", "joint mse (test)", "indiv mse (train)", "indiv mse (test)", "y mse (train)", "y mse (test)", "joint rank", paste("indiv rank", 1:q))
+    res <- c(joint.recovery.structure.train, joint.recovery.structure.test, indiv.recovery.structure.train, indiv.recovery.structure.test, mse_y_train, mse_y_test, coverage_EY_train, coverage_EY_test, mod.ranks)
+    names(res) <- c("joint mse (train)", "joint mse (test)", "indiv mse (train)", "indiv mse (test)", "y mse (train)", "y mse (test)", "coverage y (train)", "coverage y (test)", "joint rank", paste("indiv rank", 1:q))
     
     res
   }
