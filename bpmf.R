@@ -3391,84 +3391,238 @@ create_validation_table <- function(results_list, condition) {
 }
 
 # The label switching algorithm. 
-label_switching <- function(draws, pivot, loadings, betas = NULL, rank) {
+label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
   # draws (list): the draws to swap according to the pivot
-  # pivot (matrix): the pivot sample to use to arrange the columns in the draws
   # rank (int): number of columns to iterate through
   # loadings (list): the corresponding loadings for each draw of the matrix to swap
   # betas (double vec): list of vectors of the coefficients drawn at each iteration
+  # gammas (int vec): list of vectors of the inclusion indicators drawn at each iteration
+  # ---------------------------------------------------------------------------
   
   # Returning the swapped matrices
-  swapped_draws <- lapply(1:length(draws), function(iter) list())
-  swapped_loadings <- lapply(1:length(loadings), function(iter) list())
+  swapped_U.draw <- lapply(1:length(U.draw), function(iter) list())
+  swapped_V.draw <- lapply(1:length(V.draw), function(iter) list())
+  swapped_W.draw <- lapply(1:length(W.draw), function(iter) list())
+  swapped_Vs.draw <- lapply(1:length(Vs.draw), function(iter) list())
   swapped_betas <- lapply(1:length(betas), function(iter) list())
+  swapped_gammas <- lapply(1:length(gammas), function(iter) list())
   
   # Returning the swaps made so they can be undone
-  swaps_made <- lapply(1:length(draws), function(iter) list())
+  swaps_made_joint <- lapply(1:length(swapped_U.draw), function(iter) list())
+  swaps_made_indiv <- lapply(1:length(swapped_W.draw), function(iter) list())
   
   # Storing the sign changes so they can be undone
-  signs_changed <- lapply(1:length(draws), function(iter) list())
+  signs_changed_joint <- lapply(1:length(swapped_U.draw), function(iter) list())
+  signs_changed_indiv <- lapply(1:length(swapped_W.draw), function(iter) list())
   
-  for (iter in 1:length(draws)) {
+  # Setting the pivots
+  pivot_V <- V.draw[[nsample]]
+  pivot_Vs <- Vs.draw[[nsample]]
+  
+  for (iter in 1:length(U.draw)) {
     # For each iteration, arrange the columns of each draw to match that 
     # of the pivot. 
     
     # Initializing the rearranged version
-    tilde_V <- matrix(nrow = nrow(draws[[1]]), ncol = ncol(draws[[1]]))
-    tilde_U <- matrix(nrow = nrow(loadings[[1]]), ncol = ncol(loadings[[1]]))
-    tilde_beta <- matrix(nrow = nrow(betas[[1]]), ncol = ncol(betas[[1]]))
+    tilde_V <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_U <- matrix(list(), nrow = q, ncol = 1)
+    tilde_W <- matrix(list(), nrow = q, ncol = q)
+    tilde_Vs <- matrix(list(), nrow = 1, ncol = q)
     
-    # Storing the current V, U, and beta
-    current_V <- draws[[iter]]
-    current_U <- loadings[[iter]]
-    current_beta <- betas[[iter]]
+    tilde_beta <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_beta_joint <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_beta_indiv <- matrix(list(), nrow = q, ncol = 1)
     
-    # Storing the swaps
-    current_swaps <- c()
+    tilde_gamma <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_gamma_joint <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_gamma_indiv <- matrix(list(), nrow = q, ncol = 1)
     
-    # Storing the signs
-    current_signs <- c()
+    tilde_V[[1,1]] <- matrix(nrow = nrow(V.draw[[1]][[1,1]]), ncol = ncol(V.draw[[1]][[1,1]]))
     
-    for (k in 1:rank) {
+    for (s in 1:q) {
+      tilde_U[[s,1]] <- matrix(nrow = nrow(U.draw[[1]][[s,1]]), ncol = ncol(U.draw[[1]][[s,1]]))
+      tilde_W[[s,s]] <- matrix(nrow = nrow(W.draw[[1]][[s,s]]), ncol = ncol(W.draw[[1]][[s,s]]))
+      tilde_Vs[[1,s]] <- matrix(nrow = nrow(Vs.draw[[1]][[1,s]]), ncol = ncol(Vs.draw[[1]][[1,s]]))
+      
+      for (ss in 1:q) {
+        if (ss != s) {
+          tilde_W[[s,ss]] <- matrix(0, nrow = nrow(W.draw[[1]][[s,s]]), ncol = ncol(W.draw[[1]][[ss,ss]]))
+        }
+      }
+    }
+    
+    n_beta <- 1 + r + sum(r.vec)
+    tilde_beta[[1,1]] <- matrix(nrow = n_beta, ncol = 1)
+    tilde_beta_joint[[1,1]] <- matrix(nrow = r, ncol = 1)
+    
+    tilde_gamma[[1,1]] <- matrix(nrow = n_beta, ncol = 1)
+    tilde_gamma_joint[[1,1]] <- matrix(nrow = r, ncol = 1)
+    
+    for (s in 1:q) {
+      tilde_beta_indiv[[s,1]] <- matrix(nrow = r.vec[s], ncol = 1)
+      tilde_gamma_indiv[[s,1]] <- matrix(nrow = r.vec[s], ncol = 1)
+    }
+    
+    # Storing the current V, U, beta, and gamma
+    current_V <- V.draw[[iter]]
+    current_U <- U.draw[[iter]]
+    current_Vs <- Vs.draw[[iter]]
+    current_W <- W.draw[[iter]]
+    
+    if (!is.null(betas)) {
+      current_beta <- betas[[iter]]
+      current_beta_indiv <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Joint effect
+      if (r != 0) {
+        current_beta_joint <- current_beta[[1,1]][2:(r+1),, drop = FALSE] 
+      } else {
+        current_beta_joint <- NULL
+      }
+      
+      # Individual effects
+      current_beta_indiv.temp <- current_beta[[1,1]][(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) {
+            current_beta_indiv[[s, 1]] <- current_beta_indiv.temp[1:r.vec[s],, drop = FALSE] 
+          }
+          if (s != 1) {
+            current_beta_indiv[[s, 1]] <- current_beta_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+      }
+
+    }
+    
+    if (!is.null(gammas)) {
+      current_gamma <- gammas[[iter]] 
+      current_gamma_indiv <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Joint effect
+      if (r != 0) {
+        current_gamma_joint <- current_gamma[[1,1]][2:(r+1),, drop = FALSE]
+      } else {
+        current_gamma_joint <- NULL
+      }
+      
+      # Individual effects
+      current_gamma_indiv.temp <- current_gamma[[1,1]][(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) {
+            current_gamma_indiv[[s,1]] <- current_gamma_indiv.temp[1:r.vec[s],, drop = FALSE] 
+          }
+          if (s != 1) {
+            current_gamma_indiv[[s,1]] <- current_gamma_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+      }
+    }
+    
+    # Storing the swaps and signs
+    current_swaps_joint <- current_signs_joint <- c()
+    current_swaps_indiv <- current_signs_indiv <- lapply(1:q, function(s) c())
+    
+    for (k in 1:r) {
       # for each column in the pivot, rearrange the columns in draws to match the order
-      corrs <- apply(current_V, 2, function(current_col) cor(current_col, pivot[,k])) # compute correlation between each 
+      corrs <- apply(current_V[[1,1]], 2, function(current_col) cor(current_col, pivot_V[[1,1]][,k])) # compute correlation between each 
       jk <- which.max(abs(corrs)) # storing the index of the highest correlation
       ak <- sign(corrs[jk]) # storing the sign of that correlation
       
       # Setting the kth column of \tilde_V to be the ak*current_V[,jk] column. 
-      tilde_V[,k] <- ak*current_V[,jk]
+      tilde_V[[1,1]][,k] <- ak*current_V[[1,1]][,jk]
       
       # Rearranging the corresponding column in U:
-      tilde_U[,k] <- ak*current_U[,jk]
+      for (s in 1:q) {
+        tilde_U[[s,1]][,k] <- ak*current_U[[s,1]][,jk]
+      }
       
       # Rearranging the corresponding rows in betas:
-      tilde_beta[k,] <- ak*current_beta[jk,]
+      tilde_beta_joint[[1,1]][k,] <- ak*current_beta_joint[jk,]
+      
+      # Rearranging the corresponding rows in the gammas:
+      tilde_gamma_joint[[1,1]][k,] <- current_gamma_joint[jk,]
       
       # Recording what swap was made. The first entry would be the column index
       # of current_V that was moved to the first spot. The second index would be 
       # the column index of current_V that was moved to the second column, etc. 
-      current_swaps[k] <- jk
+      current_swaps_joint[k] <- jk
       
       # Recording the sign change (if any) that was made
-      current_signs[k] <- ak
+      current_signs_joint[k] <- ak
       
       # Removing the already-swapped columns in current_V from the running:
-      current_V[,jk] <- NA
+      current_V[[1,1]][,jk] <- NA
     }
     
+    for (s in 1:q) {
+      for (k in 1:r.vec[s]) {
+        # for each column in the pivot, rearrange the columns in draws to match the order
+        corrs <- apply(current_Vs[[1,s]], 2, function(current_col) cor(current_col, pivot_Vs[[1,s]][,k])) # compute correlation between each 
+        jk <- which.max(abs(corrs)) # storing the index of the highest correlation
+        ak <- sign(corrs[jk]) # storing the sign of that correlation
+        
+        # Setting the kth column of \tilde_Vs to be the ak*current_Vs[,jk] column. 
+        tilde_Vs[[1,s]][,k] <- ak*current_Vs[[1,s]][,jk]
+        
+        # Rearranging the corresponding column in W:
+        tilde_W[[s,s]][,k] <- ak*current_W[[s,s]][,jk]
+        
+        # Rearranging the corresponding rows in betas:
+        tilde_beta_indiv[[s,1]][k,] <- ak*current_beta_indiv[[s,1]][jk,]
+        
+        # Rearranging the corresponding rows in the gammas:
+        tilde_gamma_indiv[[s,1]][k,] <- current_gamma_indiv[[s,1]][jk,]
+        
+        # Recording what swap was made. The first entry would be the column index
+        # of current_V that was moved to the first spot. The second index would be 
+        # the column index of current_V that was moved to the second column, etc. 
+        current_swaps_indiv[[s]][k] <- jk
+        
+        # Recording the sign change (if any) that was made
+        current_signs_indiv[[s]][k] <- ak
+        
+        # Removing the already-swapped columns in current_V from the running:
+        current_Vs[[1,s]][,jk] <- NA
+      }
+    }
+    
+    # Combine the betas 
+    tilde_beta[[1,1]] <- rbind(current_beta[[1,1]][1], tilde_beta_joint[[1,1]], do.call(rbind, tilde_beta_indiv))
+    
+    # Combine the gammas
+    tilde_gamma[[1,1]] <- rbind(current_gamma[[1,1]][1], tilde_gamma_joint[[1,1]], do.call(rbind, tilde_gamma_indiv))
+    
     # Storing the swapped samples
-    swapped_draws[[iter]] <- tilde_V
-    swapped_loadings[[iter]] <- tilde_U
+    swapped_V.draw[[iter]] <- tilde_V
+    swapped_U.draw[[iter]] <- tilde_U
     swapped_betas[[iter]] <- tilde_beta
+    swapped_gammas[[iter]] <- tilde_gamma
     
     # Storing the swaps made
-    swaps_made[[iter]] <- current_swaps
+    swaps_made[[iter]] <- list(current_swaps_joint = current_swaps_joint, current_swaps_indiv = current_swaps_indiv)
     
     # Storing the signs changed
-    signs_changed[[iter]] <- current_signs
+    signs_changed[[iter]] <- list(current_signs_joint = current_signs_joint, current_signs_indiv = current_signs_indiv)
   }
-  list(swapped_draws = swapped_draws, swapped_loadings = swapped_loadings, swapped_betas = swapped_betas,
-       swaps_made = swaps_made, signs_changed = signs_changed)
+  
+  # Return
+  list(swapped_V.draw = swapped_V.draw, 
+       swapped_U.draw = swapped_U.draw, 
+       swapped_Vs.draw = swapped_Vs.draw, 
+       swapped_W.draw = swapped_W.draw,
+       swapped_betas = swapped_betas,
+       swapped_gammas = swapped_gammas,
+       swaps_made = swaps_made, 
+       signs_changed = signs_changed)
 }
 
 
