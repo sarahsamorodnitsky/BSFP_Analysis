@@ -3429,6 +3429,9 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
   # gammas (int vec): list of vectors of the inclusion indicators drawn at each iteration
   # ---------------------------------------------------------------------------
   
+  # Saving the number of sources
+  q <- length(r.vec)
+  
   # Returning the swapped matrices
   swapped_U.draw <- lapply(1:length(U.draw), function(iter) list())
   swapped_V.draw <- lapply(1:length(V.draw), function(iter) list())
@@ -3438,12 +3441,10 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
   swapped_gammas <- lapply(1:length(gammas), function(iter) list())
   
   # Returning the swaps made so they can be undone
-  swaps_made_joint <- lapply(1:length(swapped_U.draw), function(iter) list())
-  swaps_made_indiv <- lapply(1:length(swapped_W.draw), function(iter) list())
+  swaps_made <- lapply(1:length(swapped_U.draw), function(iter) list())
   
   # Storing the sign changes so they can be undone
-  signs_changed_joint <- lapply(1:length(swapped_U.draw), function(iter) list())
-  signs_changed_indiv <- lapply(1:length(swapped_W.draw), function(iter) list())
+  signs_changed <- lapply(1:length(swapped_U.draw), function(iter) list())
   
   # Setting the pivots
   pivot_V <- V.draw[[nsample]]
@@ -3573,10 +3574,14 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
       }
       
       # Rearranging the corresponding rows in betas:
-      tilde_beta_joint[[1,1]][k,] <- ak*current_beta_joint[jk,]
+      if (!is.null(betas)) {
+        tilde_beta_joint[[1,1]][k,] <- ak*current_beta_joint[jk,]
+      }
       
       # Rearranging the corresponding rows in the gammas:
-      tilde_gamma_joint[[1,1]][k,] <- current_gamma_joint[jk,]
+      if (!is.null(gammas)) {
+        tilde_gamma_joint[[1,1]][k,] <- current_gamma_joint[jk,]
+      }
       
       # Recording what swap was made. The first entry would be the column index
       # of current_V that was moved to the first spot. The second index would be 
@@ -3604,10 +3609,14 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
         tilde_W[[s,s]][,k] <- ak*current_W[[s,s]][,jk]
         
         # Rearranging the corresponding rows in betas:
-        tilde_beta_indiv[[s,1]][k,] <- ak*current_beta_indiv[[s,1]][jk,]
+        if (!is.null(betas)) {
+          tilde_beta_indiv[[s,1]][k,] <- ak*current_beta_indiv[[s,1]][jk,]
+        }
         
         # Rearranging the corresponding rows in the gammas:
-        tilde_gamma_indiv[[s,1]][k,] <- current_gamma_indiv[[s,1]][jk,]
+        if (!is.null(gammas)) {
+          tilde_gamma_indiv[[s,1]][k,] <- current_gamma_indiv[[s,1]][jk,]
+        }
         
         # Recording what swap was made. The first entry would be the column index
         # of current_V that was moved to the first spot. The second index would be 
@@ -3623,16 +3632,24 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
     }
     
     # Combine the betas 
-    tilde_beta[[1,1]] <- rbind(current_beta[[1,1]][1], tilde_beta_joint[[1,1]], do.call(rbind, tilde_beta_indiv))
+    if (!is.null(betas)) {
+      tilde_beta[[1,1]] <- rbind(current_beta[[1,1]][1], tilde_beta_joint[[1,1]], do.call(rbind, tilde_beta_indiv))
+    }
     
     # Combine the gammas
-    tilde_gamma[[1,1]] <- rbind(current_gamma[[1,1]][1], tilde_gamma_joint[[1,1]], do.call(rbind, tilde_gamma_indiv))
+    if (!is.null(gammas)) {
+      tilde_gamma[[1,1]] <- rbind(current_gamma[[1,1]][1], tilde_gamma_joint[[1,1]], do.call(rbind, tilde_gamma_indiv))
+    }
     
     # Storing the swapped samples
     swapped_V.draw[[iter]] <- tilde_V
     swapped_U.draw[[iter]] <- tilde_U
-    swapped_betas[[iter]] <- tilde_beta
-    swapped_gammas[[iter]] <- tilde_gamma
+    swapped_W.draw[[iter]] <- tilde_W
+    swapped_Vs.draw[[iter]] <- tilde_Vs
+    
+    if (!is.null(betas)) swapped_betas[[iter]] <- tilde_beta
+    
+    if (!is.null(gammas)) swapped_gammas[[iter]] <- tilde_gamma
     
     # Storing the swaps made
     swaps_made[[iter]] <- list(current_swaps_joint = current_swaps_joint, current_swaps_indiv = current_swaps_indiv)
