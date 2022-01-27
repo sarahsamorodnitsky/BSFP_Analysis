@@ -2900,7 +2900,7 @@ sJIVE <- function(X, Y, rankJ = NULL, rankA=NULL,eta=NULL, max.iter=1000,
 }
 
 # Run each model being compared in simulation study
-run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust) {
+run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -2919,8 +2919,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
   # ---------------------------------------------------------------------------
   
   # Loading in the packages
-  library(r.jive)
-  library(MOFA2)
+  # library(r.jive)
+  # library(MOFA2)
   library(doParallel)
   library(foreach)
   
