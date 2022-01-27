@@ -3291,9 +3291,9 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     mse_y_test <- frob(Y.fit - Y_test[[1,1]])/frob(Y_test[[1,1]])
     
     # Save 
-    save(joint.recovery.structure.train, indiv.recovery.structure.test, 
-         indiv.recovery.structure.train, indiv.recovery.structure.test, 
-         mse_y_train, mse_y_test, coverage_EY_test, coverage_EY_test, ranks, 
+    save(joint.recovery.structure.train, joint.recovery.structure.train, 
+         joint.recovery.structure.test, indiv.recovery.structure.test, 
+         mse_y_train, mse_y_test, coverage_EY_test, coverage_EY_test, mod.ranks, 
          file = paste0("~/BayesianPMF/03Simulations/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda"))
     
     res <- c(joint.recovery.structure.train, joint.recovery.structure.test, indiv.recovery.structure.train, indiv.recovery.structure.test, mse_y_train, mse_y_test, coverage_EY_train, coverage_EY_test, mod.ranks)
