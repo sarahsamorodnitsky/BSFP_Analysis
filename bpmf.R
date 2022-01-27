@@ -2900,7 +2900,7 @@ sJIVE <- function(X, Y, rankJ = NULL, rankA=NULL,eta=NULL, max.iter=1000,
 }
 
 # Run each model being compared in simulation study
-run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY, sparsity, nsim, nsample, n_clust) {
+run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -3004,7 +3004,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     EY_train[[1,1]] <- EY[[1,1]][1:n,, drop = FALSE]
     
     Y_test <- matrix(list(), nrow = 1, ncol = 1)
-    Y_test[[1,1]] <- Y[[1,1]][1:n,, drop = FALSE]
+    Y_test[[1,1]] <- Y[[1,1]][(n+1):(2*n),, drop = FALSE]
     
     EY_test <- matrix(list(), nrow = 1, ncol = 1)
     EY_test[[1,1]] <- EY[[1,1]][(n+1):(2*n),, drop = FALSE]
@@ -3199,7 +3199,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     
     if (mod == "BPMF") {
       # Running BPMF
-      mod.out <- bpmf(training_data, Y = Y_train, nninit = TRUE, model_params = model_params, nsample = 1000)
+      mod.out <- bpmf(training_data, Y = Y_train, nninit = TRUE, model_params = model_params, nsample = nsample)
       
       # Saving the joint structure
       mod.joint <- lapply(1:nsample, function(iter) {
@@ -3236,7 +3236,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, s2nX, s2nY
     if (mod %in% c("BIDIFAC+", "JIVE", "MOFA")) {
       # Fitting the Bayesian linear model
       mod.bayes <- bpmf(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
-                        ranks = mod.ranks, scores = all.scores[,-1], nsample = 1000)
+                        ranks = mod.ranks, scores = all.scores[,-1], nsample = nsample)
       
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
       Y.fit.iter <- lapply(1:nsample, function(iter) {
