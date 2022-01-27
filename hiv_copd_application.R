@@ -72,6 +72,7 @@ fev1pp[[1,1]] <- matrix(subject_processed$FEV1_percent_predicted, ncol = 1)
 p1 <- nrow(lavage_processed_no_info_log_scale)
 p2 <- nrow(somascan_normalized_clean_no_info_transpose_reorder)
 n <- ncol(lavage_processed_no_info_log_scale)
+q <- nrow(hiv_copd_data)
 
 # Error variances
 sigma21 <- 1 # error variance for Biocrates
@@ -179,10 +180,132 @@ plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joi
 plot(fev1pp_training_sparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Sparse Model")
 
 # Applying the label switching algorithm to the training data fits
+fev1pp_training_fit_sparse_ls <- label_switching(U.draw = fev1pp_training_fit_sparse$U.draw,
+                                                 V.draw = fev1pp_training_fit_sparse$V.draw,
+                                                 W.draw = fev1pp_training_fit_sparse$W.draw,
+                                                 Vs.draw = fev1pp_training_fit_sparse$Vs.draw,
+                                                 betas = fev1pp_training_fit_sparse$beta.draw,
+                                                 gammas = fev1pp_training_fit_sparse$gamma.draw,
+                                                 r = fev1pp_training_fit_sparse$ranks[1],
+                                                 r.vec = fev1pp_training_fit_sparse$ranks[-1],
+                                                 nsample = nsample)
+
+fev1pp_training_fit_nonsparse_ls <- label_switching(U.draw = fev1pp_training_fit_nonsparse$U.draw,
+                                                   V.draw = fev1pp_training_fit_nonsparse$V.draw,
+                                                   W.draw = fev1pp_training_fit_nonsparse$W.draw,
+                                                   Vs.draw = fev1pp_training_fit_nonsparse$Vs.draw,
+                                                   betas = fev1pp_training_fit_nonsparse$beta.draw,
+                                                   gammas = NULL,
+                                                   r = fev1pp_training_fit_nonsparse$ranks[1],
+                                                   r.vec = fev1pp_training_fit_nonsparse$ranks[-1],
+                                                   nsample = nsample)
+
+# Check that label switching correctly swapped the columns
+correct_swaps_structure <- correct_swaps_lm <- c()
+for (iter in 1:nsample) {
+  correct_swaps_structure_s <- correct_swaps_lm_s <- c()
+  for (s in 1:q) {
+    # Checking the structure
+    before_ls <- fev1pp_training_fit_sparse$U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_sparse$V.draw[[iter]][[1,1]]) +
+      fev1pp_training_fit_sparse$W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_sparse$Vs.draw[[iter]][[1,s]])
+    
+    after_ls <- fev1pp_training_fit_sparse_ls$swapped_U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_sparse_ls$swapped_V.draw[[iter]][[1,1]]) +
+      fev1pp_training_fit_sparse_ls$swapped_W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_sparse_ls$swapped_Vs.draw[[iter]][[1,s]])
+    
+   # Checking the gammas * betas
+   before_ls_lm <- t(fev1pp_training_fit_sparse$gamma.draw[[iter]][[1,1]]) %*% abs(fev1pp_training_fit_sparse$beta.draw[[iter]][[1,1]])
+   
+   after_ls_lm <- t(fev1pp_training_fit_sparse_ls$swapped_gammas[[iter]][[1,1]]) %*% abs(fev1pp_training_fit_sparse_ls$swapped_betas[[iter]][[1,1]])
+   
+   # Checking that everything matched
+   correct_swaps_structure_s[s] <- all.equal(before_ls, after_ls)
+   correct_swaps_lm_s[s] <- all.equal(before_ls_lm, after_ls_lm)
+  }
+  # Add the results from both sources
+  correct_swaps_structure[iter] <- all(correct_swaps_structure_s)
+  correct_swaps_lm[iter] <- all(correct_swaps_lm_s)
+}
+all(correct_swaps_structure)
+all(correct_swaps_lm)
+
+correct_swaps_structure <- correct_swaps_lm <- c()
+for (iter in 1:nsample) {
+  correct_swaps_structure_s <- correct_swaps_lm_s <- c()
+  for (s in 1:q) {
+    # Checking the structure
+    before_ls <- fev1pp_training_fit_nonsparse$U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]]) +
+      fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]])
+    
+    after_ls <- fev1pp_training_fit_nonsparse_ls$swapped_U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]]) +
+      fev1pp_training_fit_nonsparse_ls$swapped_W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]][[1,s]])
+    
+    # Checking the VStar * betas
+    before.VStar.iter <- cbind(1, fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]], do.call(cbind, fev1pp_training_fit_nonsparse$Vs.draw[[iter]]))
+    before_ls_lm <- before.VStar.iter %*% (fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]])
+    
+    after.VStar.iter <- cbind(1, fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]], do.call(cbind, fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]]))
+    after_ls_lm <- after.VStar.iter %*% (fev1pp_training_fit_nonsparse_ls$swapped_betas[[iter]][[1,1]])
+    
+    # Checking that everything matched
+    correct_swaps_structure_s[s] <- all.equal(before_ls, after_ls)
+    correct_swaps_lm_s[s] <- all.equal(before_ls_lm, after_ls_lm)
+  }
+  # Add the results from both sources
+  correct_swaps_structure[iter] <- all(correct_swaps_structure_s)
+  correct_swaps_lm[iter] <- all(correct_swaps_lm_s)
+}
+all(correct_swaps_structure)
+all(correct_swaps_lm)
 
 # In sparse model, which factors were selected?
+mat_of_gammas_ls <- do.call(cbind, lapply(fev1pp_training_fit_sparse_ls$swapped_gammas, function(iter) iter[[1,1]]))
 mat_of_gammas <- do.call(cbind, lapply(fev1pp_training_fit_sparse$gamma.draw, function(iter) iter[[1,1]]))
+
+post_prob_ls <- rowMeans(mat_of_gammas_ls)
 post_prob <- rowMeans(mat_of_gammas)
+
+# Comparing the training data fits
+latent_structure_sparse <- lapply(1:nsample, function(iter) {
+  lapply(1:q, function(s) {
+    fev1pp_training_fit_sparse$U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_sparse$V.draw[[iter]][[1,1]]) + fev1pp_training_fit_sparse$W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_sparse$Vs.draw[[iter]][[1,s]])
+  })
+})
+latent_structure_sparse <- list(Reduce("+", lapply(latent_structure_sparse, function(iter) iter[[1]]))/nsample,
+                                Reduce("+", lapply(latent_structure_sparse, function(iter) iter[[2]]))/nsample)
+
+latent_structure_nonsparse <- lapply(1:nsample, function(iter) {
+  lapply(1:q, function(s) {
+    fev1pp_training_fit_nonsparse$U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]]) + fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]])
+  })
+})
+latent_structure_nonsparse <- list(Reduce("+", lapply(latent_structure_nonsparse, function(iter) iter[[1]]))/nsample,
+                                   Reduce("+", lapply(latent_structure_nonsparse, function(iter) iter[[2]]))/nsample)
+
+frob(hiv_copd_data[[1,1]] - latent_structure_sparse[[1]]) # Sparse model fit for Biocrates
+frob(hiv_copd_data[[2,1]] - latent_structure_sparse[[2]]) # Sparse model fit for Somascan
+
+frob(hiv_copd_data[[1,1]] - latent_structure_nonsparse[[1]]) # Sparse model fit for Biocrates
+frob(hiv_copd_data[[2,1]] - latent_structure_nonsparse[[2]]) # Sparse model fit for Somascan
+
+# Joint Scores
+V_nonsparse <- Reduce("+", lapply(fev1pp_training_fit_nonsparse_ls$swapped_V.draw, function(iter) iter[[1,1]]))/nsample
+V_sparse <- Reduce("+", lapply(fev1pp_training_fit_sparse_ls$swapped_V.draw, function(iter) iter[[1,1]]))/nsample
+
+# Individual scores
+Vs_nonsparse <- Reduce("+", lapply(fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw, function(iter) do.call(cbind, iter)))/nsample
+Vs_sparse <- Reduce("+", lapply(fev1pp_training_fit_sparse_ls$swapped_Vs.draw, function(iter) do.call(cbind, iter)))/nsample
+
+# Betas
+betas_nonsparse <- Reduce("+", lapply(fev1pp_training_fit_nonsparse_ls$swapped_betas, function(iter) iter[[1,1]]))/nsample
+betas_sparse <- Reduce("+", lapply(fev1pp_training_fit_sparse_ls$swapped_betas, function(iter) iter[[1,1]]))/nsample
+
+# E(Y)
+EY_nonsparse <- cbind(1, V_nonsparse, Vs_nonsparse) %*% betas_nonsparse
+EY_sparse <- cbind(1, V_sparse, Vs_sparse) %*% betas_sparse
+
+# Compare to FEV1pp
+cor.test(EY_nonsparse, fev1pp[[1,1]])
+cor.test(EY_sparse, fev1pp[[1,1]])
 
 # -----------------------------------------------------------------------------
 # Cross Validated Model Fit
