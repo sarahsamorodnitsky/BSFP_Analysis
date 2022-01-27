@@ -2127,7 +2127,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
 }
 
 # Checking convergence
-log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_params, ranks, Y = NULL, beta.iter = NULL, tau2.iter = NULL, Xm.draw = NULL) {
+log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_params, ranks, Y = NULL, beta.iter = NULL, tau2.iter = NULL, Xm.iter = NULL, gamma.iter = NULL, p.iter = NULL) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -2186,7 +2186,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
     
     # Fill in the completed matrices with the imputed values
     for (s in 1:q) {
-      X_complete[[s,1]][missing_obs[[s]]] <- Xm.draw[[iter]][[s,1]]
+      X_complete[[s,1]][missing_obs[[s]]] <- Xm.iter[[s,1]]
     }
   }
   
@@ -2225,14 +2225,30 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
       VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
       
       # The contribution of beta to the joint density
-      like <- like + sum(sapply(1:n_beta, function(rs) {
-        dnorm(beta.iter[[1,1]][rs,], mean = 0, sd = sqrt(Sigma_beta[rs,rs]), log = TRUE)
-      }))
+      if (!sparsity) {
+        like <- like + sum(sapply(1:n_beta, function(rs) {
+          dnorm(beta.iter[[1,1]][rs,], mean = 0, sd = sqrt(Sigma_beta[rs,rs]), log = TRUE)
+        }))
+      }
+      
+      if (sparsity) {
+        like <- like + sum(sapply(1:n_beta, function(rs) {
+          # Update the var-covar of beta given the current value of gamma
+          if (gamma.iter[[1,1]][rs,] == 1) {
+            var_beta <- Sigma_beta[rs,rs]
+          } 
+          if (gamma.iter[[1,1]][rs,] == 0) {
+            var_beta <- 1/1000
+          }
+          
+          dnorm(beta.iter[[1,1]][rs,], mean = 0, sd = sqrt(var_beta), log = TRUE)
+        }))
+      }
       
       if (response_type == "continuous") {
         # The contribution of the observed response to the joint density
         like <- like + sum(sapply(1:n, function(i) {
-          dnorm(Y[[1,1]][i,], mean = VStar.iter %*% beta.iter[[1,1]], sd = sqrt(tau2.iter[[1,1]]), log = TRUE)
+          dnorm(Y[[1,1]][i,], mean = (VStar.iter %*% beta.iter[[1,1]])[i,], sd = sqrt(tau2.iter[[1,1]]), log = TRUE)
         }))
         
         # The contribution of tau2 to the joint density
@@ -2244,6 +2260,17 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
         like <- like + sum(log(sapply(1:n, function(i) {
           dbinom(Y[[1,1]][i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter[[1,1]]))
         })))
+      }
+      
+      # The contribution of the gammas and the prior probability of inclusion, p, to the likelihood
+      if (sparsity) {
+        # The gammas
+        like <- like + sum(sapply(2:n_beta, function(rs) { # Ignore the intercept, which is always included
+          dbinom(gamma.iter[[1,1]][rs,], size = 1, prob = p.iter[[1,1]], log = TRUE)
+        }))
+        
+        # Prior inclusion probability, p
+        like <- like + dbeta(p.iter[[1,1]], shape1 = 1, shape2 = 1, log = TRUE)
       }
     }
   }
