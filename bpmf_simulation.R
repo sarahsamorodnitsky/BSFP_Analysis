@@ -45,13 +45,17 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, 
-                                     s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = 100, nsample = 1000, n_clust = 10)
     ind <- ind + 1
   }
 }
 
 end <- Sys.time()
 end-start
+
+# Sparse condition
+sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, 
+                                 s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = 100, nsample = 1000, n_clust = 10)
 
 # -----------------------------------------------------------------------------
 # BIDIFAC+
@@ -63,10 +67,14 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     BIDIFAC.res[[ind]] <- run_each_mod(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, 
-                                     s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = 100, nsample = 1000, n_clust = 10)
     ind <- ind + 1
   }
 }
+
+# Sparse condition
+BIDIFAC.res[[ind]] <- run_each_mod(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, 
+                                 s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = 100, nsample = 1000, n_clust = 10)
 
 # -----------------------------------------------------------------------------
 # JIVE
@@ -78,10 +86,14 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     JIVE.res[[ind]] <- run_each_mod(mod = "JIVE", p.vec, n, ranks, response = "continuous", true_params, 
-                                       s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+                                       s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = 100, nsample = 1000, n_clust = 10)
     ind <- ind + 1
   }
 }
+
+# Sparse condition
+JIVE.res[[ind]] <- run_each_mod(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, 
+                                s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = 100, nsample = 1000, n_clust = 10)
 
 # -----------------------------------------------------------------------------
 # MOFA
@@ -93,10 +105,14 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     MOFA.res[[ind]] <- run_each_mod(mod = "MOFA", p.vec, n, ranks, response = "continuous", true_params, 
-                                    s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+                                    s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = 100, nsample = 1000, n_clust = 10)
     ind <- ind + 1
   }
 }
+
+# Sparse condition
+MOFA.res[[ind]] <- run_each_mod(mod = "MOFA", p.vec, n, ranks, response = "continuous", true_params, 
+                                s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = 100, nsample = 1000, n_clust = 10)
 
 # -----------------------------------------------------------------------------
 # BPMF
@@ -108,7 +124,11 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     BPMF.res[[ind]] <- run_each_mod(mod = "BPMF", p.vec, n, ranks, response = "continuous", true_params, 
-                                    s2nX = s2nX, s2nY = s2nY, nsim = 100, nsample = 1000, n_clust = 10)
+                                    s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = 100, nsample = 1000, n_clust = 10)
     ind <- ind + 1
   }
 }
+
+# Sparse condition
+BPMF.res[[ind]] <- run_each_mod(mod = "BPMF", p.vec, n, ranks, response = "continuous", true_params, 
+                                s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = 100, nsample = 1000, n_clust = 10)
