@@ -3250,6 +3250,9 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       
       # Saving the E(Y)
       Y.fit <- t(mod.out$fittedY)
+      
+      # Do not compute results for coverage
+      coverage_EY_train <- coverage_EY_test <- NULL
     }
     
     if (mod == "BIDIFAC+") {
@@ -3402,6 +3405,29 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       mod.bayes <- bpmf(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
                         ranks = mod.ranks, scores = all.scores[,-1], nsample = nsample)
       
+      # Calculate the predicted E(Y) at each Gibbs sampling iteration
+      Y.fit.iter <- lapply(1:nsample, function(iter) {
+        VStar.iter <- cbind(1, all.scores[,-1])
+        beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]]
+        VStar.iter %*% beta.iter
+      })
+      
+      Y.fit <- Reduce("+", Y.fit.iter)/nsample
+      
+      # Calculate the coverage of training E(Y) and test E(Y)
+      Y.fit.iter <- do.call(cbind, Y.fit.iter)
+      ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
+      
+      coverage_EY_train <- mean(sapply(1:n, function(i) {
+        (EY_train[[1,1]][i,] >= ci_by_Y[1,i]) & (EY_train[[1,1]][i,] <= ci_by_Y[2,i])
+      }))
+      
+      coverage_EY_test <- mean(sapply(1:n, function(i) {
+        (EY_test[[1,1]][i,] >= ci_by_Y[1,i]) & (EY_test[[1,1]][i,] <= ci_by_Y[2,i])
+      }))
+    }
+    
+    if (mod == "BPMF") {
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
       Y.fit.iter <- lapply(1:nsample, function(iter) {
         VStar.iter <- cbind(1, all.scores[,-1])
