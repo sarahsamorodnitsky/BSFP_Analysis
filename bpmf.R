@@ -3252,7 +3252,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       Y.fit <- t(mod.out$fittedY)
       
       # Do not compute results for coverage
-      coverage_EY_train <- coverage_EY_test <- NULL
+      coverage_EY_train <- coverage_EY_test <- NA
     }
     
     if (mod == "BIDIFAC+") {
