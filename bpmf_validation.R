@@ -126,5 +126,19 @@ library(tidyverse)
 print(xtable(validation_results, digits = 4), include.rownames = FALSE)
 
 
+# -----------------------------------------------------------------------------
+# Coverage simulations when ranks are 0
+# -----------------------------------------------------------------------------
 
+r <- 0
+r.vec <- c(1, 0)
+ranks <- c(r, r.vec)
 
+# No response, no missingness
+no_response_no_missing <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks)
+
+# Continuous response
+response_continuous_joint_rank_only <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
+
+# Binary response
+response_binary_joint_rank_only <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
