@@ -308,6 +308,254 @@ cor.test(EY_nonsparse, fev1pp[[1,1]])
 cor.test(EY_sparse, fev1pp[[1,1]])
 
 # -----------------------------------------------------------------------------
+# PCA-like plots using non-sparse model
+# -----------------------------------------------------------------------------
+
+# Calculate posterior mean for joint structure -- 
+V_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]]))/length(thinned_iters_burnin)
+
+# Load in the clustering information
+load("~/HIV-COPD/Data/UnivariatePValuesUncombinedClusterComparison.rda", verbose = TRUE)
+
+# Plot subjects against every combination of PCs
+joint_rank <- fev1pp_training_fit_nonsparse$ranks[1]
+pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Joint_Structure_PCA_Plot.pdf"), width = 15)
+for (rs1 in 1:joint_rank) {
+ for (rs2 in 1:joint_rank) {
+   if (rs1 != rs2) {
+     par(mfrow = c(1,2))
+     # Plot with case-control label as colors
+     plot(V_ls_nonsparse_mean[,rs1], V_ls_nonsparse_mean[,rs2], pch = 16, xlab = paste0("Joint Score ", rs1),
+          ylab = paste0("Joint Score ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
+          col = clinical_data_soma$ccstat)
+     # Plot with stand-out subjects as colors
+     plot(V_ls_nonsparse_mean[,rs1], V_ls_nonsparse_mean[,rs2], pch = 16, xlab = paste0("Joint Score ", rs1),
+          ylab = paste0("Joint Score ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
+          col = clusters.soma)
+     par(mfrow = c(1,1))
+   }
+ } 
+}
+dev.off()
+
+# Calculate the posterior mean for the individual structure --
+V1_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]][[1,1]]))/length(thinned_iters_burnin)
+V2_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]][[1,2]]))/length(thinned_iters_burnin)
+
+# Plot subjects against every combination of PCs for Biocrates
+indiv_rank1 <- fev1pp_training_fit_nonsparse$ranks[2]
+pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Individual_Structure_Biocrates_PCA_Plot.pdf"), width = 15)
+for (rs1 in 1:indiv_rank1) {
+  for (rs2 in 1:indiv_rank1) {
+    if (rs1 != rs2) {
+      par(mfrow = c(1,2))
+      # Plot with case-control label as colors
+      plot(V1_ls_nonsparse_mean[,rs1], V1_ls_nonsparse_mean[,rs2], pch = 16, xlab = paste0("Individual Score ", rs1),
+           ylab = paste0("Individual Score ", rs2), main = paste0("Individual Factors Biocrates ", rs1, " vs ", rs2),
+           col = clinical_data_soma$ccstat)
+      # Plot with stand-out subjects as colors
+      plot(V1_ls_nonsparse_mean[,rs1], V1_ls_nonsparse_mean[,rs2], pch = 16, xlab = paste0("Individual Score ", rs1),
+           ylab = paste0("Individual Score ", rs2), main = paste0("Individual Factors Biocrates ", rs1, " vs ", rs2),
+           col = clusters.soma)
+      par(mfrow = c(1,1))
+    }
+  } 
+}
+dev.off()
+
+# Plot subjects against every combination of PCs for Somascan
+indiv_rank2 <- fev1pp_training_fit_nonsparse$ranks[3]
+pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Individual_Structure_Somascan_PCA_Plot.pdf"), width = 15)
+for (rs1 in 1:indiv_rank2) {
+  for (rs2 in 1:indiv_rank2) {
+    if (rs1 != rs2) {
+      par(mfrow = c(1,2))
+      # Plot with case-control label as colors
+      plot(V2_ls_nonsparse_mean[,rs1], V2_ls_nonsparse_mean[,rs2], pch = 16, xlab = paste0("Individual Score ", rs1),
+           ylab = paste0("Individual Score ", rs2), main = paste0("Individual Factors Somascan ", rs1, " vs ", rs2),
+           col = clinical_data_soma$ccstat)
+      # Plot with stand-out subjects as colors
+      plot(V2_ls_nonsparse_mean[,rs1], V2_ls_nonsparse_mean[,rs2], pch = 16, xlab = paste0("Individual Score ", rs1),
+           ylab = paste0("Individual Score ", rs2), main = paste0("Individual Factors Somascan ", rs1, " vs ", rs2),
+           col = clusters.soma)
+      par(mfrow = c(1,1))
+    }
+  } 
+}
+dev.off()
+
+# -----------------------------------------------------------------------------
+# Investigating factor 2
+# -----------------------------------------------------------------------------
+
+# Selecting the loadings for factor 2 from Biocrates --
+U_Biocrates_Factor2_nonsparse_ls <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_ls$swapped_U.draw[[iter]][[1,1]][,2]
+}))
+rownames(U_Biocrates_Factor2_nonsparse_ls) <- rownames(hiv_copd_data[[1,1]])
+
+# Calculate the posterior mean loading for each protein
+U_Biocrates_Factor2_nonsparse_ls_mean <- rowMeans(U_Biocrates_Factor2_nonsparse_ls)
+names(U_Biocrates_Factor2_nonsparse_ls_mean) <- rownames(hiv_copd_data[[1,1]])
+U_Biocrates_Factor2_nonsparse_ls_mean_order <- U_Biocrates_Factor2_nonsparse_ls_mean[order(U_Biocrates_Factor2_nonsparse_ls_mean, decreasing = TRUE)]
+
+# Waterfall plot
+barplot(U_Biocrates_Factor2_nonsparse_ls_mean_order, col="blue", border="blue", space=0.5,
+        main = "Posterior Mean of Biocrates Factor 2 Loadings", ylab = "Mean Loading",
+        cex.axis=1.2, cex.lab=1.4, names.arg = NULL)
+
+
+
+# Constructing credible intervals
+U_Biocrates_Factor2_nonsparse_ls_mat <- t(apply(U_Biocrates_Factor2_nonsparse_ls, 1, function(protein) {
+  c(mean(protein), quantile(protein, 0.025), quantile(protein, 0.975))
+}))
+U_Biocrates_Factor2_nonsparse_ls_mat <- cbind.data.frame(rownames(U_Biocrates_Factor2_nonsparse_ls_mat), U_Biocrates_Factor2_nonsparse_ls_mat)
+colnames(U_Biocrates_Factor2_nonsparse_ls_mat) <- c("Protein", "Mean", "Lower", "Upper")
+U_Biocrates_Factor2_nonsparse_ls_mat$Protein <- 1:nrow(U_Biocrates_Factor2_nonsparse_ls_mat)
+
+# Order by the mean
+U_Biocrates_Factor2_nonsparse_ls_mat <- U_Biocrates_Factor2_nonsparse_ls_mat[order(U_Biocrates_Factor2_nonsparse_ls_mat$Mean, decreasing = TRUE),]
+
+# Creating the same plot with error bars
+error.bar <- function(x, y, upper, lower, length=0.1,...){
+  arrows(x,y+upper, x, y-lower, angle=90, code=3, length=length, ...)
+}
+
+pdf("~/BayesianPMF/04DataApplication/Figures/Biocrates_Factor2_Loadings.pdf")
+waterfall_factor2 <- barplot(U_Biocrates_Factor2_nonsparse_ls_mat$Mean, col="blue", border="blue", space=0.5,
+                             main = "Posterior Mean of Biocrates Factor 2 Loadings", ylab = "Mean Loading",
+                             cex.axis=1.2, cex.lab=1.4, names.arg = NULL, ylim = c(-1,1))
+error.bar(waterfall_factor2, U_Biocrates_Factor2_nonsparse_ls_mat$Mean, U_Biocrates_Factor2_nonsparse_ls_mat$Upper-U_Biocrates_Factor2_nonsparse_ls_mat$Mean, U_Biocrates_Factor2_nonsparse_ls_mat$Mean-U_Biocrates_Factor2_nonsparse_ls_mat$Lower)
+dev.off()
+
+
+# Selecting the loadings for factor 2 from Somascan --
+U_Somascan_Factor2_nonsparse_ls <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_ls$swapped_U.draw[[iter]][[2,1]][,2]
+}))
+
+# Calculate the posterior mean loading for each protein
+U_Somascan_Factor2_nonsparse_ls_mean <- rowMeans(U_Somascan_Factor2_nonsparse_ls)
+U_Somascan_Factor2_nonsparse_ls_mean_order <- U_Somascan_Factor2_nonsparse_ls_mean[order(U_Somascan_Factor2_nonsparse_ls_mean, decreasing = TRUE)]
+
+# Waterfall plot
+barplot(U_Somascan_Factor2_nonsparse_ls_mean_order, col="blue", border="blue",
+        main = "Posterior Mean of Somascan Factor 2 Loadings", ylab = "Mean Loading",
+        cex.axis=1.2, cex.lab=1.4)
+
+# -----------------------------------------------------------------------------
+# Heatmaps on non-sparse model
+# -----------------------------------------------------------------------------
+
+# Calculating the posterior mean of the joint structure (Biocrates)
+joint_biocrates_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_ls$swapped_U.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]])
+}))/length(thinned_iters_burnin)
+
+# Calculating the posterior mean of the joint structure (Somascan)
+joint_somascan_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_ls$swapped_U.draw[[iter]][[2,1]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]])
+}))/length(thinned_iters_burnin)
+
+# Calculating the posterior mean of the individual structure (Biocrates)
+indiv_biocrates_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_ls$swapped_W.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]][[1,1]])
+}))/length(thinned_iters_burnin)
+
+# Calculating the posterior mean of the individual structure (Somascan)
+indiv_somascan_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_ls$swapped_W.draw[[iter]][[2,2]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]][[1,2]])
+}))/length(thinned_iters_burnin)
+
+
+# Reorganizing the results to fit the JIVE structure
+heatmap_ls_nonsparse_jive <- list(data = list(hiv_copd_data[[1,1]], hiv_copd_data[[2,1]]),
+                                  joint = list(joint_biocrates_ls_nonsparse_mean, joint_somascan_ls_nonsparse_mean),
+                                  individual = list(indiv_biocrates_ls_nonsparse_mean, indiv_somascan_ls_nonsparse_mean),
+                                  rankJ = joint_rank,
+                                  rankA = c(indiv_rank1, indiv_rank2))
+
+# Applying the showHeatmaps function (ordered by joint structure)
+pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Joint.pdf"), width = 15)
+showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 0)
+dev.off()
+
+# Applying the showHeatmaps function (ordered by Biocrates structure)
+pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Biocrates.pdf"), width = 15)
+showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 1)
+dev.off()
+
+# Applying the showHeatmaps function (ordered by Somascan structure)
+pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Somascan.pdf"), width = 15)
+showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 2)
+dev.off()
+
+# -----------------------------------------------------------------------------
+# Credible Intervals for Coefficients Using Non-Sparse Model
+# -----------------------------------------------------------------------------
+
+# Creating a matrix with the posterior samples for the betas after burnin and thinning
+betas_ls_nonsparse_mat <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_ls$swapped_betas[[iter]][[1,1]]
+}))
+
+# Calculate the mean and CIs
+betas_ls_nonsparse_mat_results <- t(apply(betas_ls_nonsparse_mat, 1, function(beta) {
+  c(mean(beta), quantile(beta, 0.025), quantile(beta, 0.975))
+}))
+
+# Add factor labels
+betas_ls_nonsparse_mat_results <- as.data.frame(betas_ls_nonsparse_mat_results)
+betas_ls_nonsparse_mat_results <- cbind.data.frame(0:(nrow(betas_ls_nonsparse_mat_results)-1),
+                                                   betas_ls_nonsparse_mat_results)
+colnames(betas_ls_nonsparse_mat_results) <- c("Factor", "Posterior Mean", "Lower (2.5%)", "Upper (97.5%)")
+betas_ls_nonsparse_mat_results <- betas_ls_nonsparse_mat_results[-1,] # Remove intercept
+
+# Create plot
+library(plotrix)
+plotCI(x = betas_ls_nonsparse_mat_results$Factor,               # plotrix plot with confidence intervals
+       y = betas_ls_nonsparse_mat_results$`Posterior Mean`,
+       li = betas_ls_nonsparse_mat_results$`Lower (2.5%)`,
+       ui = betas_ls_nonsparse_mat_results$`Upper (97.5%)`,
+       main = "95% Credible Intervals for Factor Effects \n on FEV1pp (Non-Sparse)",
+       xlab = "Factor", ylab = "Posterior Mean",
+       scol = c(rep(1, joint_rank), rep(2, indiv_rank1), rep(3, indiv_rank2)))
+
+
+# -----------------------------------------------------------------------------
+# Credible Intervals for Coefficients Using Sparse Model
+# -----------------------------------------------------------------------------
+
+# Creating a matrix with the posterior samples for the betas after burnin and thinning
+betas_ls_sparse_mat <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_sparse_ls$swapped_betas[[iter]][[1,1]]
+}))
+
+# Calculate the mean and CIs
+betas_ls_sparse_mat_results <- t(apply(betas_ls_sparse_mat, 1, function(beta) {
+  c(mean(beta), quantile(beta, 0.025), quantile(beta, 0.975))
+}))
+
+# Add factor labels
+betas_ls_sparse_mat_results <- as.data.frame(betas_ls_sparse_mat_results)
+betas_ls_sparse_mat_results <- cbind.data.frame(0:(nrow(betas_ls_sparse_mat_results)-1),
+                                                   betas_ls_sparse_mat_results)
+colnames(betas_ls_sparse_mat_results) <- c("Factor", "Posterior Mean", "Lower (2.5%)", "Upper (97.5%)")
+betas_ls_sparse_mat_results <- betas_ls_sparse_mat_results[-1,] # Remove intercept
+
+# Create plot
+library(plotrix)
+plotCI(x = betas_ls_sparse_mat_results$Factor,               # plotrix plot with confidence intervals
+       y = betas_ls_sparse_mat_results$`Posterior Mean`,
+       li = betas_ls_sparse_mat_results$`Lower (2.5%)`,
+       ui = betas_ls_sparse_mat_results$`Upper (97.5%)`,
+       main = "95% Credible Intervals for Factor Effects \n on FEV1pp (Sparse)",
+       xlab = "Factor", ylab = "Posterior Mean",
+       scol = c(rep(1, joint_rank), rep(2, indiv_rank1), rep(3, indiv_rank2)))
+
+
+# -----------------------------------------------------------------------------
 # Cross Validated Model Fit
 # -----------------------------------------------------------------------------
 
