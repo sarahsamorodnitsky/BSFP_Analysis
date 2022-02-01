@@ -867,6 +867,10 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     tau2 <- sim_data$tau2
     EY <- sim_data$EY
     
+    # Setting the ranks
+    r <- ranks[1]
+    r.vec <- ranks[-1]
+    
     # -------------------------------------------------------------------------
     # Setting the proper variable names for the sampler
     # -------------------------------------------------------------------------
@@ -971,7 +975,16 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
       if (response == "continuous") {
         EY.burnin <- lapply(1:(burnin+1), function(res) {
           mat <- matrix(list(), nrow = 1, ncol = 1)
-          VStar.iter <- cbind(1, do.call(cbind, V.burnin[[res]]), do.call(cbind, Vs.burnin[[res]]))
+          
+          V.burnin.star <- V.burnin[[res]]
+          if (ranks[1] == 0) V.burnin.star[[1,1]] <- matrix(nrow = n, ncol = r)
+          
+          Vs.burnin.star <- Vs.burnin[[res]]
+          for (s in 1:q) {
+            if (r.vec[s] == 0) Vs.burnin.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
+          }
+          
+          VStar.iter <- cbind(1, do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
           mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
           mat
         })
@@ -980,7 +993,17 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
       if (response == "binary") {
         EY.burnin <- lapply(1:(burnin+1), function(res) {
           mat <- matrix(list(), nrow = 1, ncol = 1)
-          VStar.iter <- cbind(1, do.call(cbind, V.burnin[[res]]), do.call(cbind, Vs.burnin[[res]]))
+          
+          V.burnin.star <- V.burnin[[res]]
+          if (ranks[1] == 0) V.burnin.star[[1,1]] <- matrix(nrow = n, ncol = r)
+          
+          Vs.burnin.star <- Vs.burnin[[res]]
+          for (s in 1:q) {
+            if (r.vec[s] == 0) Vs.burnin.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
+          }
+          
+          VStar.iter <- cbind(1, do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
+          
           mat[[1,1]] <- pnorm(VStar.iter %*% beta.burnin[[res]][[1,1]])
           mat
         })
