@@ -48,9 +48,18 @@ ind <- 1
 
 for (s2nX in s2nX.list[2:7]) {
   for (s2nY in s2nY.list) {
-    sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
-    ind <- ind + 1
+    if (s2nX == 9) {
+      if (s2nY != 3) {
+        sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                                         s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+        ind <- ind + 1
+      }
+    }
+    if (s2nX != 9) {
+      sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                                       s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+      ind <- ind + 1
+    }
   }
 }
 
