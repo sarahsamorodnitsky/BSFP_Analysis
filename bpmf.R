@@ -1403,7 +1403,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
     s2nX_coef <- rep(0, q)
     
     for (s in 1:q) {
-      s2nX_coef[s] <- s2nX * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
+      s2nX_coef[s] <- sqrt(s2nX) * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
       
       joint.structure[[s,1]] <- s2nX_coef[s] * joint.structure[[s,1]]
       indiv.structure[[s,1]] <- s2nX_coef[s] * indiv.structure[[s,1]]
@@ -1488,7 +1488,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
       
       if (!is.null(s2nY)) {
         # Calculating the scaling coefficient so that the variance of the response = s2nY * noise variance
-        s2nY_coef <- s2nY * sd(error_y)/sd(EY[[1,1]])
+        s2nY_coef <- sqrt(s2nY) * sd(error_y)/sd(EY[[1,1]])
         EY[[1,1]] <- s2nY_coef * EY[[1,1]]
       }
       
@@ -3152,6 +3152,9 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     tau2 <- sim_data$tau2
     EY <- sim_data$EY
     
+    # Save a burn-in
+    burnin <- nsample/2
+    
     # -------------------------------------------------------------------------
     # Split the data into a training and test set
     # -------------------------------------------------------------------------
@@ -3201,35 +3204,35 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     # -------------------------------------------------------------------------
     
     for (s in 1:q) {
-      # Center and scale the observed training data
-      training_data[[s,1]] <- scale(training_data[[s,1]], center = TRUE, scale = TRUE)
-      training_data_list[[s]] <- scale(training_data_list[[s]], center = TRUE, scale = TRUE)
+      # Center and scale the observed training data (transpose to scale the cols (features) than transpose back)
+      training_data[[s,1]] <- t(scale(t(training_data[[s,1]]), center = TRUE, scale = TRUE))
+      training_data_list[[s]] <- t(scale(t(training_data_list[[s]]), center = TRUE, scale = TRUE))
       
       # Save the means and variances
-      col_means_train <- attr(training_data[[s,1]], "scaled:center")
-      col_sd_train <- attr(training_data[[s,1]], "scaled:scale")
+      row_means_train <- attr(training_data[[s,1]], "scaled:center")
+      row_sd_train <- attr(training_data[[s,1]], "scaled:scale")
       
       # Subtract each column by the same mean and divide by the same sd above
-      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 2, col_means_train)
-      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 2, col_sd_train, FUN = "/")
+      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_means_train)
+      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_sd_train, FUN = "/")
       
-      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 2, col_means_train)
-      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 2, col_sd_train, FUN = "/")
+      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_means_train)
+      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_sd_train, FUN = "/")
       
       # Center and scale the observed test data
-      test_data[[s,1]] <- scale(test_data[[s,1]], center = TRUE, scale = TRUE)
-      test_data_list[[s]] <- scale(test_data_list[[s]], center = TRUE, scale = TRUE)
+      test_data[[s,1]] <- t(scale(t(test_data[[s,1]]), center = TRUE, scale = TRUE))
+      test_data_list[[s]] <- t(scale(t(test_data_list[[s]]), center = TRUE, scale = TRUE))
       
       # Save the means and variances
-      col_means_test <- attr(test_data[[s,1]], "scaled:center")
-      col_sd_test <- attr(test_data[[s,1]], "scaled:scale")
+      row_means_test <- attr(test_data[[s,1]], "scaled:center")
+      row_sd_test <- attr(test_data[[s,1]], "scaled:scale")
       
       # Subtract each column by the same mean and divide by the same sd above
-      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 2, col_means_test)
-      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 2, col_sd_test, FUN = "/")
+      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_means_test)
+      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_sd_test, FUN = "/")
       
-      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 2, col_means_test)
-      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 2, col_sd_test, FUN = "/")
+      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_means_test)
+      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_sd_test, FUN = "/")
     }
 
     Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = TRUE)
@@ -3263,12 +3266,18 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       indiv.rank <- mod.out$rankA
       
       # Saving the joint scores
-      if (joint.rank != 0) joint.scores <- t(mod.out$S_J)
-      if (joint.rank == 0) joint.scores <- NULL
+      if (joint.rank != 0) {
+        joint.scores <- t(mod.out$S_J)
+      }
+      if (joint.rank == 0) {
+        joint.scores <- NULL
+      }
       
       # Saving the individual scores
       indiv.scores <- lapply(1:q, function(source) {
-        if (indiv.rank[source] != 0) t(mod.out$S_I[[source]])
+        if (indiv.rank[source] != 0) {
+          t(mod.out$S_I[[source]])
+        }
       })
       
       # Saving the E(Y)
@@ -3298,12 +3307,16 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       # Saving the individual ranks
       indiv.rank <- sapply(mod.out$I, function(source) {
         rankMatrix(source)[1]
-      }) # Not sure this is the most generalizable approach
+      }) 
       
       # Obtaining the joint scores
-      if (joint.rank != 0) joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
-      if (joint.rank == 0) joint.scores <- NULL
-      
+      if (joint.rank != 0)  {
+        joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
+      }
+      if (joint.rank == 0) {
+        joint.scores <- NULL
+      }
+        
       # Obtaining the individual scores
       indiv.scores <- lapply(1:q, function(source) {
         if (indiv.rank[source] != 0) {
@@ -3330,8 +3343,12 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       indiv.rank <- mod.out$rankA
       
       # Obtaining the joint scores
-      if (joint.rank != 0) joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
-      if (joint.rank == 0) joint.scores <- NULL
+      if (joint.rank != 0) {
+        joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
+      }
+      if (joint.rank == 0) {
+        joint.scores <- NULL
+      }
       
       # Obtaining the individual scores
       indiv.scores <- lapply(1:q, function(source) {
@@ -3372,12 +3389,16 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
         t(mod.out@expectations$Z$group1[, indiv.factors[[source]], drop = FALSE] %*% t(mod.out@expectations$W[[source]][, indiv.factors[[source]], drop = FALSE]))
       })
       
-      # Save the MOFA scores
+      # Save the MOFA scores (all.equal(get_factors(mod.out)$group1, mod.out@expectations$Z$group1[, joint.factors, drop = FALSE]) # TRUE!)
       mofa.scores <- get_factors(mod.out)$group1
       
       # Save the joint scores
-      if (joint.rank != 0) joint.scores <- mofa.scores[,joint.factors, drop = FALSE]
-      if (joint.rank == 0) joint.scores <- NULL
+      if (joint.rank != 0) {
+        joint.scores <- mofa.scores[,joint.factors, drop = FALSE]
+      }
+      if (joint.rank == 0) {
+        joint.scores <- NULL
+      }
       
       # Save the individual scores
       indiv.scores <- lapply(1:q, function(source) {
@@ -3392,17 +3413,37 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       mod.out <- bpmf(training_data, Y = Y_train, nninit = TRUE, model_params = model_params, nsample = nsample)
       
       # Saving the joint structure
-      mod.joint <- lapply(1:nsample, function(iter) {
+      mod.joint.iter <- lapply(1:nsample, function(iter) {
         lapply(1:q, function(source) {
           mod.out$U.draw[[iter]][[source,1]] %*% t(mod.out$V.draw[[iter]][[1]])
         })
       })
       
-      # Saving the individual structure
-      mod.individual <- lapply(1:nsample, function(iter) {
-        lapply(1:q, function(source) {
-          mod.joint$W.draw[[iter]][[source,source]] %*% t(mod.joint$Vs.draw[[iter]][[1,source]])
+      # Taking the posterior mean
+      mod.joint <- lapply(1:q, function(source) {
+        # Save the joint structure at each iteration for source
+        joint.source <- lapply((burnin+1):nsample, function(iter) {
+          mod.joint.iter[[iter]][[source]]
         })
+        # Take the mean
+        Reduce("+", joint.source)/length(joint.source)
+      })
+      
+      # Saving the individual structure
+      mod.individual.iter <- lapply(1:nsample, function(iter) {
+        lapply(1:q, function(source) {
+          mod.out$W.draw[[iter]][[source,source]] %*% t(mod.out$Vs.draw[[iter]][[1,source]])
+        })
+      })
+      
+      # Taking the posterior mean
+      mod.individual <- lapply(1:q, function(source) {
+        # Save the joint structure at each iteration for source
+        indiv.source <- lapply((burnin+1):nsample, function(iter) {
+          mod.individual.iter[[iter]][[source]]
+        })
+        # Take the mean
+        Reduce("+", indiv.source)/length(indiv.source)
       })
       
       # Saving the joint rank
@@ -3410,6 +3451,25 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       
       # Saving the individual ranks
       indiv.rank <- mod.out$ranks[-1]
+      
+      # Saving the joint scores
+      if (joint.rank != 0) {
+        joint.scores <- Reduce("+", lapply((burnin+1):nsample, function(iter) {
+          mod.out$V.draw[[iter]][[1,1]]
+        }))/(nsample-burnin)
+      }
+      if (joint.rank == 0) {
+        joint.scores <- NULL
+      }
+      
+      # Saving the individual scores
+      indiv.scores <- lapply(1:q, function(source) {
+        if (indiv.rank[source] != 0) {
+          indiv.scores <- Reduce("+", lapply((burnin+1):nsample, function(iter) {
+            mod.out$Vs.draw[[iter]][[1,source]]
+          }))/(nsample-burnin)
+        }
+      })
     }
     
     # Combining the ranks
@@ -3429,13 +3489,13 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
                         ranks = mod.ranks, scores = all.scores[,-1], nsample = nsample)
       
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
-      Y.fit.iter <- lapply(1:nsample, function(iter) {
+      Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
         VStar.iter <- cbind(1, all.scores[,-1])
         beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]]
         VStar.iter %*% beta.iter
       })
       
-      Y.fit <- Reduce("+", Y.fit.iter)/nsample
+      Y.fit <- Reduce("+", Y.fit.iter)/length(Y.fit.iter)
       
       # Calculate the coverage of training E(Y) and test E(Y)
       Y.fit.iter <- do.call(cbind, Y.fit.iter)
@@ -3452,13 +3512,13 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     
     if (mod == "BPMF") {
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
-      Y.fit.iter <- lapply(1:nsample, function(iter) {
+      Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
         VStar.iter <- cbind(1, all.scores[,-1])
-        beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]]
+        beta.iter <- mod.out$beta.draw[[iter]][[1,1]]
         VStar.iter %*% beta.iter
       })
       
-      Y.fit <- Reduce("+", Y.fit.iter)/nsample
+      Y.fit <- Reduce("+", Y.fit.iter)/length(Y.fit.iter)
       
       # Calculate the coverage of training E(Y) and test E(Y)
       Y.fit.iter <- do.call(cbind, Y.fit.iter)
