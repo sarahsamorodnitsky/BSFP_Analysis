@@ -171,62 +171,130 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   # Initialize V, U, V, W
   # ---------------------------------------------------------------------------
   
-  V0 <- matrix(list(), nrow = 1, ncol = 1)
-  if (r > 0) {
-    V0[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
-  } 
-  if (r == 0) {
-    V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
-  }
-  
-  U0 <- matrix(list(), nrow = q, ncol = 1)
-  Vs0 <- matrix(list(), nrow = 1, ncol = q)
-  W0 <- matrix(list(), nrow = q, ncol = q)
-  
-  for (s in 1:q) {
+  # If initializing with nuclear norm, set initialize values to posterior mode
+  if (nninit) {
+    # Joint structure
     
-    # Initialize U
+    # Individual structure
+    
+    V0 <- matrix(list(), nrow = 1, ncol = 1)
     if (r > 0) {
-      U0[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
+      V0[[1,1]] <- svd(rank_init$C[[1,1]])$v[,1:r]
     } 
     if (r == 0) {
-      U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+      V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
     }
     
-    # Initialize W and V
-    if (r.vec[s] > 0) {
-      Vs0[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
-      W0[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r.vec[s])
+    U0 <- matrix(list(), nrow = q, ncol = 1)
+    Vs0 <- matrix(list(), nrow = 1, ncol = q)
+    W0 <- matrix(list(), nrow = q, ncol = q)
+    
+    for (s in 1:q) {
       
-      for (ss in 1:q) {
-        if (ss != s) {
-          if (r.vec[ss] > 0) {
-            W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+      # Initialize U
+      if (r > 0) {
+        U0[[s,1]] <- svd(rank_init$C[[s,1]])$u[,1:r]
+      } 
+      if (r == 0) {
+        U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+      }
+      
+      # Initialize W and V
+      if (r.vec[s] > 0) {
+        Vs0[[1,s]] <- svd(rank_init$I[[s,1]])$v[,1:r.vec[s]]
+        W0[[s,s]] <- svd(rank_init$I[[s,1]])$u[,1:r.vec[s]]
+        
+        for (ss in 1:q) {
+          if (ss != s) {
+            if (r.vec[ss] > 0) {
+              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+            }
+            
+            if (r.vec[ss] == 0) {
+              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+            }
           }
-          
-          if (r.vec[ss] == 0) {
-            W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+        }
+      } 
+      if (r.vec[s] == 0) {
+        Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
+        W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        
+        for (ss in 1:q) {
+          if (ss != s) {
+            if (r.vec[ss] > 0) {
+              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+            }
+            
+            if (r.vec[ss] == 0) {
+              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+            }
           }
         }
       }
-    } 
-    if (r.vec[s] == 0) {
-      Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
-      W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
       
-      for (ss in 1:q) {
-        if (ss != s) {
-          if (r.vec[ss] > 0) {
-            W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
-          }
-          
-          if (r.vec[ss] == 0) {
-            W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
-          }
-        }
-      }
     }
-
+  }
+  
+  # If ranks provided, initialize with prior
+  if (!nninit) {
+    V0 <- matrix(list(), nrow = 1, ncol = 1)
+    if (r > 0) {
+      V0[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
+    } 
+    if (r == 0) {
+      V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
+    }
+    
+    U0 <- matrix(list(), nrow = q, ncol = 1)
+    Vs0 <- matrix(list(), nrow = 1, ncol = q)
+    W0 <- matrix(list(), nrow = q, ncol = q)
+    
+    for (s in 1:q) {
+      
+      # Initialize U
+      if (r > 0) {
+        U0[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
+      } 
+      if (r == 0) {
+        U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+      }
+      
+      # Initialize W and V
+      if (r.vec[s] > 0) {
+        Vs0[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
+        W0[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r.vec[s])
+        
+        for (ss in 1:q) {
+          if (ss != s) {
+            if (r.vec[ss] > 0) {
+              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+            }
+            
+            if (r.vec[ss] == 0) {
+              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+            }
+          }
+        }
+      } 
+      if (r.vec[s] == 0) {
+        Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
+        W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        
+        for (ss in 1:q) {
+          if (ss != s) {
+            if (r.vec[ss] > 0) {
+              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+            }
+            
+            if (r.vec[ss] == 0) {
+              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+            }
+          }
+        }
+      }
+      
+    }
   }
   
   if (response_given) {
