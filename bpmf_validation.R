@@ -142,3 +142,31 @@ response_continuous_joint_rank_only <- bpmf_sim(nsample = 2000, n_clust = 10, p.
 
 # Binary response
 response_binary_joint_rank_only <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
+
+# -----------------------------------------------------------------------------
+# Coverage simulations with 3 data sources
+# -----------------------------------------------------------------------------
+
+# Setting up the data
+n <- 50
+p.vec <- c(150, 100, 100)
+r <- 1
+r.vec <- c(1, 1, 1)
+ranks <- c(r, r.vec)
+q <- 3
+
+# Setting up the model parameters
+model_params <- true_params <- list(error_vars = c(1,1,1),
+                                    joint_var = 1,
+                                    indiv_vars = c(1,1,1),
+                                    beta_vars = c(1, 1, rep(1, q)), # Use the same variance for all the effects from each source
+                                    response_vars = c(shape = 1, rate = 1))
+
+# No response, no missingness
+no_response_no_missing <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks)
+
+# Continuous response
+response_continuous <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
+
+# Binary response
+response_binary <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
