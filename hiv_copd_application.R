@@ -31,9 +31,11 @@ load(paste0(data_wd, "HIV_COPD_SomaScan_Normalized_Clean.rda"))
 # BALF Biocrates
 lavage_processed_no_info <- lavage_processed[, -c(1:2)] # removing meta
 bioc_meta_data <- lavage_processed[, 1:2] # saving meta elsewhere
-lavage_processed_no_info_log_scale <- scale(log(lavage_processed_no_info + 1), # log/scale
-                                            center = TRUE, scale = TRUE)
+lavage_processed_no_info_log_scale <- t(apply(lavage_processed_no_info, 1, function(row) {
+  scale(log(row + 1), center = TRUE, scale = TRUE)
+})) # scaling the rows
 rownames(lavage_processed_no_info_log_scale) <- bioc_meta_data$Metabolite
+colnames(lavage_processed_no_info_log_scale) <- colnames(lavage_processed_no_info)
 
 # BALF Somascan
 somascan_normalized_clean_no_info <- somascan_normalized_clean[, -c(1:29)] # removing meta
