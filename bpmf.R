@@ -3792,8 +3792,12 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
   pivot_Vs <- Vs.draw[[nsample]]
   
   for (iter in 1:length(U.draw)) {
+    # -------------------------------------------------------------------------
+    # Initializing for iter
+    # 
     # For each iteration, arrange the columns of each draw to match that 
     # of the pivot. 
+    # -------------------------------------------------------------------------
     
     # Initializing the rearranged version
     tilde_V <- matrix(list(), nrow = 1, ncol = 1)
@@ -3835,7 +3839,9 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
       tilde_gamma_indiv[[s,1]] <- matrix(nrow = r.vec[s], ncol = 1)
     }
     
+    # -------------------------------------------------------------------------
     # Storing the current V, U, beta, and gamma
+    # -------------------------------------------------------------------------
     current_V <- V.draw[[iter]]
     current_U <- U.draw[[iter]]
     current_Vs <- Vs.draw[[iter]]
@@ -3866,7 +3872,6 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
           }
         }
       }
-
     }
     
     if (!is.null(gammas)) {
