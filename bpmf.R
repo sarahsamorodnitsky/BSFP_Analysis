@@ -179,7 +179,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     
     V0 <- matrix(list(), nrow = 1, ncol = 1)
     if (r > 0) {
-      V0[[1,1]] <- svd(rank_init$C[[1,1]])$v[,1:r]
+      V0[[1,1]] <- svd(rank_init$C[[1,1]])$v[,1:r, drop = FALSE]
     } 
     if (r == 0) {
       V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
@@ -193,7 +193,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       # Initialize U
       if (r > 0) {
-        U0[[s,1]] <- svd(rank_init$C[[s,1]])$u[,1:r]
+        U0[[s,1]] <- svd(rank_init$C[[s,1]])$u[,1:r, drop = FALSE]
       } 
       if (r == 0) {
         U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
@@ -201,8 +201,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       # Initialize W and V
       if (r.vec[s] > 0) {
-        Vs0[[1,s]] <- svd(rank_init$I[[s,1]])$v[,1:r.vec[s]]
-        W0[[s,s]] <- svd(rank_init$I[[s,1]])$u[,1:r.vec[s]]
+        Vs0[[1,s]] <- svd(rank_init$I[[s,1]])$v[,1:r.vec[s], drop = FALSE]
+        W0[[s,s]] <- svd(rank_init$I[[s,1]])$u[,1:r.vec[s], drop = FALSE]
         
         for (ss in 1:q) {
           if (ss != s) {
