@@ -260,9 +260,12 @@ all(correct_swaps_structure)
 all(correct_swaps_lm)
 
 # In sparse model, which factors were selected?
-mat_of_gammas_ls <- do.call(cbind, lapply(fev1pp_training_fit_sparse_ls$swapped_gammas, function(iter) iter[[1,1]]))
-mat_of_gammas <- do.call(cbind, lapply(fev1pp_training_fit_sparse$gamma.draw, function(iter) iter[[1,1]]))
-
+mat_of_gammas_ls <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_sparse_ls$swapped_gammas[[iter]][[1,1]]
+}))
+mat_of_gammas <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
+  fev1pp_training_fit_sparse$gamma.draw[[iter]][[1,1]]
+}))
 post_prob_ls <- rowMeans(mat_of_gammas_ls)
 post_prob <- rowMeans(mat_of_gammas)
 
