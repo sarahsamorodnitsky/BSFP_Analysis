@@ -3174,8 +3174,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
   # ---------------------------------------------------------------------------
   
   # Loading in the packages
-  # library(r.jive)
-  # library(MOFA2)
+  library(r.jive)
+  library(MOFA2)
   library(doParallel)
   library(foreach)
   
@@ -3189,7 +3189,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "sJIVE", "sJIVE.converge", "sJIVE.predict", "sJIVE.ranks")
-  packs <- c("Matrix", "MASS", "truncnorm")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
     set.seed(sim_iter)
