@@ -139,8 +139,25 @@ for (s2nX in s2nX.list) {
 }
 
 # Sparse condition
-JIVE.res[[ind]] <- run_each_mod(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, model_params,
+JIVE.res[[ind]] <- run_each_mod(mod = "JIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
                                 s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = nsim, nsample = nsample, n_clust = 10)
+
+# Check that all conditions ran
+all_s2n <- c()
+combos <- c()
+all_files <- list.files("~/BayesianPMF/03Simulations/JIVE")
+al_files_split <- strsplit(all_files, split = "_")
+ind <- 1
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    # Select all the files corresponding to current s2nX and s2nY 
+    files_for_s2nX_s2nY <- all_files[sapply(al_files_split, function(file) (file[5] == s2nX) & (file[7] == paste0(s2nY, ".rda")))]
+    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
+    combos[ind] <- paste(s2nX, "&", s2nY)
+    ind <- ind + 1
+  }
+}
+names(all_s2n) <- combos
 
 # -----------------------------------------------------------------------------
 # MOFA
