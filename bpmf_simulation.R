@@ -185,7 +185,7 @@ MOFA.res[[ind]] <- run_each_mod(mod = "MOFA", p.vec, n, ranks, response = "conti
 BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
-for (s2nX in s2nX.list[4:7]) {
+for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     BPMF.res[[ind]] <- run_each_mod(mod = "BPMF", p.vec, n, ranks, response = "continuous", true_params, model_params,
                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
