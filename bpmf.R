@@ -3759,7 +3759,7 @@ create_validation_table <- function(results_list, condition) {
 }
 
 # The label switching algorithm. 
-label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample) {
+label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample, thinned_iters_burnin) {
   
   # ---------------------------------------------------------------------------
   # Arguments: 
@@ -4004,6 +4004,165 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
     signs_changed[[iter]] <- list(current_signs_joint = current_signs_joint, current_signs_indiv = current_signs_indiv)
   }
   
+  # ---------------------------------------------------------------------------
+  # Calculating the posterior mean for each parameter
+  # ---------------------------------------------------------------------------
+  
+  V.mean <- matrix(list(), nrow = 1, ncol = 1)
+  V.mean[[1,1]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+    swapped_V.draw[[iter]][[1,1]]
+  }))/length(thinned_iters_burnin)
+  
+  U.mean <- matrix(list(), nrow = q, ncol = 1)
+  W.mean <- matrix(list(), nrow = q, ncol = q)
+  Vs.mean <- matrix(list(), nrow = 1, ncol = q)
+  
+  for (s in 1:q) {
+    U.mean[[s,1]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_U.draw[[iter]][[s,1]]
+    }))/length(thinned_iters_burnin)
+    
+    Vs.mean[[1,s]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_Vs.draw[[iter]][[1,s]]
+    }))/length(thinned_iters_burnin)
+    
+    W.mean[[s,s]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_W.draw[[iter]][[s,s]]
+    }))/length(thinned_iters_burnin)
+    
+    for (ss in 1:q) {
+      if (ss != s) {
+        W.mean[[s,ss]] <- swapped_W.draw[[1]][[s,ss]]
+      }
+    }
+  }
+  
+  if (!is.null(betas)) {
+    betas.mean <- matrix(list(), nrow = 1, ncol = 1)
+    
+    betas.mean[[1,1]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_betas[[iter]][[1,1]]
+    }))/length(thinned_iters_burnin)
+  }
+  
+  if (!is.null(gammas)) {
+    gammas.mean <- matrix(list(), nrow = 1, ncol = 1)
+    
+    gammas.mean[[1,1]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_gammas[[iter]][[1,1]]
+    }))/length(thinned_iters_burnin)
+  }
+
+  # ---------------------------------------------------------------------------
+  # Ordering the results in the posterior mean to be ordered most-to-least
+  # variance explained
+  # ---------------------------------------------------------------------------
+  
+  # Joint structure
+  
+  # Calculate the variance explained by each of the r factors (using Frobenius norm)
+  var_exp_joint <- c()
+  for (i in 1:r) {
+    var_exp_joint[i] <- frob(U.mean[[1,1]][,i, drop = FALSE] %*% t(V.mean[[1,1]])[i,, drop = FALSE])
+  }
+  
+  # Order the factors 
+  order_joint <- order(var_exp_joint, decreasing = TRUE)
+  
+  # Reorder the joint and individual factors
+  V.mean.reorder <- V.mean; U.mean.reorder <- U.mean
+  V.mean.reorder[[1,1]] <- V.mean[[1,1]][,order_joint]
+  
+  for (s in 1:q) {
+    U.mean.reorder[[s,1]] <- U.mean[[s,1]][,order_joint]
+  }
+  
+  # Individual structure
+  var_exp_indiv <- order_indiv <- matrix(list(), nrow = q, ncol = 1)
+  W.mean.reorder <- W.mean; Vs.mean.reorder <- Vs.mean
+  
+  for (s in 1:q) {
+    for (i in 1:r.vec[s]) {
+      var_exp_indiv[[s,1]][i] <- frob(W.mean[[s,s]][,i, drop = FALSE] %*% t(Vs.mean[[1,s]])[i,, drop = FALSE])
+    }
+    order_indiv[[s,1]] <- order(var_exp_indiv[[s,1]], decreasing = TRUE)
+    
+    # Order the factors
+    W.mean.reorder[[s,s]] <- W.mean[[s,s]][,order_indiv[[s,1]]]
+    Vs.mean.reorder[[1,s]] <- Vs.mean[[1,s]][,order_indiv[[s,1]]]
+  }
+  
+  # Betas
+  if (!is.null(betas)) {
+    betas.mean.indiv <- betas.mean.indiv.reorder <- matrix(list(), nrow = q, ncol = 1)
+    
+    # Joint effect
+    if (r != 0) {
+      betas.mean.joint <- betas.mean.reorder[[1,1]][2:(r+1),, drop = FALSE] 
+      betas.mean.joint.reorder <- betas.mean.joint[order_joint,, drop = FALSE]
+    } else {
+      betas.mean.joint <- NULL
+    }
+    
+    # Individual effects
+    betas.mean.indiv.temp <- betas.mean.reorder[[1,1]][(r+2):n_beta,, drop = FALSE]
+    
+    for (s in 1:q) {
+      # If there is an individual effect
+      if (r.vec[s] != 0) {
+        if (s == 1) {
+          betas.mean.indiv[[s, 1]] <- betas.mean.indiv.temp[1:r.vec[s],, drop = FALSE] 
+        }
+        if (s != 1) {
+          betas.mean.indiv[[s, 1]] <- betas.mean.indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
+        betas.mean.indiv.reorder[[s,1]] <- betas.mean.indiv[[s, 1]][order_indiv[[s,1]],, drop = FALSE]
+      }
+    }
+    
+    betas.mean.reorder <- rbind(betas.mean[[1,1]][1,], betas.mean.joint.reorder, do.call(rbind, betas.mean.indiv.reorder))
+  }
+  
+  if (is.null(betas)) {
+    betas.mean.reorder <- NULL
+  }
+  
+  # Gammas
+  
+  if (!is.null(gammas)) {
+    gammas.mean.indiv <- gammas.mean.indiv.reorder <- matrix(list(), nrow = q, ncol = 1)
+    
+    # Joint effect
+    if (r != 0) {
+      gammas.mean.joint <- gammas.mean[[1,1]][2:(r+1),, drop = FALSE]
+      gammas.mean.joint.reorder <- gammas.mean.joint[order_joint,, drop = FALSE]
+    } else {
+      gammas.mean.joint <- NULL
+    }
+    
+    # Individual effects
+    gammas.mean.indiv.temp <- gammas.mean[[1,1]][(r+2):n_beta,, drop = FALSE]
+    
+    for (s in 1:q) {
+      # If there is an individual effect
+      if (r.vec[s] != 0) {
+        if (s == 1) {
+          gammas.mean.indiv[[s,1]] <- gammas.mean.indiv.temp[1:r.vec[s],, drop = FALSE] 
+        }
+        if (s != 1) {
+          gammas.mean.indiv[[s,1]] <- gammas.mean.indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
+        gammas.mean.indiv.reorder[[s,1]] <- gammas.mean.indiv[[s,1]][order_indiv[[s,1]],, drop = FALSE]
+      }
+    }
+    
+    gammas.mean.reorder <- rbind(gammas.mean[[1,1]][1,], gammas.mean.joint.reorder, do.call(rbind, gammas.mean.indiv.reorder))
+  }
+  
+  if (is.null(gammas)) {
+    gammas.mean.reorder <- NULL
+  }
+  
   # Return
   list(swapped_V.draw = swapped_V.draw, 
        swapped_U.draw = swapped_U.draw, 
@@ -4012,7 +4171,13 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
        swapped_betas = swapped_betas,
        swapped_gammas = swapped_gammas,
        swaps_made = swaps_made, 
-       signs_changed = signs_changed)
+       signs_changed = signs_changed,
+       V.mean.reorder = V.mean.reorder,
+       U.mean.reorder = U.mean.reorder,
+       Vs.mean.reorder = Vs.mean.reorder,
+       W.mean.reorder = W.mean.reorder,
+       betas.mean.reorder = betas.mean.reorder,
+       gammas.mean.reorder = gammas.mean.reorder)
 }
 
 
