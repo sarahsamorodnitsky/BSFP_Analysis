@@ -213,3 +213,36 @@ for (s2nX in s2nX.list) {
   }
 }
 names(all_s2n) <- combos
+
+
+# -----------------------------------------------------------------------------
+# Results
+# -----------------------------------------------------------------------------
+
+# Subset the s2n lists to make the table smaller for now
+s2nX.list.subset <- s2nY.list.subset <- s2nX.list[c(1, 4, 7)]
+
+# Set up the table 
+simulation_results <- data.frame(s2nX = numeric(),
+                                 s2nY = numeric(),
+                                 Metric = character(),
+                                 BPMF = numeric(),
+                                 JIVE = numeric(),
+                                 `BIDIFAC+` = numeric(),
+                                 check.names = FALSE)
+
+# Iterate through the s2ns and append to the table
+for (s2nX in s2nX.list.subset) {
+  for (s2nY in s2nY.list.subset) {
+    # Current results
+    res <- create_simulation_table(mod.list = c("BPMF", "JIVE", "BIDIFAC+"),
+                                   path.list = list(BPMF = "~/BayesianPMF/03Simulations/BPMF/",
+                                                    JIVE = "~/BayesianPMF/03Simulations/JIVE/",
+                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/"),
+                                   s2nX = s2nX, 
+                                   s2nY = s2nY)
+    # Save
+    simulation_results <- rbind.data.frame(simulation_results, res)
+  }
+}
+
