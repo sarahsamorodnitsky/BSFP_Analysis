@@ -146,6 +146,10 @@ fev1pp_training_fit_sparse <- bpmf(
 # Save the results
 save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(results_wd, "training_data_fit.rda"))
 
+# -----------------------------------------------------------------------------
+# Investigating training data fit results
+# -----------------------------------------------------------------------------
+
 # Assessing convergence for both model fits
 load(paste0(results_wd, "training_data_fit.rda"))
 
@@ -190,7 +194,8 @@ fev1pp_training_fit_sparse_ls <- label_switching(U.draw = fev1pp_training_fit_sp
                                                  gammas = fev1pp_training_fit_sparse$gamma.draw,
                                                  r = fev1pp_training_fit_sparse$ranks[1],
                                                  r.vec = fev1pp_training_fit_sparse$ranks[-1],
-                                                 nsample = nsample)
+                                                 nsample = nsample,
+                                                 thinned_iters_burnin = thinned_iters_burnin)
 
 fev1pp_training_fit_nonsparse_ls <- label_switching(U.draw = fev1pp_training_fit_nonsparse$U.draw,
                                                    V.draw = fev1pp_training_fit_nonsparse$V.draw,
@@ -200,7 +205,8 @@ fev1pp_training_fit_nonsparse_ls <- label_switching(U.draw = fev1pp_training_fit
                                                    gammas = NULL,
                                                    r = fev1pp_training_fit_nonsparse$ranks[1],
                                                    r.vec = fev1pp_training_fit_nonsparse$ranks[-1],
-                                                   nsample = nsample)
+                                                   nsample = nsample,
+                                                   thinned_iters_burnin = thinned_iters_burnin)
 
 # Check that label switching correctly swapped the columns
 correct_swaps_structure <- correct_swaps_lm <- c()
