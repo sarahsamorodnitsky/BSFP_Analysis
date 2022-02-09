@@ -3634,7 +3634,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     # Save 
     save(joint.recovery.structure.train, joint.recovery.structure.test,
          indiv.recovery.structure.train, indiv.recovery.structure.test,
-         mse_y_train, mse_y_test, coverage_EY_test, coverage_EY_test, mod.ranks, 
+         mse_y_train, mse_y_test, coverage_EY_train, coverage_EY_test, mod.ranks, 
          file = paste0("~/BayesianPMF/03Simulations/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda"))
     
     res <- c(joint.recovery.structure.train, joint.recovery.structure.test, indiv.recovery.structure.train, indiv.recovery.structure.test, mse_y_train, mse_y_test, coverage_EY_train, coverage_EY_test, mod.ranks)
@@ -3756,6 +3756,73 @@ create_validation_table <- function(results_list, condition) {
   
   # Return
   dt
+}
+
+create_simulation_table <- function(mod.list, path.list, s2nX, s2nY) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  #
+  # mod.list = vector with model names desired
+  # path.list = list of strings for file directory containing results from 
+  #   each model. List entries should be named by model
+  # s2nX = current s2n for data to load in
+  # s2nY = current s2n for response to load in
+  # ---------------------------------------------------------------------------
+  
+  # Set up the results table
+  simulation_results <- data.frame(s2nX = rep(s2nX, 11),
+                                   s2nY = rep(s2nY, 11),
+                                   Metric = numeric(11),
+                                   BPMF = numeric(11),
+                                   JIVE = numeric(11),
+                                   `BIDIFAC+` = numeric(11),
+                                   check.names = FALSE)
+  simulation_results$Metric <- c("MSE Joint (train)", "MSE Joint (test)", "MSE Indiv (train)",
+                                 "MSE Indiv (test)", "MSE Y (train)", "MSE Y (test)", 
+                                 "Coverage EY (train)", "Coverage EY (test)", "Joint Rank", 
+                                 "Indiv Rank 1", "Indiv Rank 2")
+  
+  # Iterate through the models
+  for (mod in mod.list) {
+    # Load in the files for this model
+    path <- path.list[[mod]]
+    all_files <- list.files(path)
+    all_files_split <- strsplit(all_files, split = "_")
+    
+    # Save the names of the current results
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[5] == s2nX) & (file[7] == paste0(s2nY, ".rda")))]
+    
+    # Create a temporary table to load the results into
+    simulation_results_temp <- data.frame(joint.structure.train = numeric(length(files_for_s2nX_s2nY)),
+                                          joint.structure.test = numeric(length(files_for_s2nX_s2nY)),
+                                          indiv.structure.train = numeric(length(files_for_s2nX_s2nY)),
+                                          indiv.structure.test = numeric(length(files_for_s2nX_s2nY)),
+                                          mse_y_train = numeric(length(files_for_s2nX_s2nY)),
+                                          mse_y_test = numeric(length(files_for_s2nX_s2nY)),
+                                          coverage_EY_train = numeric(length(files_for_s2nX_s2nY)),
+                                          coverage_EY_test = numeric(length(files_for_s2nX_s2nY)),
+                                          joint.rank = numeric(length(files_for_s2nX_s2nY)),
+                                          indiv.rank1 = numeric(length(files_for_s2nX_s2nY)),
+                                          indiv.rank2 = numeric(length(files_for_s2nX_s2nY)))
+    
+    # Iteratively load in the results
+    for (ind in 1:length(files_for_s2nX_s2nY)) {
+      # Load in the results
+      file <- files_for_s2nX_s2nY[ind]
+      res <- load(paste0(path, file))
+      simulation_results_temp[ind,] <- unlist(sapply(res, function(met) get(met)))
+    }
+    
+    # Take the mean for the results
+    simulation_results_temp_mean <- colMeans(simulation_results_temp)
+    
+    # Save the results
+    simulation_results[,mod] <- simulation_results_temp_mean
+  }
+  
+  # Return 
+  simulation_results
 }
 
 # The label switching algorithm. 
@@ -4094,6 +4161,7 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
   
   # Betas
   if (!is.null(betas)) {
+    betas.mean.reorder <- betas.mean
     betas.mean.indiv <- betas.mean.indiv.reorder <- matrix(list(), nrow = q, ncol = 1)
     
     # Joint effect
@@ -4130,6 +4198,7 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
   # Gammas
   
   if (!is.null(gammas)) {
+    gammas.mean.reorder <- gammas.mean
     gammas.mean.indiv <- gammas.mean.indiv.reorder <- matrix(list(), nrow = q, ncol = 1)
     
     # Joint effect
