@@ -2355,7 +2355,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
 }
 
 # Checking convergence
-log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_params, ranks, Y = NULL, beta.iter = NULL, tau2.iter = NULL, Xm.iter = NULL, gamma.iter = NULL, p.iter = NULL) {
+log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_params, ranks, Y = NULL, beta.iter = NULL, tau2.iter = NULL, Xm.iter = NULL, Ym.iter = NULL, gamma.iter = NULL, p.iter = NULL) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -2371,6 +2371,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   # tau2.iter = the value of the variance of the response if a continuous
   #   response is given
   # Xm.draw = the imputed values at the current Gibbs sampling iteration
+  # Ym.draw = the imputed values at the current Gibbs sampling iteration
   # ---------------------------------------------------------------------------
   
   library(invgamma)
@@ -2422,6 +2423,29 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   if (!missingness_in_data) {
     X_complete <- data
   }
+  
+  # Check if there is missingness in the response
+  missingness_in_response <- any(is.na(Y[[1,1]]))
+  
+  # Which entries are missing?
+  missing_obs_Y <- which(is.na(Y[[1,1]])) 
+  
+  # If there is missingness in the response, fill in the missing values with the current imputed values
+  if (missingness_in_response) {
+    # Create a completed response
+    Y_complete <- Y
+    
+    # Fill in the missing values
+    Y_complete[[1,1]][missing_obs_Y] <- Ym.iter[[1,1]]
+  }
+  
+  # If there is no missingness, rename the response
+  if (!missingness_in_response) {
+    Y_complete <- Y
+  }
+  
+  # Check if the model was fit with sparsity
+  sparsity <- !is.null(gamma.iter)
   
   # Saving the contributions of each term to the joint density
   like <- 0
@@ -2476,7 +2500,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
       if (response_type == "continuous") {
         # The contribution of the observed response to the joint density
         like <- like + sum(sapply(1:n, function(i) {
-          dnorm(Y[[1,1]][i,], mean = (VStar.iter %*% beta.iter[[1,1]])[i,], sd = sqrt(tau2.iter[[1,1]]), log = TRUE)
+          dnorm(Y_complete[[1,1]][i,], mean = (VStar.iter %*% beta.iter[[1,1]])[i,], sd = sqrt(tau2.iter[[1,1]]), log = TRUE)
         }))
         
         # The contribution of tau2 to the joint density
@@ -2486,7 +2510,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
       if (response_type == "binary") {
         # The contribution of the observed response to the joint density
         like <- like + sum(log(sapply(1:n, function(i) {
-          dbinom(Y[[1,1]][i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter[[1,1]]))
+          dbinom(Y_complete[[1,1]][i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter[[1,1]]))
         })))
       }
       
@@ -4169,7 +4193,7 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
       betas.mean.joint <- betas.mean.reorder[[1,1]][2:(r+1),, drop = FALSE] 
       betas.mean.joint.reorder <- betas.mean.joint[order_joint,, drop = FALSE]
     } else {
-      betas.mean.joint <- NULL
+      betas.mean.joint <- betas.mean.joint.reorder <-  NULL
     }
     
     # Individual effects
@@ -4206,7 +4230,7 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
       gammas.mean.joint <- gammas.mean[[1,1]][2:(r+1),, drop = FALSE]
       gammas.mean.joint.reorder <- gammas.mean.joint[order_joint,, drop = FALSE]
     } else {
-      gammas.mean.joint <- NULL
+      gammas.mean.joint <- gammas.mean.joint.reorder <- NULL
     }
     
     # Individual effects
@@ -4246,7 +4270,11 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
        Vs.mean.reorder = Vs.mean.reorder,
        W.mean.reorder = W.mean.reorder,
        betas.mean.reorder = betas.mean.reorder,
-       gammas.mean.reorder = gammas.mean.reorder)
+       gammas.mean.reorder = gammas.mean.reorder,
+       var_exp_joint = var_exp_joint, 
+       order_joint = order_joint, 
+       var_exp_indiv = var_exp_indiv,
+       order_indiv = order_indiv)
 }
 
 
