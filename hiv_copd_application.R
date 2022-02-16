@@ -639,7 +639,7 @@ funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
 packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
 
 # Running each training and test run in parallel
-cl <- makeCluster(5)
+cl <- makeCluster(3)
 registerDoParallel(cl)
 fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
   # Create a new vector of the outcome with the current pair set to NA
@@ -732,6 +732,7 @@ stopCluster(cl)
 # the posterior mean predicted outcome. Comparing to the true FEV1pp 
 
 fev1pp_cv_sparsity <- c()
+convergence_cv_sparsity <- c()
 for (pair in ind_of_pairs) {
   # Load in the results
   load(paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
@@ -744,6 +745,9 @@ for (pair in ind_of_pairs) {
   
   # Save in the vector
   fev1pp_cv_sparsity[pair:(pair+1)] <- rowMeans(samps_burnin)
+  
+  # Save the vector of log-joint densities after burn-in
+  convergence_cv_sparsity <- c(convergence_cv_sparsity, mean(convergence))
 }
 
 # Plotting the results
@@ -756,6 +760,7 @@ cor.test(fev1pp_cv_sparsity, c(fev1pp[[1,1]]))
 # Using the non-sparse model
 
 fev1pp_cv <- c()
+convergence_cv_nonsparse <- c()
 for (pair in ind_of_pairs) {
   # Load in the results
   load(paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
@@ -768,6 +773,9 @@ for (pair in ind_of_pairs) {
   
   # Save in the vector
   fev1pp_cv[pair:(pair+1)] <- rowMeans(samps_burnin)
+  
+  # Save the vector of log-joint densities after burn-in
+  convergence_cv_nonsparse <- c(convergence_cv_nonsparse, mean(convergence))
 }
 
 # Plotting the results
