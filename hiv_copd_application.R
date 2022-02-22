@@ -271,117 +271,81 @@ all(correct_swaps_lm)
 
 
 # -------------------------------------
-# Selection of factors in sparse model
+# Calculation of variance explained in data and response
 # -------------------------------------
 
-# Saving posterior probabilities ordered by variance explained
-gammas_ls <- fev1pp_training_fit_sparse_ls$gammas.mean.reorder 
-order_joint_ls <- fev1pp_training_fit_sparse_ls$order_joint
-order_indiv_ls <- fev1pp_training_fit_sparse_ls$order_indiv
-var_exp_joint_ls <- fev1pp_training_fit_sparse_ls$var_exp_joint
-var_exp_indiv_ls <- fev1pp_training_fit_sparse_ls$var_exp_indiv
+# Save the parameters each ordered by variance explained
+ranks <- fev1pp_training_fit_nonsparse$ranks
+betas_ls <- fev1pp_training_fit_nonsparse_ls$betas.mean.reorder
+V_ls <- fev1pp_training_fit_nonsparse_ls$V.mean.reorder
+U_ls <- fev1pp_training_fit_nonsparse_ls$U.mean.reorder
+Vs_ls <- fev1pp_training_fit_nonsparse_ls$Vs.mean.reorder
+W_ls <- fev1pp_training_fit_nonsparse_ls$W.mean.reorder
+
+# -----------------
+# Variance exp in X
+# -----------------
+
+# Calculate the Frobenius norm of each data source
+ss_biocrates <- frob(hiv_copd_data[[1,1]])
+ss_somascan <- frob(hiv_copd_data[[2,1]])
+
+# Calculate the contribution of joint structure for Biocrates
+ss_biocrates_joint <- frob(U_ls[[1,1]] %*% t(V_ls[[1,1]]))
+
+# Calculate the contribution of joint structure for Somascan
+ss_somascan_joint <- frob(U_ls[[2,1]] %*% t(V_ls[[1,1]]))
+
+# Calculate the contribution of individual structure for Biocrates
+ss_biocrates_indiv <- frob(W_ls[[1,1]] %*% t(Vs_ls[[1,1]]))
+
+# Calculate the contribution of individual structure for Somascan
+ss_somascan_indiv <- frob(W_ls[[2,2]] %*% t(Vs_ls[[1,2]]))
+
+# Calculate the variance explained
+prop_var_exp_biocrates_joint <- ss_biocrates_joint/ss_biocrates # Joint Biocrates
+prop_var_exp_somascan_joint <- ss_somascan_joint/ss_somascan # Joint Somascan
+prop_var_exp_biocrates_indiv <- ss_biocrates_indiv/ss_biocrates
+prop_var_exp_somascan_indiv <- ss_somascan_indiv/ss_somascan
+
+# -----------------
+# Variance exp in Y
+# -----------------
+
+# Calculate the sum of squared Ys
+ssY <- sum(fev1pp[[1,1]])
+
+# Calculate the contribution from joint prediction
+ss_joint_Y <- sum((V_ls[[1,1]] %*% betas_ls[2:(1+ranks[1]),,drop = FALSE])^2)
+ss_biocrates_Y <- sum((Vs_ls[[1,1]] %*% betas_ls[(2+ranks[1]):(1+ranks[1]+ranks[2]),,drop = FALSE])^2)
+ss_somascan_Y <- sum((Vs_ls[[1,2]] %*% betas_ls[(2+ranks[1]+ranks[2]):(1+sum(ranks)),,drop = FALSE])^2)
+
+# Calculate proportion variance explained
+var_exp_Y_joint <- ss_joint_Y/ssY
+var_exp_Y_biocrates <- ss_biocrates_Y/ssY
+var_exp_Y_somascan <- ss_somascan_Y/ssY
 
 # Creating table
 library(xtable)
-selection_df <- data.frame(Factor = character(length(gammas_ls) - 1),
-                           Post.Prob = numeric(length(gammas_ls) - 1),
-                           Var.Exp = numeric(length(gammas_ls) - 1))
+var_exp_df <- data.frame(Source = c("Metabolite", "Protein", "FEV1pp"),
+                         Joint = numeric(3),
+                         Indiv.Metab = numeric(3),
+                         Indiv.Protein = numeric(3))
+var_exp_df[1,2:4] <- c(prop_var_exp_biocrates_joint, prop_var_exp_biocrates_indiv, 0) # 0 because Somascan does not explain var in Biocrates
+var_exp_df[2,2:4] <- c(prop_var_exp_somascan_joint, 0, prop_var_exp_somascan_indiv) # 0 because Biocrates does not explain var in Somascan
+var_exp_df[3,2:4] <- c(var_exp_Y_joint, var_exp_Y_biocrates, var_exp_Y_somascan)
 
-# Saving the ranks from the sparse model
-ranks_ls <- fev1pp_training_fit_sparse$ranks
-
-# Filling in the table
-selection_df$Post.Prob <- gammas_ls[-1,]
-
-# Ordering the names of the factors
-joint_factor_names <- paste0("Joint ", 1:ranks_ls[1])
-joint_factor_names <- joint_factor_names[order_joint_ls]
-
-indiv_factor_names <- list(paste0("Metabolomics ", 1:ranks_ls[2]),
-                           paste0("Proteomics ", 1:ranks_ls[3]))
-indiv_factor_names <- lapply(1:q, function(s) {
-  indiv_factor_names[[s]][order_indiv_ls[[s,1]]]
-})
-
-# Combining them together
-factor_names <- c(joint_factor_names, unlist(indiv_factor_names))
-
-# Adding them to the table
-selection_df$Factor <- factor_names
-
-# Adding variance explained
-var_exp_joint_ls <- var_exp_joint_ls[order_joint_ls]
-var_exp_indiv_ls <- lapply(1:q, function(s) {
-  var_exp_indiv_ls[[s,1]][order_indiv_ls[[s]]]
-})
-var_exp <- c(var_exp_joint_ls, unlist(var_exp_indiv_ls))
-
-# Adding them to the table
-selection_df$Var.Exp <- var_exp
-
-# xtable
-print(xtable(selection_df, digits = 3), include.rownames = FALSE)
-
-
-# -------------------------------------
-# Comparing the training data fits
-# -------------------------------------
-
-latent_structure_sparse <- lapply(1:nsample, function(iter) {
-  lapply(1:q, function(s) {
-    fev1pp_training_fit_sparse$U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_sparse$V.draw[[iter]][[1,1]]) + fev1pp_training_fit_sparse$W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_sparse$Vs.draw[[iter]][[1,s]])
-  })
-})
-latent_structure_sparse <- list(Reduce("+", lapply(latent_structure_sparse, function(iter) iter[[1]]))/nsample,
-                                Reduce("+", lapply(latent_structure_sparse, function(iter) iter[[2]]))/nsample)
-
-latent_structure_nonsparse <- lapply(1:nsample, function(iter) {
-  lapply(1:q, function(s) {
-    fev1pp_training_fit_nonsparse$U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]]) + fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]])
-  })
-})
-latent_structure_nonsparse <- list(Reduce("+", lapply(latent_structure_nonsparse, function(iter) iter[[1]]))/nsample,
-                                   Reduce("+", lapply(latent_structure_nonsparse, function(iter) iter[[2]]))/nsample)
-
-frob(hiv_copd_data[[1,1]] - latent_structure_sparse[[1]]) # Sparse model fit for Biocrates
-frob(hiv_copd_data[[2,1]] - latent_structure_sparse[[2]]) # Sparse model fit for Somascan
-
-frob(hiv_copd_data[[1,1]] - latent_structure_nonsparse[[1]]) # Sparse model fit for Biocrates
-frob(hiv_copd_data[[2,1]] - latent_structure_nonsparse[[2]]) # Sparse model fit for Somascan
-
-# Joint Scores
-V_nonsparse <- Reduce("+", lapply(fev1pp_training_fit_nonsparse_ls$swapped_V.draw, function(iter) iter[[1,1]]))/nsample
-V_sparse <- Reduce("+", lapply(fev1pp_training_fit_sparse_ls$swapped_V.draw, function(iter) iter[[1,1]]))/nsample
-
-# Individual scores
-Vs_nonsparse <- Reduce("+", lapply(fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw, function(iter) do.call(cbind, iter)))/nsample
-Vs_sparse <- Reduce("+", lapply(fev1pp_training_fit_sparse_ls$swapped_Vs.draw, function(iter) do.call(cbind, iter)))/nsample
-
-# Betas
-betas_nonsparse <- Reduce("+", lapply(fev1pp_training_fit_nonsparse_ls$swapped_betas, function(iter) iter[[1,1]]))/nsample
-betas_sparse <- Reduce("+", lapply(fev1pp_training_fit_sparse_ls$swapped_betas, function(iter) iter[[1,1]]))/nsample
-
-# E(Y)
-EY_nonsparse <- cbind(1, V_nonsparse, Vs_nonsparse) %*% betas_nonsparse
-EY_sparse <- cbind(1, V_sparse, Vs_sparse) %*% betas_sparse
-
-# Compare to FEV1pp
-cor.test(EY_nonsparse, fev1pp[[1,1]])
-cor.test(EY_sparse, fev1pp[[1,1]])
-
-# Plotting E(Y) against FEV1pp
-png("~/BayesianPMF/04DataApplication/Figures/EY_vs_FEV1pp_Nonsparse.png")
-par(mfrow = c(1,1), mar = c(5.1, 4.1, 4.1, 2.1), xpd = FALSE)
-plot(EY_nonsparse, fev1pp[[1,1]], xlab = "Estimated FEV1pp (%)", ylab = "Observed FEV1pp (%)",
-     main = "Predicted vs. Observed FEV1pp", pch = 16)
-abline(a=0, b=1, lwd = 2, col = viridis(1))
-dev.off()
+# Print table
+print(xtable(var_exp_df, digits = 4), include.rownames = FALSE)
 
 # -----------------------------------------------------------------------------
 # PCA-like plots using non-sparse model
 # -----------------------------------------------------------------------------
 
 library(viridis)
+
+# Load in the clustering information
+load("~/HIV-COPD/Data/UnivariatePValuesUncombinedClusterComparison.rda", verbose = TRUE)
 
 # Creating colors for the plots
 ccstat_colors <- viridis(2)[clinical_data_soma$ccstat]
@@ -394,9 +358,6 @@ cluster_colors <- viridis(2)[clusters.soma]
 # Saving the posterior mean of the joint structure, ordered by variance explained 
 V_ls_nonsparse_mean_ordered <- fev1pp_training_fit_nonsparse_ls$V.mean.reorder[[1,1]]
 
-# Load in the clustering information
-load("~/HIV-COPD/Data/UnivariatePValuesUncombinedClusterComparison.rda", verbose = TRUE)
-
 # Plot subjects against every combination of PCs
 joint_rank <- fev1pp_training_fit_nonsparse$ranks[1]
 pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Joint_Structure_PCA_Plot.pdf"), width = 15)
@@ -405,13 +366,13 @@ for (rs1 in 1:joint_rank) {
    if (rs1 != rs2) {
      par(mfrow = c(1,2), mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
      # Plot with case-control label as colors
-     plot(V_ls_nonsparse_mean_ordered[,rs1], V_ls_nonsparse_mean_ordered[,rs2], pch = 16, xlab = paste0("Joint Score ", rs1),
-          ylab = paste0("Joint Score ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
+     plot(V_ls_nonsparse_mean_ordered[,rs1], V_ls_nonsparse_mean_ordered[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
+          ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
           col = ccstat_colors)
      
      # Plot with stand-out subjects as colors
-     plot(V_ls_nonsparse_mean[,rs1], V_ls_nonsparse_mean[,rs2], pch = 16, xlab = paste0("Joint Score ", rs1),
-          ylab = paste0("Joint Score ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
+     plot(V_ls_nonsparse_mean_ordered[,rs1], V_ls_nonsparse_mean_ordered[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
+          ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
           col = cluster_colors)
      par(mfrow = c(1,1))
    }
@@ -434,13 +395,13 @@ for (rs1 in 1:indiv_rank1) {
     if (rs1 != rs2) {
       par(mfrow = c(1,2))
       # Plot with case-control label as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,1]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,1]][,rs2], pch = 16, xlab = paste0("Individual Score ", rs1),
-           ylab = paste0("Individual Score ", rs2), main = paste0("Individual Factors Biocrates ", rs1, " vs ", rs2),
+      plot(Vs_ls_nonsparse_mean_ordered[[1,1]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,1]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+           ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Metabolomic ", rs1, " vs ", rs2),
            col = ccstat_colors)
       
       # Plot with stand-out subjects as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,1]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,1]][,rs2], pch = 16, xlab = paste0("Individual Score ", rs1),
-           ylab = paste0("Individual Score ", rs2), main = paste0("Individual Factors Biocrates ", rs1, " vs ", rs2),
+      plot(Vs_ls_nonsparse_mean_ordered[[1,1]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,1]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+           ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Metabolomic ", rs1, " vs ", rs2),
            col = cluster_colors)
       par(mfrow = c(1,1))
     }
@@ -456,19 +417,23 @@ for (rs1 in 1:indiv_rank2) {
     if (rs1 != rs2) {
       par(mfrow = c(1,2))
       # Plot with case-control label as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,2]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,2]][,rs2], pch = 16, xlab = paste0("Individual Score ", rs1),
-           ylab = paste0("Individual Score ", rs2), main = paste0("Individual Factors Somascan ", rs1, " vs ", rs2),
+      plot(Vs_ls_nonsparse_mean_ordered[[1,2]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,2]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+           ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Proteomic ", rs1, " vs ", rs2),
            col = ccstat_colors)
       
       # Plot with stand-out subjects as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,2]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,2]][,rs2], pch = 16, xlab = paste0("Individual Score ", rs1),
-           ylab = paste0("Individual Score ", rs2), main = paste0("Individual Factors Somascan ", rs1, " vs ", rs2),
+      plot(Vs_ls_nonsparse_mean_ordered[[1,2]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,2]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+           ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Proteomic ", rs1, " vs ", rs2),
            col = cluster_colors)
       par(mfrow = c(1,1))
     }
   } 
 }
 dev.off()
+
+# -----------------------------------------------------------------------------
+# Kernel density plots for particular factors
+# -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # Heatmaps on non-sparse model
@@ -516,49 +481,6 @@ dev.off()
 pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Somascan.pdf"), width = 15)
 showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 2)
 dev.off()
-
-# -----------------------------------------------------------------------------
-# Calculating meta-loadings for each feature
-# -----------------------------------------------------------------------------
-
-# Saving the joint loadings after taking the posterior mean and ordering by variance explained
-U.mean.reorder <- fev1pp_training_fit_nonsparse_ls$U.mean.reorder
-
-# Saving the individual loadings after taking the posterior mean and ordering by variance explained
-W.mean.reorder <- fev1pp_training_fit_nonsparse_ls$W.mean.reorder
-
-# Saving the betas vector ordered by variance explained
-betas.mean.reorder <- fev1pp_training_fit_nonsparse_ls$betas.mean.reorder
-
-# Iterating through the Biocrates metabolite factors and calculating the linear combination between
-# each joint and individual loading with the corresponding beta
-
-# Save the meta loadings vector
-n_metab <- nrow(lavage_processed_no_info_log_scale)
-n_protein <- nrow(somascan_normalized_clean_no_info_transpose_scale)
-meta_loadings <- matrix(list(), nrow = q, ncol = 1)
-
-# Save the indiv ranks
-indiv_ranks <- fev1pp_training_fit_nonsparse$ranks[-1]
-
-# Iterate through each metabolite, take linear combination with betas
-for (s in 1:q) {
-  if (s == 1) {
-    for (i in 1:n_metab) {
-      meta_loadings[[s,1]][i] <- 
-        U.mean.reorder[[s,1]][i,,drop = FALSE] %*% betas.mean.reorder[2:(joint_rank+1),,drop = FALSE] + 
-        W.mean.reorder[[s,s]][i,,drop = FALSE] %*% betas.mean.reorder[(joint_rank+2):(indiv_rank1+joint_rank+1),,drop = FALSE] 
-    }
-  }
-  
-  if (s == 2) {
-    for (i in 1:n_protein) {
-      meta_loadings[[s,1]][i] <- 
-        U.mean.reorder[[s,1]][i,,drop = FALSE] %*% betas.mean.reorder[2:(joint_rank+1),,drop = FALSE] + 
-        W.mean.reorder[[s,s]][i,,drop = FALSE] %*% betas.mean.reorder[(indiv_rank1+joint_rank+2):(indiv_rank1+indiv_rank2+joint_rank+1),,drop = FALSE] 
-    }
-  }
-}
 
 # -----------------------------------------------------------------------------
 # Credible Intervals for Coefficients Using Non-Sparse Model
@@ -783,5 +705,14 @@ plot(fev1pp_cv, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FE
 abline(a=0, b=1)
 cor.test(fev1pp_cv, c(fev1pp[[1,1]]))
 
+# Plotting observed vs. predicted from both models together
+png("~/BayesianPMF/04DataApplication/Figures/Observed_vs_Predicted_FEV1pp.png", width = 800)
+par(mfrow = c(1,2))
+plot(fev1pp_cv_sparsity, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp \n from Sparse Model", pch = 16)
+abline(a=0, b=1)
+plot(fev1pp_cv, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp \n from Non-Sparse Model", pch = 16)
+abline(a=0, b=1)
+par(mfrow = c(1,1))
+dev.off()
 
 
