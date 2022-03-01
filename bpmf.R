@@ -3420,7 +3420,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     
     if (mod == "JIVE") {
       # Running JIVE
-      mod.out <- jive(training_data_list)
+      mod.out <- jive(training_data_list, scale = FALSE, center = FALSE)
       
       # Saving the joint structure
       mod.joint <- mod.out$joint
