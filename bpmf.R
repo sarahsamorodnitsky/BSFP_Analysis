@@ -90,7 +90,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   # ---------------------------------------------------------------------------
   
   if (nninit) {
-    rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE)
+    rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
     
     # Print when finished
     print("Posterior mode obtained: joint and individual ranks determined.")
