@@ -1341,10 +1341,10 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
     ind1= start.ind.m[i]:end.ind.m[i]
     for (j in 1:q){
       ind2=start.ind.n[j]:end.ind.n[j]
-      G00.mat[[i,j]]=G00[ind1,ind2]*sigma.mat[i,j]
-      R00.mat[[i,j]]=R00[ind1,ind2]*sigma.mat[i,j]
-      C00.mat[[i,j]]=C00[ind1,ind2]*sigma.mat[i,j]
-      I00.mat[[i,j]]=I00[ind1,ind2]*sigma.mat[i,j]
+      G00.mat[[i,j]]=G00[ind1,ind2] #*sigma.mat[i,j] Remove the scaling back by the error variance
+      R00.mat[[i,j]]=R00[ind1,ind2] #*sigma.mat[i,j]
+      C00.mat[[i,j]]=C00[ind1,ind2] #*sigma.mat[i,j]
+      I00.mat[[i,j]]=I00[ind1,ind2] #*sigma.mat[i,j]
       S00.mat[[i,j]]=G00.mat[[i,j]]+R00.mat[[i,j]]+C00.mat[[i,j]]+I00.mat[[i,j]]
     }
   }
