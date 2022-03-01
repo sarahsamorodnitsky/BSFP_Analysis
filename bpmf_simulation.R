@@ -24,11 +24,11 @@ p.vec = c(100, 100)
 n = 100
 
 # Parameters for data generation
-true_params <- model_params <- list(error_vars = c(1,1), # Error variance for each source
-                                    joint_var = 1, # Variance for joint structure
-                                    indiv_vars = c(1,1), # Variance for each individual structure
-                                    beta_vars = c(10, 1, rep(1, q)), # Variance of intercept effect and each joint effect 
-                                    response_vars = c(shape = 1, rate = 1)) # Hyperparameters for variance of response (if continuous)
+true_params <- list(error_vars = c(1,1), # Error variance for each source
+                    joint_var = 1, # Variance for joint structure
+                    indiv_vars = c(1,1), # Variance for each individual structure
+                    beta_vars = c(10, 1, rep(1, q)), # Variance of intercept effect and each joint effect 
+                    response_vars = c(shape = 1, rate = 1)) # Hyperparameters for variance of response (if continuous)
 
 # Parameters for the simulation
 nsample <- 2000
@@ -181,6 +181,13 @@ MOFA.res[[ind]] <- run_each_mod(mod = "MOFA", p.vec, n, ranks, response = "conti
 # -----------------------------------------------------------------------------
 # BPMF
 # -----------------------------------------------------------------------------
+
+# Setting the model variances
+model_params <- list(error_vars = c(1,1), # Error variance for each source
+                     joint_var = 1/(sqrt(n) + sqrt(sum(p.vec))), # Variance for joint structure
+                     indiv_vars = c(1/(sqrt(n) + sqrt(p.vec[1])), 1/(sqrt(n) + sqrt(p.vec[2]))), # Variance for each individual structure
+                     beta_vars = c(10, 1, rep(1, q)), # Variance of intercept effect and each joint effect 
+                     response_vars = c(shape = 1, rate = 1)) # Hyperparameters for variance of response (if continuous)
 
 BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
