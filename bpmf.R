@@ -1257,7 +1257,7 @@ estim_sigma <- function (X, k = NA, method = c("LN", "MAD"), center = "TRUE") {
 
 BIDIFAC=function(data,rmt=T, sigma=NULL,
                  start=NULL, out=FALSE,
-                 eps=1e-3, max.iter=1000, pbar=TRUE, seed=NULL, ...){
+                 eps=1e-3, max.iter=1000, pbar=TRUE, seed=NULL, scale_back = TRUE, ...){
   if (!is.null(seed)){set.seed(seed)}
   if (!rmt & class(sigma)!="matrix") stop("sigma must be a matrix.")
   
@@ -1336,16 +1336,33 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
     else{ count = count+1 }
   }
   
-  S00.mat=G00.mat=R00.mat=C00.mat=I00.mat=data
-  for (i in 1:p){
-    ind1= start.ind.m[i]:end.ind.m[i]
-    for (j in 1:q){
-      ind2=start.ind.n[j]:end.ind.n[j]
-      G00.mat[[i,j]]=G00[ind1,ind2] #*sigma.mat[i,j] Remove the scaling back by the error variance
-      R00.mat[[i,j]]=R00[ind1,ind2] #*sigma.mat[i,j]
-      C00.mat[[i,j]]=C00[ind1,ind2] #*sigma.mat[i,j]
-      I00.mat[[i,j]]=I00[ind1,ind2] #*sigma.mat[i,j]
-      S00.mat[[i,j]]=G00.mat[[i,j]]+R00.mat[[i,j]]+C00.mat[[i,j]]+I00.mat[[i,j]]
+  if (scale_back) {
+    S00.mat=G00.mat=R00.mat=C00.mat=I00.mat=data
+    for (i in 1:p){
+      ind1= start.ind.m[i]:end.ind.m[i]
+      for (j in 1:q){
+        ind2=start.ind.n[j]:end.ind.n[j]
+        G00.mat[[i,j]]=G00[ind1,ind2] *sigma.mat[i,j] 
+        R00.mat[[i,j]]=R00[ind1,ind2] *sigma.mat[i,j]
+        C00.mat[[i,j]]=C00[ind1,ind2] *sigma.mat[i,j]
+        I00.mat[[i,j]]=I00[ind1,ind2] *sigma.mat[i,j]
+        S00.mat[[i,j]]=G00.mat[[i,j]]+R00.mat[[i,j]]+C00.mat[[i,j]]+I00.mat[[i,j]]
+      }
+    }
+  }
+  
+  if (!scale_back) {
+    S00.mat=G00.mat=R00.mat=C00.mat=I00.mat=data
+    for (i in 1:p){
+      ind1= start.ind.m[i]:end.ind.m[i]
+      for (j in 1:q){
+        ind2=start.ind.n[j]:end.ind.n[j]
+        G00.mat[[i,j]]=G00[ind1,ind2] #*sigma.mat[i,j] Remove the scaling back by the error variance
+        R00.mat[[i,j]]=R00[ind1,ind2] #*sigma.mat[i,j]
+        C00.mat[[i,j]]=C00[ind1,ind2] #*sigma.mat[i,j]
+        I00.mat[[i,j]]=I00[ind1,ind2] #*sigma.mat[i,j]
+        S00.mat[[i,j]]=G00.mat[[i,j]]+R00.mat[[i,j]]+C00.mat[[i,j]]+I00.mat[[i,j]]
+      }
     }
   }
   
