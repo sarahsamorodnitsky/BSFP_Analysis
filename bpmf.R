@@ -3312,43 +3312,43 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     # Center and scale X and y to have variance 1
     # -------------------------------------------------------------------------
     
-    for (s in 1:q) {
-      # Center and scale the observed training data (transpose to scale the cols (features) than transpose back)
-      training_data[[s,1]] <- t(scale(t(training_data[[s,1]]), center = TRUE, scale = TRUE))
-      training_data_list[[s]] <- t(scale(t(training_data_list[[s]]), center = TRUE, scale = TRUE))
-      
-      # Save the means and variances
-      row_means_train <- attr(training_data[[s,1]], "scaled:center")
-      row_sd_train <- attr(training_data[[s,1]], "scaled:scale")
-      
-      # Subtract each column by the same mean and divide by the same sd above
-      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_means_train)
-      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_sd_train, FUN = "/")
-      
-      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_means_train)
-      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_sd_train, FUN = "/")
-      
-      # Center and scale the observed test data
-      test_data[[s,1]] <- t(scale(t(test_data[[s,1]]), center = TRUE, scale = TRUE))
-      test_data_list[[s]] <- t(scale(t(test_data_list[[s]]), center = TRUE, scale = TRUE))
-      
-      # Save the means and variances
-      row_means_test <- attr(test_data[[s,1]], "scaled:center")
-      row_sd_test <- attr(test_data[[s,1]], "scaled:scale")
-      
-      # Subtract each column by the same mean and divide by the same sd above
-      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_means_test)
-      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_sd_test, FUN = "/")
-      
-      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_means_test)
-      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_sd_test, FUN = "/")
-    }
-
-    Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = TRUE)
-    EY_train[[1,1]] <- (EY_train[[1,1]] - attr(Y_train[[1,1]], "scaled:center"))/attr(Y_train[[1,1]], "scaled:scale")
-    
-    Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = TRUE)
-    EY_test[[1,1]] <- (EY_test[[1,1]] - attr(Y_test[[1,1]], "scaled:center"))/attr(Y_test[[1,1]], "scaled:scale")
+    # for (s in 1:q) {
+    #   # Center and scale the observed training data (transpose to scale the cols (features) than transpose back)
+    #   training_data[[s,1]] <- t(scale(t(training_data[[s,1]]), center = TRUE, scale = TRUE))
+    #   training_data_list[[s]] <- t(scale(t(training_data_list[[s]]), center = TRUE, scale = TRUE))
+    #   
+    #   # Save the means and variances
+    #   row_means_train <- attr(training_data[[s,1]], "scaled:center")
+    #   row_sd_train <- attr(training_data[[s,1]], "scaled:scale")
+    #   
+    #   # Subtract each column by the same mean and divide by the same sd above
+    #   joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_means_train)
+    #   joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_sd_train, FUN = "/")
+    #   
+    #   indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_means_train)
+    #   indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_sd_train, FUN = "/")
+    #   
+    #   # Center and scale the observed test data
+    #   test_data[[s,1]] <- t(scale(t(test_data[[s,1]]), center = TRUE, scale = TRUE))
+    #   test_data_list[[s]] <- t(scale(t(test_data_list[[s]]), center = TRUE, scale = TRUE))
+    #   
+    #   # Save the means and variances
+    #   row_means_test <- attr(test_data[[s,1]], "scaled:center")
+    #   row_sd_test <- attr(test_data[[s,1]], "scaled:scale")
+    #   
+    #   # Subtract each column by the same mean and divide by the same sd above
+    #   joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_means_test)
+    #   joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_sd_test, FUN = "/")
+    #   
+    #   indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_means_test)
+    #   indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_sd_test, FUN = "/")
+    # }
+    # 
+    # Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = TRUE)
+    # EY_train[[1,1]] <- (EY_train[[1,1]] - attr(Y_train[[1,1]], "scaled:center"))/attr(Y_train[[1,1]], "scaled:scale")
+    # 
+    # Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = TRUE)
+    # EY_test[[1,1]] <- (EY_test[[1,1]] - attr(Y_test[[1,1]], "scaled:center"))/attr(Y_test[[1,1]], "scaled:scale")
     
     # -------------------------------------------------------------------------
     # Fit each model on generated data to obtain estimate of underlying structure
@@ -3518,8 +3518,12 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     }
     
     if (mod == "BPMF") {
+      # Setting the test response to NA
+      Y_NA_for_test <- Y
+      Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
+      
       # Running BPMF
-      mod.out <- bpmf(training_data, Y = Y_train, nninit = TRUE, model_params = model_params, nsample = nsample)
+      mod.out <- bpmf(true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
       
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
@@ -3585,7 +3589,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     mod.ranks <- c(joint.rank, indiv.rank)
     
     # Combining all scores together
-    all.scores <- cbind(Y_train[[1,1]], joint.scores, do.call(cbind, indiv.scores))
+    all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
     colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
     
     # -------------------------------------------------------------------------
@@ -3634,11 +3638,11 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
       
       coverage_EY_train <- mean(sapply(1:n, function(i) {
-        (EY_train[[1,1]][i,] >= ci_by_Y[1,i]) & (EY_train[[1,1]][i,] <= ci_by_Y[2,i])
+        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
       }))
       
-      coverage_EY_test <- mean(sapply(1:n, function(i) {
-        (EY_test[[1,1]][i,] >= ci_by_Y[1,i]) & (EY_test[[1,1]][i,] <= ci_by_Y[2,i])
+      coverage_EY_test <- mean(sapply((n+1):(2*n), function(i) {
+        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
       }))
     }
     
@@ -3648,20 +3652,20 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     
     # Joint structure
     joint.recovery.structure.train <- mean(sapply(1:q, function(source) {
-      frob(mod.joint[[source]] - joint.structure_train[[source,1]])/frob(joint.structure_train[[source,1]])
+      frob(mod.joint[[source]][,1:n] - joint.structure_train[[source,1]])/frob(joint.structure_train[[source,1]])
     }))
     
     joint.recovery.structure.test <- mean(sapply(1:q, function(source) {
-      frob(mod.joint[[source]] - joint.structure_test[[source,1]])/frob(joint.structure_test[[source,1]])
+      frob(mod.joint[[source]][,(n+1):(2*n)] - joint.structure_test[[source,1]])/frob(joint.structure_test[[source,1]])
     }))
     
     # Individual structure
     indiv.recovery.structure.train <- mean(sapply(1:q, function(source) {
-      frob(mod.individual[[source]] - indiv.structure_train[[source,1]])/frob(indiv.structure_train[[source,1]])
+      frob(mod.individual[[source]][,1:n] - indiv.structure_train[[source,1]])/frob(indiv.structure_train[[source,1]])
     }))
     
     indiv.recovery.structure.test <- mean(sapply(1:q, function(source) {
-      frob(mod.individual[[source]] - indiv.structure_test[[source,1]])/frob(indiv.structure_test[[source,1]])
+      frob(mod.individual[[source]][,(n+1):(2*n)] - indiv.structure_test[[source,1]])/frob(indiv.structure_test[[source,1]])
     }))
     
     # -------------------------------------------------------------------------
@@ -3669,8 +3673,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     # -------------------------------------------------------------------------
     
     # Comparing the predicted Y to the training and test Y
-    mse_y_train <- frob(Y.fit - Y_train[[1,1]])/frob(Y_train[[1,1]])
-    mse_y_test <- frob(Y.fit - Y_test[[1,1]])/frob(Y_test[[1,1]])
+    mse_y_train <- frob(Y.fit[1:n,] - Y_train[[1,1]])/frob(Y_train[[1,1]])
+    mse_y_test <- frob(Y.fit[1:n,] - Y_test[[1,1]])/frob(Y_test[[1,1]])
     
     # Save 
     save(joint.recovery.structure.train, joint.recovery.structure.test,
