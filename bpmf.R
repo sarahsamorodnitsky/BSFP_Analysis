@@ -872,12 +872,33 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     }
   }
   
+  # ---------------------------------------------------------------------------
+  # Calculating the joint and individual structure, scaled to the data
+  # ---------------------------------------------------------------------------
+  
+  # Storing the joint structure at each Gibbs sampling iteration
+  Joint.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  
+  # Storing the individual structure at each Gibbs sampling iteration
+  Indiv.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  
+  for (iter in 1:nsample) {
+    for (s in 1:q) {
+      # Calculating the joint structure and scaling by sigma.mat
+      Joint.draw[[iter]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+      
+      # Calculating the individual structure and scaling by sigma.mat
+      Indiv.draw[[iter]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+    }
+  }
+  
   # Return
   list(data = data, # Returning the scaled version of the data
         Y = Y, # Return the response vector
         sigma.mat = sigma.mat, # Returning the scaling factors
         V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw,
         Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
+        Joint.draw = Joint.draw, Indiv.draw = Indiv.draw,
         scores = scores,
         tau2.draw = tau2.draw, beta.draw = beta.draw,
         ranks = c(r, r.vec), gamma.draw = gamma.draw, p.draw = p.draw)
