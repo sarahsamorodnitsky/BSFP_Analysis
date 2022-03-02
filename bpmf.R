@@ -3524,7 +3524,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
         lapply(1:q, function(source) {
-          mod.out$U.draw[[iter]][[source,1]] %*% t(mod.out$V.draw[[iter]][[1]])
+          (mod.out$U.draw[[iter]][[source,1]] %*% t(mod.out$V.draw[[iter]][[1]])) * mod.out$sigma.mat[source,]
         })
       })
       
@@ -3541,7 +3541,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       # Saving the individual structure
       mod.individual.iter <- lapply(1:nsample, function(iter) {
         lapply(1:q, function(source) {
-          mod.out$W.draw[[iter]][[source,source]] %*% t(mod.out$Vs.draw[[iter]][[1,source]])
+          (mod.out$W.draw[[iter]][[source,source]] %*% t(mod.out$Vs.draw[[iter]][[1,source]])) * mod.out$sigma.mat[source,]
         })
       })
       
