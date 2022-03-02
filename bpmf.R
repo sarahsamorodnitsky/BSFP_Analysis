@@ -3398,7 +3398,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     
     if (mod == "BIDIFAC+") {
       # Run model
-      mod.out <- BIDIFAC(training_data, rmt = FALSE, pbar = FALSE, scale_back = TRUE, sigma = matrix(1, nrow = 2))
+      mod.out <- BIDIFAC(true_data, rmt = FALSE, pbar = FALSE, scale_back = TRUE, sigma = matrix(1, nrow = 2))
       
       # Saving the column structure (the joint structure)
       mod.joint <- lapply(1:q, function(source) {
@@ -3437,7 +3437,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     
     if (mod == "JIVE") {
       # Running JIVE
-      mod.out <- jive(training_data_list, scale = FALSE)
+      mod.out <- jive(true_data_list, scale = FALSE)
       
       # Saving the joint structure
       mod.joint <- mod.out$joint
@@ -3471,7 +3471,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     if (mod == "MOFA") {
       # Create the MOFA object
       MOFAobject <- prepare_mofa(
-        object = create_mofa(training_data_list)
+        object = create_mofa(true_data_list)
       )
     
       # Train the MOFA model
@@ -3597,9 +3597,12 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     # -------------------------------------------------------------------------
     
     if (mod %in% c("BIDIFAC+", "JIVE", "MOFA")) {
+      # Subset the scores to just the training data
+      all.scores.train <- all.scores[1:n,]
+      
       # Fitting the Bayesian linear model
       mod.bayes <- bpmf(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
-                        ranks = mod.ranks, scores = all.scores[,-1], nsample = nsample)
+                        ranks = mod.ranks, scores = all.scores.train[,-1], nsample = nsample)
       
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
       Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
@@ -3615,11 +3618,11 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
       
       coverage_EY_train <- mean(sapply(1:n, function(i) {
-        (EY_train[[1,1]][i,] >= ci_by_Y[1,i]) & (EY_train[[1,1]][i,] <= ci_by_Y[2,i])
+        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
       }))
       
-      coverage_EY_test <- mean(sapply(1:n, function(i) {
-        (EY_test[[1,1]][i,] >= ci_by_Y[1,i]) & (EY_test[[1,1]][i,] <= ci_by_Y[2,i])
+      coverage_EY_test <- mean(sapply((n+1):(2*n), function(i) {
+        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
       }))
     }
     
