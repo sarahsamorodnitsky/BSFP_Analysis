@@ -882,13 +882,15 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   # Storing the individual structure at each Gibbs sampling iteration
   Indiv.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   
-  for (iter in 1:nsample) {
-    for (s in 1:q) {
-      # Calculating the joint structure and scaling by sigma.mat
-      Joint.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
-      
-      # Calculating the individual structure and scaling by sigma.mat
-      Indiv.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+  if (is.null(scores)) {
+    for (iter in 1:nsample) {
+      for (s in 1:q) {
+        # Calculating the joint structure and scaling by sigma.mat
+        Joint.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+        
+        # Calculating the individual structure and scaling by sigma.mat
+        Indiv.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+      }
     }
   }
   
@@ -900,9 +902,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   Joint.mean <- matrix(list(), nrow = q, ncol = 1)
   Indiv.mean <- matrix(list(), nrow = q, ncol = 1)
   
-  for (s in 1:q) {
-    Joint.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Joint.draw[[iter]][[s,1]]))/length(Joint.draw)
-    Indiv.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Indiv.draw[[iter]][[s,1]]))/length(Indiv.draw)
+  if (is.null(scores)) {
+    for (s in 1:q) {
+      Joint.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Joint.draw[[iter]][[s,1]]))/length(Joint.draw)
+      Indiv.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Indiv.draw[[iter]][[s,1]]))/length(Indiv.draw)
+    }
   }
   
   # Return
