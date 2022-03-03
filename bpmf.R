@@ -885,23 +885,38 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   for (iter in 1:nsample) {
     for (s in 1:q) {
       # Calculating the joint structure and scaling by sigma.mat
-      Joint.draw[[iter]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+      Joint.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
       
       # Calculating the individual structure and scaling by sigma.mat
-      Indiv.draw[[iter]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+      Indiv.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
     }
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Calculating the posterior mean
+  # ---------------------------------------------------------------------------
+  
+  # Storing the posterior mean for the joint and individual structure
+  Joint.mean <- matrix(list(), nrow = q, ncol = 1)
+  Indiv.mean <- matrix(list(), nrow = q, ncol = 1)
+  
+  for (s in 1:q) {
+    Joint.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Joint.draw[[iter]][[s,1]]))/length(Joint.draw)
+    Indiv.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Indiv.draw[[iter]][[s,1]]))/length(Indiv.draw)
   }
   
   # Return
   list(data = data, # Returning the scaled version of the data
         Y = Y, # Return the response vector
-        sigma.mat = sigma.mat, # Returning the scaling factors
-        V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw,
-        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw,
-        Joint.draw = Joint.draw, Indiv.draw = Indiv.draw,
-        scores = scores,
-        tau2.draw = tau2.draw, beta.draw = beta.draw,
-        ranks = c(r, r.vec), gamma.draw = gamma.draw, p.draw = p.draw)
+        sigma.mat = sigma.mat, # Scaling factors
+        Joint.draw = Joint.draw, Indiv.draw = Indiv.draw, # Underlying structure
+        Joint.mean = Joint.mean, Indiv.mean = Indiv.mean, # Posterior mean of structures
+        V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
+        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
+        scores = scores, # Scores if provided by another method 
+        ranks = c(r, r.vec), # Ranks
+        tau2.draw = tau2.draw, beta.draw = beta.draw, # Regression parameters
+        gamma.draw = gamma.draw, p.draw = p.draw) # Sparsity parameters
 
 }
 
