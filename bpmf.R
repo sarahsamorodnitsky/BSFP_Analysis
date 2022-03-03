@@ -3640,10 +3640,10 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       mod.bayes <- bpmf(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
                         ranks = mod.ranks, scores = all.scores.train[,-1], nsample = nsample)
       
-      # Calculate the predicted E(Y) at each Gibbs sampling iteration
+      # Calculate the predicted E(Y) at each Gibbs sampling iteration using training and testing scores
       Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
         VStar.iter <- cbind(1, all.scores[,-1])
-        beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]]
+        beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]] # Beta depends only on training data
         VStar.iter %*% beta.iter
       })
       
