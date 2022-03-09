@@ -1325,8 +1325,8 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
     G00=start[[1]]; R00=start[[2]]
     C00=start[[3]]; I00=start[[4]]
   } else {
-    G00=replicate(sum(nvec),rnorm(sum(mvec)))
-    R00=replicate(sum(nvec),rnorm(sum(mvec)))
+    G00= matrix(0, nrow = sum(mvec), ncol = sum(nvec)) # replicate(sum(nvec),rnorm(sum(mvec)))
+    R00= matrix(0, nrow = sum(mvec), ncol = sum(nvec)) # replicate(sum(nvec),rnorm(sum(mvec)))
     C00=replicate(sum(nvec),rnorm(sum(mvec)))
     I00=replicate(sum(nvec),rnorm(sum(mvec)))
   }
@@ -1341,15 +1341,18 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
     if (pbar){  setTxtProgressBar(pb, count)  }
     crit0.old = crit0
     
-    #Update G
+    #Update G to 0
     fit1=softSVD(X00-R00-C00-I00,lambda.G)
-    G00=fit1$out; G00.nuc=fit1$nuc
+    G00 <- matrix(0, nrow = sum(mvec), ncol = sum(nvec)) # G00=fit1$out; 
+    G00.nuc=fit1$nuc
     
-    #update R
+    #update R to 0
     for (i in 1:p){
       ind=start.ind.m[i]:end.ind.m[i]
       fit1=softSVD(X00[ind,]-G00[ind,]-C00[ind,]-I00[ind,], lambda.R[i])
-      R00[ind,]=fit1$out; R00.nuc[i]=fit1$nuc
+      # R00[ind,]=fit1$out; 
+      R00 <- matrix(0, nrow = sum(mvec), ncol = sum(nvec))
+      R00.nuc[i]=fit1$nuc
     }
     
     for (j in 1:q){
