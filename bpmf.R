@@ -111,9 +111,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   if (!nninit) {
     r <- ranks[1]
     r.vec <- ranks[-1]
-    sigma.mat <- matrix(list(), nrow = q, 1)
+    sigma.mat <- matrix(nrow = q, 1)
     for (s in 1:q) {
-      sigma.mat[[s,1]] <- 1
+      sigma.mat[s,1] <- 1
     }
   }
   
