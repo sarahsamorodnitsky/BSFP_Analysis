@@ -2831,7 +2831,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     
     if (mod == "BIDIFAC+") {
       # Run model
-      mod.out <- BIDIFAC(true_data, rmt = FALSE, pbar = FALSE, scale_back = TRUE, sigma = matrix(1, nrow = 2))
+      mod.out <- BIDIFAC(true_data, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
       
       # Saving the column structure (the joint structure)
       mod.joint <- lapply(1:q, function(source) {
