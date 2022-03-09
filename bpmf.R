@@ -4119,7 +4119,7 @@ create_simulation_table <- function(mod.list, path.list, s2nX, s2nY) {
   simulation_results
 }
 
-# The label switching algorithm. 
+# The label switching algorithm: matches results to the posterior mode
 label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample, thinned_iters_burnin) {
   
   # ---------------------------------------------------------------------------
@@ -4148,9 +4148,17 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
   # Storing the sign changes so they can be undone
   signs_changed <- lapply(1:length(swapped_U.draw), function(iter) list())
   
-  # Setting the pivots
-  pivot_V <- V.draw[[nsample]]
-  pivot_Vs <- Vs.draw[[nsample]]
+  # Setting the pivots to the posterior mode
+  V.draw.thinned.burnin <- lapply(V.draw[thinned_iters_burnin], function(iter) iter[[1,1]])
+  pivot_V <- matrix(list(), nrow = 1, ncol = 1)
+  pivot_V[[1,1]] <- Reduce("+", V.draw.thinned.burnin)/length(V.draw.thinned.burnin)
+  
+  Vs.draw.thinned.burnin <- Vs.draw[thinned_iters_burnin]
+  pivot_Vs <- matrix(list(), nrow = 1, ncol = q)
+  
+  for (s in 1:q) {
+    pivot_Vs[[1,s]] <- Reduce("+", lapply(Vs.draw.thinned.burnin, function(iter) iter[[1,s]]))/length(Vs.draw.thinned.burnin)
+  }
   
   for (iter in 1:length(U.draw)) {
     # -------------------------------------------------------------------------
