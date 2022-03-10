@@ -2666,7 +2666,8 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
   packs <- c("Matrix", "MASS", "truncnorm", "r.jive")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
-    set.seed(sim_iter)
+    seed <- sim_iter + which(models %in% mod) * nsim
+    set.seed(seed)
     
     # -------------------------------------------------------------------------
     # Generate data 
