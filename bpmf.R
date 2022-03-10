@@ -3031,7 +3031,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     
     if (mod %in% c("BIDIFAC+", "JIVE", "MOFA")) {
       # Subset the scores to just the training data
-      all.scores.train <- all.scores[1:n,]
+      all.scores.train <- all.scores[1:n,,drop=FALSE]
       
       # Fitting the Bayesian linear model
       mod.bayes <- bpmf(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
