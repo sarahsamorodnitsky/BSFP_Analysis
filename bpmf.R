@@ -3111,7 +3111,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     
     # Comparing the predicted Y to the training and test Y
     mse_y_train <- frob(Y.fit[1:n,] - Y_train[[1,1]])/frob(Y_train[[1,1]])
-    mse_y_test <- frob(Y.fit[1:n,] - Y_test[[1,1]])/frob(Y_test[[1,1]])
+    mse_y_test <- frob(Y.fit[(n+1):(2*n),] - Y_test[[1,1]])/frob(Y_test[[1,1]])
     
     # Save 
     save(joint.recovery.structure.train, joint.recovery.structure.test,
