@@ -1697,6 +1697,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
        s2nY = s2nY, s2nY_coef = s2nY_coef, # Scaling for the response
        joint.structure = joint.structure, # Joint structure
        indiv.structure = indiv.structure, # Individual structure
+       V = V, U = U, Vs = Vs, W = W, # Components of the structure
        beta = beta, tau2 = tau2, EY = EY, gamma = gamma, p.prior = p.prior)
 }
 
@@ -3170,7 +3171,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # Generate data 
     # -------------------------------------------------------------------------
     
-    # Generate 2*n samples to split into equally-sized training and test datasets
+    # Generate n samples
     sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness = NULL, entrywise = NULL, prop_missing = NULL, sparsity = sparsity)
     
     # Saving the data
@@ -3185,6 +3186,10 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     
     # The inclusion indicators
     true.gammas <- sim_data$gamma
+    
+    # Save the true V and Vs
+    true.V <- sim_data$V
+    true.Vs <- sim_data$Vs
 
     # Save a burn-in
     burnin <- nsample/2
@@ -3221,7 +3226,8 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # Apply algorithm
     res.ls <- label_switching(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
                               gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
-                              nsample = nsample, thinned_iters_burnin = thinned_iters_burnin)
+                              nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
+                              nninit = FALSE, pivot = list(true.V, true.Vs))
     
     # Save gammas
     gammas.draw.ls <- do.call(cbind, lapply(res.ls$swapped_gammas, function(iter) iter[[1,1]]))
@@ -4242,7 +4248,7 @@ create_simulation_table <- function(mod.list, path.list, s2nX, s2nY) {
 }
 
 # The label switching algorithm: matches results to the posterior mode
-label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample, thinned_iters_burnin) {
+label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample, thinned_iters_burnin, nninit = TRUE, pivot = NULL) {
   
   # ---------------------------------------------------------------------------
   # Arguments: 
@@ -4251,6 +4257,12 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
   # loadings (list): the corresponding loadings for each draw of the matrix to swap
   # betas (double vec): list of vectors of the coefficients drawn at each iteration
   # gammas (int vec): list of vectors of the inclusion indicators drawn at each iteration
+  # r (int) = joint rank
+  # r.vec (c(ints)) = vector of individual ranks
+  # nsample (int) = number of posterior samples
+  # thinned_iters_burnin (c(ints)) = vector of indices for samples after burn-in + thinning if desired
+  # nninit (boolean) = TRUE if initialized at theoretical posterior mode or FALSE if use posterior mean as pivot
+  # pivot (list) = list of V and Vs to use as pivots. If NULL, must provide nninit. 
   # ---------------------------------------------------------------------------
   
   # Saving the number of sources
@@ -4270,19 +4282,32 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
   # Storing the sign changes so they can be undone
   signs_changed <- lapply(1:length(swapped_U.draw), function(iter) list())
   
-  # Setting the pivots to the posterior mode (result from BIDIFAC)
-  pivot_V <- V.draw[[1]]
-  pivot_Vs <- Vs.draw[[1]]
-  # V.draw.thinned.burnin <- lapply(V.draw[thinned_iters_burnin], function(iter) iter[[1,1]])
-  # pivot_V <- matrix(list(), nrow = 1, ncol = 1)
-  # pivot_V[[1,1]] <- Reduce("+", V.draw.thinned.burnin)/length(V.draw.thinned.burnin)
-  # 
-  # Vs.draw.thinned.burnin <- Vs.draw[thinned_iters_burnin]
-  # pivot_Vs <- matrix(list(), nrow = 1, ncol = q)
-  # 
-  # for (s in 1:q) {
-  #   pivot_Vs[[1,s]] <- Reduce("+", lapply(Vs.draw.thinned.burnin, function(iter) iter[[1,s]]))/length(Vs.draw.thinned.burnin)
-  # }
+  # Setting the pivots to the posterior mode (result from BIDIFAC) or posterior mean
+  if (is.null(pivot)) {
+    if (nninit) {
+      pivot_V <- V.draw[[1]]
+      pivot_Vs <- Vs.draw[[1]]
+    }
+    
+    if (!nninit) {
+      V.draw.thinned.burnin <- lapply(V.draw[thinned_iters_burnin], function(iter) iter[[1,1]])
+      pivot_V <- matrix(list(), nrow = 1, ncol = 1)
+      pivot_V[[1,1]] <- Reduce("+", V.draw.thinned.burnin)/length(V.draw.thinned.burnin)
+      
+      Vs.draw.thinned.burnin <- Vs.draw[thinned_iters_burnin]
+      pivot_Vs <- matrix(list(), nrow = 1, ncol = q)
+      
+      for (s in 1:q) {
+        pivot_Vs[[1,s]] <- Reduce("+", lapply(Vs.draw.thinned.burnin, function(iter) iter[[1,s]]))/length(Vs.draw.thinned.burnin)
+      }
+    }
+  }
+  
+  # Setting the pivot to be user-chosen
+  if (!is.null(pivot)) {
+    pivot_V <- pivot[[1]]
+    pivot_Vs <- pivot[[2]]
+  }
   
   for (iter in 1:length(U.draw)) {
     # -------------------------------------------------------------------------
