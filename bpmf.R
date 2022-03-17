@@ -3182,9 +3182,14 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     
     # The response
     Y <- sim_data$Y
+    
+    # The inclusion indicators
+    true.gammas <- sim_data$gamma
 
     # Save a burn-in
     burnin <- nsample/2
+    thinned_iters <- seq(1, nsample, by = 10)
+    thinned_iters_burnin <- seq(burnin, nsample, by = 10)
     
     # -------------------------------------------------------------------------
     # Run the model and extract results
@@ -3193,19 +3198,61 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # Gibbs sampling
     res <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
     
-    # Extract the inclusion indicators
-    gammas.draw <- res$gammas.draw
+    # Extract the posterior samples
+    U.draw <- res$U.draw
+    V.draw <- res$V.draw
+    W.draw <- res$W.draw
+    Vs.draw <- res$Vs.draw
+    betas.draw <- res$beta.draw
+    gammas.draw <- res$gamma.draw
+    
+    # Calculate the non-label swapped posterior inclusion indicators
+    gammas.draw.non.ls <- do.call(cbind, lapply(gammas.draw, function(iter) iter[[1,1]]))
+    
+    # Calculate the posterior inclusion indicators
+    post.non.ls <- rowMeans(gammas.draw.non.ls[,thinned_iters_burnin])
+    post.non.ls[post.non.ls >= 0.5] <- 1
+    post.non.ls[post.non.ls < 0.5] <- 0
     
     # -------------------------------------------------------------------------
     # Apply the label switching algorithm 
     # -------------------------------------------------------------------------
+    
+    # Apply algorithm
+    res.ls <- label_switching(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
+                              gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
+                              nsample = nsample, thinned_iters_burnin = thinned_iters_burnin)
+    
+    # Save gammas
+    gammas.draw.ls <- do.call(cbind, lapply(res.ls$swapped_gammas, function(iter) iter[[1,1]]))
+    
+    # Calculate the posterior inclusion indicators
+    post.ls <- rowMeans(gammas.draw.ls[,thinned_iters_burnin])
+    post.ls[post.ls >= 0.5] <- 1
+    post.ls[post.ls < 0.5] <- 0
     
     # -------------------------------------------------------------------------
     # Compare the true gammas indicator vector to the label swapped and non-label
     # swapped versions
     # -------------------------------------------------------------------------
     
+    # Label swapped
+    ssd.ls <- frob(true.gammas - post.ls)
+    
+    # Non-label swapped
+    ssd.non.ls <- frob(true.gammas - post.non.ls)
+    
+    # -------------------------------------------------------------------------
+    # Return
+    # -------------------------------------------------------------------------
+    
+    ssd <- c(ssd.ls, ssd.non.ls)
+    names(ssd) <- c("Corrected", "Non-Correceted")
+    ssd
   }
+  
+  # Return the results
+  sim_results
 }
 
 # -----------------------------------------------------------------------------
