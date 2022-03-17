@@ -2628,7 +2628,7 @@ Y_predicted <- function(scores.draw, beta.draw, nsample) {
   pred_y
 }
 
-# Run each model being compared in simulation study
+# Run each model being compared in model comparison simulation study
 run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust) {
   
   # ---------------------------------------------------------------------------
@@ -3133,6 +3133,22 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
   
 }
 
+# Simulation study for assessing adjustment of label switching (permutation invariance)
+identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, nsim, nsample) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  #
+  # p.vec = number of features per source
+  # n = sample size
+  # ranks = vector of joint and individual ranks = c(joint rank, indiv rank 1, indiv rank 2, ...)
+  # response = string in c(NULL, "continuous", "binary")
+  # true_params = the list of true parameters under which to generate data
+  # nsim = number of simulations to run
+  # nsample = number of Gibbs sampling iterations to draw for the linear model
+  # n_clust = how many clusters to run simulation in parallel?
+  # ---------------------------------------------------------------------------
+}
 
 # -----------------------------------------------------------------------------
 # sJIVE functions
