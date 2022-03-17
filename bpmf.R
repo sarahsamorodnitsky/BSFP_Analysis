@@ -3135,7 +3135,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
 }
 
 # Simulation study for assessing adjustment of label switching (permutation invariance)
-identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, nsim, nsample) {
+identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, nsim, nsample, n_clust = 10) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -3159,7 +3159,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
-             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "label_switching")
   packs <- c("Matrix", "MASS", "truncnorm", "r.jive")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     
