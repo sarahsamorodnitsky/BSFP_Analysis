@@ -3134,7 +3134,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
 }
 
 # Simulation study for assessing adjustment of label switching (permutation invariance)
-identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, nsim, nsample) {
+identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, nsim, nsample) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -3144,10 +3144,68 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   # ranks = vector of joint and individual ranks = c(joint rank, indiv rank 1, indiv rank 2, ...)
   # response = string in c(NULL, "continuous", "binary")
   # true_params = the list of true parameters under which to generate data
+  # sparsity = should the data be generated with sparsity in the response? (Boolean)
   # nsim = number of simulations to run
   # nsample = number of Gibbs sampling iterations to draw for the linear model
   # n_clust = how many clusters to run simulation in parallel?
   # ---------------------------------------------------------------------------
+  
+  # Loading in the packages
+  library(doParallel)
+  library(foreach)
+  
+  cl <- makeCluster(n_clust)
+  registerDoParallel(cl)
+  funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
+             "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive")
+  sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
+    
+    # Set seed
+    seed <- sim_iter
+    set.seed(seed)
+    
+    # -------------------------------------------------------------------------
+    # Generate data 
+    # -------------------------------------------------------------------------
+    
+    # Generate 2*n samples to split into equally-sized training and test datasets
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness = NULL, entrywise = NULL, prop_missing = NULL, sparsity = sparsity)
+    
+    # Saving the data
+    true_data <- sim_data$data
+    true_data_list <- lapply(true_data, function(s) s)
+    q <- length(p.vec)
+    joint.structure <- sim_data$joint.structure
+    indiv.structure <- sim_data$indiv.structure
+    
+    # The response
+    Y <- sim_data$Y
+
+    # Save a burn-in
+    burnin <- nsample/2
+    
+    # -------------------------------------------------------------------------
+    # Run the model and extract results
+    # -------------------------------------------------------------------------
+    
+    # Gibbs sampling
+    res <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
+    
+    # Extract the inclusion indicators
+    gammas.draw <- res$gammas.draw
+    
+    # -------------------------------------------------------------------------
+    # Apply the label switching algorithm 
+    # -------------------------------------------------------------------------
+    
+    # -------------------------------------------------------------------------
+    # Compare the true gammas indicator vector to the label swapped and non-label
+    # swapped versions
+    # -------------------------------------------------------------------------
+    
+  }
 }
 
 # -----------------------------------------------------------------------------
