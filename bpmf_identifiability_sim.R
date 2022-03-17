@@ -39,3 +39,10 @@ model_params <- list(error_vars = c(1,1), # Error variance for each source
 # Parameters for the simulation
 nsample <- 2000
 nsim <- 100
+
+# -----------------------------------------------------------------------------
+# Run the simulation
+# -----------------------------------------------------------------------------
+
+ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
+                                         model_params, sparsity = TRUE, nsim = 200, nsample = 2000)
