@@ -2440,6 +2440,9 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   # How many sources are there?
   q <- nrow(data)
   
+  # How many observations?
+  n <- ncol(data[[1,1]])
+  
   # Saving the model parameters
   error_vars <- model_params$error_vars # Error variances
   sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
@@ -2510,6 +2513,11 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   
   # Saving the contributions of each term to the joint density
   like <- 0
+  
+  # Contribution of V to the joint density
+  like <- like + sum(sapply(1:r, function(rs) {
+    dnorm(V.iter[[1,1]][,rs], mean = 0, sd = sqrt(sigma2_joint), log = TRUE)
+  }))
   
   for (s in 1:q) {
     # Contribution of the observed data to the joint density
