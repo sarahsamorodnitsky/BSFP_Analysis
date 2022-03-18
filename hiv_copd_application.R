@@ -564,6 +564,10 @@ packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
 cl <- makeCluster(3)
 registerDoParallel(cl)
 fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+  # -------------------------------------
+  # Run the model with pair response removed
+  # -------------------------------------
+  
   # Create a new vector of the outcome with the current pair set to NA
   fev1pp_cv <- fev1pp
   fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
@@ -579,22 +583,63 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
     progress = TRUE
   )
   
-  # Saving the predicted outcomes for the missing subjects
-  Ym.draw <- fev1pp_cv_fit_sparse$Ym.draw
+  # -------------------------------------
+  # Calculate the log joint density for held-out pair
+  # -------------------------------------
+  
+  # Subset the data to just this pair
+  hiv_copd_data_pair <- matrix(list(), nrow = q, ncol = 1)
+  for (s in 1:q) {
+    hiv_copd_data_pair[[s,1]] <- hiv_copd_data[[s,1]][, pair:(pair+1)]
+  }
+  
+  # Subset the posterior samples for the scores for just these subjects
+  V.draw_pair <- lapply(fev1pp_cv_fit_sparse$V.draw, function(iter) {
+    # Init the subsetted matrix
+    V <- matrix(list(), nrow = 1, ncol = 1)
+    
+    # Fill in 
+    V[[1,1]] <- iter[[1,1]][pair:(pair+1),]
+    
+    # Return
+    V
+  })
+  
+  Vs.draw_pair <- lapply(fev1pp_cv_fit_sparse$Vs.draw, function(iter) {
+    # Init the subsetted matrix
+    Vs <- matrix(list(), nrow = 1, ncol = q)
+    
+    # Fill in 
+    for (s in 1:q) {
+      Vs[[1,s]] <- iter[[1,s]][pair:(pair+1),]
+    }
+    
+    # Return
+    Vs
+  })
+  
+  # Saving the true outcomes for the missing subjects
+  Y_pair <- matrix(list(), nrow = 1, ncol = 1)
+  Y_pair[[1,1]] <- fev1pp[[1,1]][pair:(pair+1),,drop = FALSE]
+  
+  # Save the ranks
   ranks <- fev1pp_cv_fit_sparse$ranks
+  
+  # Save the imputed outcomes
+  Ym.draw_pair <- fev1pp_cv_fit_sparse$Ym.draw
   
   # Calculating the log-joint density after burn-in
   convergence <- sapply(thinned_iters_burnin, function(sim_iter) {
     # Calculate the log-joint density at each thinned iterations
-    log_joint_density(data = hiv_copd_data, 
+    log_joint_density(data = hiv_copd_data_pair, 
                       U.iter = fev1pp_cv_fit_sparse$U.draw[[sim_iter]], 
-                      V.iter = fev1pp_cv_fit_sparse$V.draw[[sim_iter]], 
+                      V.iter = V.draw_pair[[sim_iter]], 
                       W.iter = fev1pp_cv_fit_sparse$W.draw[[sim_iter]], 
-                      Vs.iter = fev1pp_cv_fit_sparse$Vs.draw[[sim_iter]],
+                      Vs.iter = Vs.draw_pair[[sim_iter]],
                       model_params = model_params,
                       ranks = fev1pp_cv_fit_sparse$ranks,
-                      Y = fev1pp,
-                      Ym.iter = fev1pp_cv_fit_sparse$Ym.draw[[sim_iter]],
+                      Y = Y_pair,
+                      Ym.iter = Ym.draw_pair[[sim_iter]],
                       beta.iter = fev1pp_cv_fit_sparse$beta.draw[[sim_iter]],
                       tau2.iter = fev1pp_cv_fit_sparse$tau2.draw[[sim_iter]],
                       gamma.iter = fev1pp_cv_fit_sparse$gamma.draw[[sim_iter]],
@@ -625,22 +670,60 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
     progress = TRUE
   )
   
-  # Saving the predicted outcomes for the missing subjects
-  Ym.draw <- fev1pp_cv_fit_nonsparse$Ym.draw
-  ranks <- fev1pp_cv_fit_nonsparse$ranks
+  # -------------------------------------
+  # Calculate the log joint density for held-out pair
+  # -------------------------------------
+  
+  # Subset the data to just this pair
+  hiv_copd_data_pair <- matrix(list(), nrow = q, ncol = 1)
+  for (s in 1:q) {
+    hiv_copd_data_pair[[s,1]] <- hiv_copd_data[[s,1]][, pair:(pair+1)]
+  }
+  
+  # Subset the posterior samples for the scores for just these subjects
+  V.draw_pair <- lapply(fev1pp_cv_fit_nonsparse$V.draw, function(iter) {
+    # Init the subsetted matrix
+    V <- matrix(list(), nrow = 1, ncol = 1)
+    
+    # Fill in 
+    V[[1,1]] <- iter[[1,1]][pair:(pair+1),]
+    
+    # Return
+    V
+  })
+  
+  Vs.draw_pair <- lapply(fev1pp_cv_fit_nonsparse$Vs.draw, function(iter) {
+    # Init the subsetted matrix
+    Vs <- matrix(list(), nrow = 1, ncol = q)
+    
+    # Fill in 
+    for (s in 1:q) {
+      Vs[[1,s]] <- iter[[1,s]][pair:(pair+1),]
+    }
+    
+    # Return
+    Vs
+  })
+  
+  # Saving the true outcomes for the missing subjects
+  Y_pair <- matrix(list(), nrow = 1, ncol = 1)
+  Y_pair[[1,1]] <- fev1pp[[1,1]][pair:(pair+1),,drop = FALSE]
+  
+  # Save the imputed outcomes
+  Ym.draw_pair <- fev1pp_cv_fit_nonsparse$Ym.draw
   
   # Calculating the log-joint density after burn-in
   convergence <- sapply(thinned_iters_burnin, function(sim_iter) {
     # Calculate the log-joint density at each thinned iterations
-    log_joint_density(data = hiv_copd_data, 
+    log_joint_density(data = hiv_copd_data_pair, 
                       U.iter = fev1pp_cv_fit_nonsparse$U.draw[[sim_iter]], 
-                      V.iter = fev1pp_cv_fit_nonsparse$V.draw[[sim_iter]], 
+                      V.iter = V.draw_pair[[sim_iter]], 
                       W.iter = fev1pp_cv_fit_nonsparse$W.draw[[sim_iter]], 
-                      Vs.iter = fev1pp_cv_fit_nonsparse$Vs.draw[[sim_iter]],
+                      Vs.iter = Vs.draw_pair[[sim_iter]],
                       model_params = model_params,
                       ranks = fev1pp_cv_fit_nonsparse$ranks,
-                      Y = fev1pp,
-                      Ym.iter = fev1pp_cv_fit_nonsparse$Ym.draw[[sim_iter]],
+                      Y = Y_pair,
+                      Ym.iter = Ym.draw_pair[[sim_iter]],
                       beta.iter = fev1pp_cv_fit_nonsparse$beta.draw[[sim_iter]],
                       tau2.iter = fev1pp_cv_fit_nonsparse$tau2.draw[[sim_iter]])
   })
