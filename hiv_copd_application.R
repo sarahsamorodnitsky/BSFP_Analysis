@@ -620,7 +620,7 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
   
   # Saving the true outcomes for the missing subjects
   Y_pair <- matrix(list(), nrow = 1, ncol = 1)
-  Y_pair[[1,1]] <- fev1pp[[1,1]][pair:(pair+1),,drop = FALSE]
+  Y_pair[[1,1]] <- fev1pp_cv[[1,1]][pair:(pair+1),,drop = FALSE]
   
   # Save the ranks
   ranks <- fev1pp_cv_fit_sparse$ranks
@@ -647,7 +647,7 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
   })
 
   # Save just the relevant output
-  save(Ym.draw, ranks, convergence, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
+  save(Ym.draw_pair, ranks, convergence, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
 }
 stopCluster(cl)
 
@@ -707,7 +707,7 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
   
   # Saving the true outcomes for the missing subjects
   Y_pair <- matrix(list(), nrow = 1, ncol = 1)
-  Y_pair[[1,1]] <- fev1pp[[1,1]][pair:(pair+1),,drop = FALSE]
+  Y_pair[[1,1]] <- fev1pp_cv[[1,1]][pair:(pair+1),,drop = FALSE]
   
   # Save the imputed outcomes
   Ym.draw_pair <- fev1pp_cv_fit_nonsparse$Ym.draw
@@ -729,7 +729,7 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
   })
   
   # Save just the relevant output
-  save(Ym.draw, ranks, convergence, file = paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
+  save(Ym.draw_pair, ranks, convergence, file = paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
 }
 stopCluster(cl)
 
