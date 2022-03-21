@@ -3251,10 +3251,10 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # -------------------------------------------------------------------------
     
     # Label swapped
-    ssd.ls <- frob(true.gammas - post.ls)
+    ssd.ls <- frob(true.gammas - post.ls)/length(true.gammas)
     
     # Non-label swapped
-    ssd.non.ls <- frob(true.gammas - post.non.ls)
+    ssd.non.ls <- frob(true.gammas - post.non.ls)/length(true.gammas)
     
     # -------------------------------------------------------------------------
     # Return
@@ -4255,6 +4255,10 @@ create_simulation_table <- function(mod.list, path.list, s2nX, s2nY) {
   simulation_results
 }
 
+# -----------------------------------------------------------------------------
+# Addressing the factor switching problem
+# -----------------------------------------------------------------------------
+
 # The label switching algorithm: matches results to the posterior mode
 label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample, thinned_iters_burnin, nninit = TRUE, pivot = NULL) {
   
@@ -4712,5 +4716,558 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
        order_indiv = order_indiv)
 }
 
+# Papastamoulis and Ntzoufras algorithm for factor switching (from the factor.switching package)
+rsp_exact <- function (lambda_mcmc, maxIter = 100, threshold = 1e-06, verbose = TRUE, 
+                       rotate = TRUE, printIter = 1000) {
+  lambda_mcmc <- as.matrix(lambda_mcmc)
+  cnames <- colnames(lambda_mcmc)
+  d <- dim(lambda_mcmc)[2]
+  if (sum(grepl("LambdaV", cnames)) < d) {
+    stop("Column names of lambda_mcmc should be formatted as: LambdaV1_1 ... LambdaV1_q   ... LambdaVp_1 ... LambdaVp_q, where p and q denote the number of variables and factors, respectively.")
+  }
+  q <- as.numeric(strsplit(cnames[d], split = "_")[[1]][2])
+  p <- d/q
+  mcmcIterations <- dim(lambda_mcmc)[1]
+  threshold <- threshold * mcmcIterations * p * q
+  checkNames <- paste0(rep(paste0("LambdaV", 1:p, "_"), each = q), 
+                       1:q)
+  if (sum(checkNames == cnames) != d) {
+    stop("Column names of lambda_mcmc are wrong, please check input.")
+  }
+  lambda_mcmc_varimax <- lambda_mcmc
+  if (rotate) {
+    if (q > 1) {
+      for (iter in 1:mcmcIterations) {
+        lambda <- matrix(lambda_mcmc[iter, ], nrow = p, 
+                         byrow = T)
+        v <- varimax(lambda, normalize = F)
+        rotated_lambda <- v$loadings
+        class(rotated_lambda) <- "matrix"
+        lambda_mcmc_varimax[iter, ] <- c(t(rotated_lambda))
+      }
+    }
+  }
+  all_c <- array(data = 1, dim = c(2^q, q))
+  l <- 1
+  if (q > 1) {
+    for (i in 1:(q - 1)) {
+      pos <- combn(1:q, i)
+      j <- dim(pos)[2]
+      for (k in 1:j) {
+        l <- l + 1
+        all_c[l, pos[, k]] <- rep(-1, i)
+      }
+    }
+  }
+  all_c[l + 1, ] <- rep(-1, q)
+  lambda_hat <- matrix(colMeans(lambda_mcmc_varimax), ncol = q, 
+                       nrow = p, byrow = TRUE)
+  lambda_hat_zero <- lambda_hat
+  c_vectors <- matrix(rep(1, q), ncol = q, nrow = mcmcIterations, 
+                      byrow = TRUE)
+  v_vectors <- matrix(1:q, ncol = q, nrow = mcmcIterations, 
+                      byrow = TRUE)
+  st <- 1:q
+  dim_all_c <- 2^q
+  dim_all_v <- factorial(q)
+  perm <- matrix(1:q, ncol = q, nrow = dim_all_c, byrow = TRUE)
+  costs <- numeric(dim_all_c)
+  f <- numeric(maxIter)
+  lambda_hat_values <- array(data = NA, dim = c(p, q, maxIter))
+  totalIterations <- 0
+  criterion = TRUE
+  cost.matrix <- matrix(numeric(q * q), nrow = q, ncol = q)
+  t1 <- numeric(maxIter)
+  start_time <- Sys.time()
+  while ((criterion == TRUE) & (totalIterations < maxIter)) {
+    totalIterations <- totalIterations + 1
+    cat(paste0("* iteration: ", totalIterations), "\n")
+    lambda_hat_new <- 0 * lambda_hat
+    objective <- 0
+    for (iter in 1:mcmcIterations) {
+      lambda <- matrix(lambda_mcmc_varimax[iter, ], ncol = q, 
+                       nrow = p, byrow = TRUE)
+      for (i in 1:dim_all_c) {
+        c_vec <- all_c[i, ]
+        lambda_switch <- matrix(c_vec, ncol = q, nrow = p, 
+                                byrow = T) * lambda_hat
+        for (j in 1:q) {
+          temp <- (lambda - lambda_switch[, j])^2
+          cost.matrix[j, ] <- colSums(temp)
+        }
+        matr <- lp.assign(cost.matrix)$solution
+        for (j in 1:q) {
+          perm[i, j] <- st[matr[, j] > 0]
+        }
+        perm[i, ] <- order(perm[i, ])
+        costs[i] <- sum(cost.matrix * matr)
+      }
+      minIndex <- order(costs)[1]
+      v_vectors[iter, ] <- perm[minIndex, ]
+      c_vectors[iter, ] <- all_c[minIndex, ]
+      switchedMatrix <- matrix(c_vectors[iter, ], ncol = q, 
+                               nrow = p, byrow = T) * lambda[, v_vectors[iter, 
+                               ]]
+      objective <- objective + costs[minIndex]
+      lambda_hat_new <- lambda_hat_new + switchedMatrix
+      if ((iter%%printIter == 0) && (verbose == TRUE)) {
+        cat(paste0("          mcmc draw = ", iter, ":  sum f = ", 
+                   round(objective, 3)), "\r")
+      }
+    }
+    f[totalIterations] <- objective
+    if (totalIterations > 1) {
+      if (f[totalIterations - 1] - f[totalIterations] < 
+          threshold) {
+        criterion = FALSE
+      }
+    }
+    if (verbose == TRUE) {
+      cat(paste0("   -----  objective function = ", round(objective, 
+                                                          3), " -----"), "\n")
+      cat("\n")
+    }
+    lambda_hat_new <- lambda_hat_new/mcmcIterations
+    lambda_hat <- lambda_hat_new
+    lambda_hat_values[, , totalIterations] <- lambda_hat
+    end_time <- Sys.time()
+    t1[totalIterations] <- as.numeric(difftime(end_time, 
+                                               start_time, units = "min"))
+  }
+  c_vec <- rep(1, q)
+  v_vec <- 1:q
+  f_zero <- 0
+  for (i in 1:mcmcIterations) {
+    lambda <- matrix(lambda_mcmc_varimax[iter, ], ncol = q, 
+                     nrow = p, byrow = TRUE)
+    switchedMatrix <- matrix(c_vec, ncol = q, nrow = p, byrow = T) * 
+      lambda[, v_vec]
+    f_zero <- f_zero + sum((switchedMatrix - lambda_hat)^2)
+  }
+  t_exact <- c(0, t1[1:totalIterations])
+  f_exact <- c(f_zero, f[1:totalIterations])
+  objective_function <- data.frame(time = t_exact, value = f_exact)
+  lambda_reordered_mcmc <- lambda_mcmc
+  for (i in 1:mcmcIterations) {
+    lambda <- matrix(lambda_mcmc_varimax[i, ], ncol = q, 
+                     nrow = p, byrow = TRUE)
+    switchedMatrix <- matrix(c_vectors[i, ], ncol = q, nrow = p, 
+                             byrow = T) * lambda[, v_vectors[i, ]]
+    lambda_reordered_mcmc[i, ] <- c(t(switchedMatrix))
+  }
+  lambda_reordered_mcmc <- as.mcmc(lambda_reordered_mcmc)
+  result <- vector("list", length = 5)
+  result[[1]] <- lambda_reordered_mcmc
+  result[[2]] <- c_vectors
+  result[[3]] <- v_vectors
+  result[[4]] <- lambda_hat
+  result[[5]] <- objective_function
+  names(result) <- c("lambda_reordered_mcmc", "sign_vectors", 
+                     "permute_vectors", "lambda_hat", "objective_function")
+  class(result) <- c("list", "rsp")
+  return(result)
+}
 
+# Papastamoulis and Ntzoufras simulated annealing approach to address factor switching (from the factor.switching package)
+rsp_full_sa <- function (lambda_mcmc, maxIter = 1000, threshold = 1e-06, verbose = TRUE, 
+          sa_loops, rotate = TRUE, increaseIter = FALSE, temperatureSchedule = NULL, 
+          printIter = 1000) {
+  lambda_mcmc <- as.matrix(lambda_mcmc)
+  cnames <- colnames(lambda_mcmc)
+  d <- dim(lambda_mcmc)[2]
+  if (sum(grepl("LambdaV", cnames)) < d) {
+    stop("Column names of lambda_mcmc should be formatted as: LambdaV1_1 ... LambdaV1_q   ... LambdaVp_1 ... LambdaVp_q, where p and q denote the number of variables and factors, respectively.")
+  }
+  q <- as.numeric(strsplit(cnames[d], split = "_")[[1]][2])
+  p <- d/q
+  mcmcIterations <- dim(lambda_mcmc)[1]
+  threshold <- threshold * mcmcIterations * p * q
+  checkNames <- paste0(rep(paste0("LambdaV", 1:p, "_"), each = q), 
+                       1:q)
+  if (sum(checkNames == cnames) != d) {
+    stop("Something is wrong, please check input.")
+  }
+  if (is.null(temperatureSchedule)) {
+    temperatureSchedule <- function(sim_ann_iter) {
+      1/log(sim_ann_iter + 1)
+    }
+  }
+  objective_function <- function(lambda, lambda_hat, c_vec, 
+                                 v_vec, q, p) {
+    switchedMatrix <- matrix(c_vec, ncol = q, nrow = p, byrow = T) * 
+      lambda[, v_vec]
+    f <- sum((switchedMatrix - lambda_hat)^2)
+    result <- vector("list", length = 2)
+    result[[1]] <- f
+    result[[2]] <- switchedMatrix
+    names(result) <- c("value", "matrix")
+    return(result)
+  }
+  lambda_mcmc_varimax <- lambda_mcmc
+  if (rotate) {
+    if (q > 1) {
+      for (iter in 1:mcmcIterations) {
+        lambda <- matrix(lambda_mcmc[iter, ], nrow = p, 
+                         byrow = T)
+        v <- varimax(lambda, normalize = F)
+        rotated_lambda <- v$loadings
+        class(rotated_lambda) <- "matrix"
+        lambda_mcmc_varimax[iter, ] <- c(t(rotated_lambda))
+      }
+    }
+  }
+  lambda_hat <- matrix(colMeans(lambda_mcmc_varimax), ncol = q, 
+                       nrow = p, byrow = TRUE)
+  lambda_hat_zero <- lambda_hat
+  st <- 1:q
+  c_vectors <- matrix(rep(1, q), ncol = q, nrow = mcmcIterations, 
+                      byrow = TRUE)
+  v_vectors <- matrix(1:q, ncol = q, nrow = mcmcIterations, 
+                      byrow = TRUE)
+  dim_all_c <- 2^q
+  dim_all_v <- factorial(q)
+  perm <- 1:q
+  sim_an_iters <- sa_loops
+  f <- numeric(maxIter)
+  lambda_hat_values <- array(data = NA, dim = c(p, q, maxIter))
+  totalIterations <- 0
+  criterion = TRUE
+  cost.matrix <- matrix(numeric(q * q), nrow = q, ncol = q)
+  t1 <- numeric(maxIter)
+  start_time <- Sys.time()
+  while ((criterion == TRUE) & (totalIterations < maxIter)) {
+    totalIterations <- totalIterations + 1
+    cat(paste0("* iteration: ", totalIterations), "\n")
+    lambda_hat_new <- 0 * lambda_hat
+    objective <- 0
+    for (iter in 1:mcmcIterations) {
+      lambda <- matrix(lambda_mcmc_varimax[iter, ], ncol = q, 
+                       nrow = p, byrow = TRUE)
+      f_values <- numeric(sim_an_iters)
+      c_vec <- c_vectors[iter, ]
+      v_vec <- v_vectors[iter, ]
+      obj <- objective_function(lambda = lambda, lambda_hat = lambda_hat, 
+                                c_vec = c_vec, v_vec = v_vec, q = q, p = p)
+      f_old <- obj$value
+      f_values[1] <- f_old
+      alpha <- 0.2
+      temperature <- 1000
+      accept_rate <- 1
+      for (sim_ann_iter in 2:sim_an_iters) {
+        temperature <- temperatureSchedule(sim_ann_iter)
+        uR <- runif(1)
+        if (uR < 0.8) {
+          c_proposed <- c_vec
+          rIndex <- sample(q, 1)
+          c_proposed[rIndex] <- -c_vec[rIndex]
+          random_pair <- sample(q, 2, replace = F)
+          v_proposed <- v_vec
+          v_proposed[random_pair] <- v_vec[random_pair[c(2, 
+                                                         1)]]
+        }
+        else {
+          if (uR < 0.9) {
+            c_proposed <- c_vec
+            rIndex <- sample(q, 1)
+            c_proposed[rIndex] <- -c_vec[rIndex]
+            v_proposed <- v_vec
+          }
+          else {
+            c_proposed <- c_vec
+            random_pair <- sample(q, 2, replace = F)
+            v_proposed <- v_vec
+            v_proposed[random_pair] <- v_vec[random_pair[c(2, 
+                                                           1)]]
+          }
+        }
+        f_new <- objective_function(lambda = lambda, 
+                                    lambda_hat = lambda_hat, c_vec = c_proposed, 
+                                    v_vec = v_proposed, q = q, p = p)$value
+        if (f_new < f_old) {
+          c_vec <- c_proposed
+          v_vec <- v_proposed
+          f_old <- f_new
+          accept_rate <- accept_rate + 1
+        }
+        else {
+          u <- runif(1)
+          ar <- -(f_new - f_old)/temperature
+          if (log(u) < ar) {
+            c_vec <- c_proposed
+            v_vec <- v_proposed
+            f_old <- f_new
+            accept_rate <- accept_rate + 1
+          }
+        }
+        f_values[sim_ann_iter] <- f_old
+      }
+      v_vectors[iter, ] <- v_vec
+      c_vectors[iter, ] <- c_vec
+      switchedMatrix <- matrix(c_vec, ncol = q, nrow = p, 
+                               byrow = T) * lambda[, v_vec]
+      objective <- objective + f_old
+      lambda_hat_new <- lambda_hat_new + switchedMatrix
+      if ((iter%%printIter == 0) && (verbose == TRUE)) {
+        cat(paste0("          mcmc draw = ", iter, ":  sum f = ", 
+                   round(objective, 3)), "\r")
+      }
+    }
+    f[totalIterations] <- objective
+    if (totalIterations > 10) {
+      f_diff <- f[totalIterations - 1] - f[totalIterations]
+      if ((f_diff < 0) && (increaseIter)) {
+        sim_an_iters <- sim_an_iters + sa_loops
+        cat(paste0("  WARNING: objective function increased."), 
+            "\n")
+        cat(paste0("           Simulated Annealing loops increased to ", 
+                   sim_an_iters, "."), "\n")
+        f_diff <- threshold + 1
+      }
+      if (abs(f_diff) < threshold) {
+        criterion = FALSE
+      }
+    }
+    if (verbose == TRUE) {
+      cat(paste0("   -----  objective function = ", round(objective, 
+                                                          3), " -----"), "\n")
+      cat("\n")
+    }
+    lambda_hat_new <- lambda_hat_new/mcmcIterations
+    lambda_hat <- lambda_hat_new
+    lambda_hat_values[, , totalIterations] <- lambda_hat
+    end_time <- Sys.time()
+    t1[totalIterations] <- as.numeric(difftime(end_time, 
+                                               start_time, units = "min"))
+  }
+  c_vec <- rep(1, q)
+  v_vec <- 1:q
+  f_zero <- 0
+  for (i in 1:mcmcIterations) {
+    lambda <- matrix(lambda_mcmc_varimax[iter, ], ncol = q, 
+                     nrow = p, byrow = TRUE)
+    switchedMatrix <- matrix(c_vec, ncol = q, nrow = p, byrow = T) * 
+      lambda[, v_vec]
+    f_zero <- f_zero + sum((switchedMatrix - lambda_hat)^2)
+  }
+  t_exact <- c(0, t1[1:totalIterations])
+  f_exact <- c(f_zero, f[1:totalIterations])
+  objective_function <- data.frame(time = t_exact, value = f_exact)
+  lambda_reordered_mcmc <- lambda_mcmc
+  for (i in 1:mcmcIterations) {
+    lambda <- matrix(lambda_mcmc_varimax[i, ], ncol = q, 
+                     nrow = p, byrow = TRUE)
+    switchedMatrix <- matrix(c_vectors[i, ], ncol = q, nrow = p, 
+                             byrow = T) * lambda[, v_vectors[i, ]]
+    lambda_reordered_mcmc[i, ] <- c(t(switchedMatrix))
+  }
+  lambda_reordered_mcmc <- as.mcmc(lambda_reordered_mcmc)
+  result <- vector("list", length = 5)
+  result[[1]] <- lambda_reordered_mcmc
+  result[[2]] <- c_vectors
+  result[[3]] <- v_vectors
+  result[[4]] <- lambda_hat
+  result[[5]] <- objective_function
+  names(result) <- c("lambda_reordered_mcmc", "sign_vectors", 
+                     "permute_vectors", "lambda_hat", "objective_function")
+  class(result) <- c("list", "rsp")
+  return(result)
+}
 
+# Papastamoulis and Ntzoufras partial simulated annealing approach
+rsp_partial_sa <- function (lambda_mcmc, maxIter = 1000, threshold = 1e-06, verbose = TRUE, 
+                            sa_loops, rotate = TRUE, increaseIter = FALSE, temperatureSchedule = NULL, 
+                            printIter = 1000) {
+  lambda_mcmc <- as.matrix(lambda_mcmc)
+  cnames <- colnames(lambda_mcmc)
+  d <- dim(lambda_mcmc)[2]
+  if (sum(grepl("LambdaV", cnames)) < d) {
+    stop("Column names of lambda_mcmc should be formatted as: LambdaV1_1 ... LambdaV1_q   ... LambdaVp_1 ... LambdaVp_q, where p and q denote the number of variables and factors, respectively.")
+  }
+  q <- as.numeric(strsplit(cnames[d], split = "_")[[1]][2])
+  p <- d/q
+  mcmcIterations <- dim(lambda_mcmc)[1]
+  threshold <- threshold * mcmcIterations * p * q
+  checkNames <- paste0(rep(paste0("LambdaV", 1:p, "_"), each = q), 
+                       1:q)
+  if (sum(checkNames == cnames) != d) {
+    stop("Something is wrong, please check input.")
+  }
+  if (is.null(temperatureSchedule)) {
+    temperatureSchedule <- function(sim_ann_iter) {
+      1/log(sim_ann_iter + 1)
+    }
+  }
+  objective_function <- function(lambda, lambda_hat, c_vec, 
+                                 v_vec, q, p) {
+    switchedMatrix <- matrix(c_vec, ncol = q, nrow = p, byrow = T) * 
+      lambda[, v_vec]
+    f <- sum((switchedMatrix - lambda_hat)^2)
+    result <- vector("list", length = 2)
+    result[[1]] <- f
+    result[[2]] <- switchedMatrix
+    names(result) <- c("value", "matrix")
+    return(result)
+  }
+  lambda_mcmc_varimax <- lambda_mcmc
+  if (rotate) {
+    if (q > 1) {
+      for (iter in 1:mcmcIterations) {
+        lambda <- matrix(lambda_mcmc[iter, ], nrow = p, 
+                         byrow = T)
+        v <- varimax(lambda, normalize = F)
+        rotated_lambda <- v$loadings
+        class(rotated_lambda) <- "matrix"
+        lambda_mcmc_varimax[iter, ] <- c(t(rotated_lambda))
+      }
+    }
+  }
+  lambda_hat <- matrix(colMeans(lambda_mcmc_varimax), ncol = q, 
+                       nrow = p, byrow = TRUE)
+  lambda_hat_zero <- lambda_hat
+  st <- 1:q
+  c_vectors <- matrix(rep(1, q), ncol = q, nrow = mcmcIterations, 
+                      byrow = TRUE)
+  v_vectors <- matrix(1:q, ncol = q, nrow = mcmcIterations, 
+                      byrow = TRUE)
+  dim_all_c <- 2^q
+  dim_all_v <- factorial(q)
+  perm <- 1:q
+  sim_an_iters <- sa_loops
+  f <- numeric(maxIter)
+  lambda_hat_values <- array(data = NA, dim = c(p, q, maxIter))
+  totalIterations <- 0
+  criterion = TRUE
+  cost.matrix <- matrix(numeric(q * q), nrow = q, ncol = q)
+  t1 <- numeric(maxIter)
+  start_time <- Sys.time()
+  while ((criterion == TRUE) & (totalIterations < maxIter)) {
+    totalIterations <- totalIterations + 1
+    cat(paste0("* iteration: ", totalIterations), "\n")
+    lambda_hat_new <- 0 * lambda_hat
+    objective <- 0
+    for (iter in 1:mcmcIterations) {
+      lambda <- matrix(lambda_mcmc_varimax[iter, ], ncol = q, 
+                       nrow = p, byrow = TRUE)
+      f_values <- numeric(sim_an_iters)
+      c_vec <- c_vectors[iter, ]
+      v_vec <- v_vectors[iter, ]
+      obj <- objective_function(lambda = lambda, lambda_hat = lambda_hat, 
+                                c_vec = c_vec, v_vec = v_vec, q = q, p = p)
+      f_old <- obj$value
+      f_values[1] <- f_old
+      alpha <- 0.2
+      temperature <- 1000
+      accept_rate <- 1
+      for (sim_ann_iter in 2:sim_an_iters) {
+        temperature <- temperatureSchedule(sim_ann_iter)
+        if (runif(1) < 0.9) {
+          c_proposed <- c_vec
+          rIndex <- sample(q, 1)
+          c_proposed[rIndex] <- -c_vec[rIndex]
+        }
+        else {
+          c_proposed <- sample(c(-1, 1), q, replace = TRUE)
+        }
+        lambda_switch <- matrix(c_proposed, ncol = q, 
+                                nrow = p, byrow = T) * lambda_hat
+        for (j in 1:q) {
+          temp <- (lambda - lambda_switch[, j])^2
+          cost.matrix[j, ] <- colSums(temp)
+        }
+        matr <- lp.assign(cost.matrix)$solution
+        for (j in 1:q) {
+          perm[j] <- st[matr[, j] > 0]
+        }
+        v_proposed <- order(perm)
+        cost_proposed <- sum(cost.matrix * matr)
+        obj <- cost_proposed
+        f_new <- obj
+        if (f_new < f_old) {
+          c_vec <- c_proposed
+          v_vec <- v_proposed
+          f_old <- f_new
+          accept_rate <- accept_rate + 1
+        }
+        else {
+          u <- runif(1)
+          ar <- -(f_new - f_old)/temperature
+          if (log(u) < ar) {
+            c_vec <- c_proposed
+            v_vec <- v_proposed
+            f_old <- f_new
+            accept_rate <- accept_rate + 1
+          }
+        }
+        f_values[sim_ann_iter] <- f_old
+      }
+      v_vectors[iter, ] <- v_vec
+      c_vectors[iter, ] <- c_vec
+      switchedMatrix <- switchedMatrix <- matrix(c_vec, 
+                                                 ncol = q, nrow = p, byrow = T) * lambda[, v_vec]
+      objective <- objective + f_old
+      lambda_hat_new <- lambda_hat_new + switchedMatrix
+      if ((iter%%printIter == 0) && (verbose == TRUE)) {
+        cat(paste0("          mcmc draw = ", iter, ":  sum f = ", 
+                   round(objective, 3)), "\r")
+      }
+    }
+    f[totalIterations] <- objective
+    if (totalIterations > 10) {
+      f_diff <- f[totalIterations - 1] - f[totalIterations]
+      if ((f_diff < 0) && (increaseIter)) {
+        sim_an_iters <- sim_an_iters + sa_loops
+        cat(paste0("  WARNING: objective function increased."), 
+            "\n")
+        cat(paste0("           Simulated Annealing loops increased to ", 
+                   sim_an_iters, "."), "\n")
+        f_diff <- threshold + 1
+      }
+      if (abs(f_diff) < threshold) {
+        criterion = FALSE
+      }
+    }
+    if (verbose == TRUE) {
+      cat(paste0("   -----  objective function = ", round(objective, 
+                                                          3), " -----"), "\n")
+      cat("\n")
+    }
+    lambda_hat_new <- lambda_hat_new/mcmcIterations
+    lambda_hat <- lambda_hat_new
+    lambda_hat_values[, , totalIterations] <- lambda_hat
+    end_time <- Sys.time()
+    t1[totalIterations] <- as.numeric(difftime(end_time, 
+                                               start_time, units = "min"))
+  }
+  c_vec <- rep(1, q)
+  v_vec <- 1:q
+  f_zero <- 0
+  for (i in 1:mcmcIterations) {
+    lambda <- matrix(lambda_mcmc_varimax[iter, ], ncol = q, 
+                     nrow = p, byrow = TRUE)
+    switchedMatrix <- matrix(c_vec, ncol = q, nrow = p, byrow = T) * 
+      lambda[, v_vec]
+    f_zero <- f_zero + sum((switchedMatrix - lambda_hat)^2)
+  }
+  t_exact <- c(0, t1[1:totalIterations])
+  f_exact <- c(f_zero, f[1:totalIterations])
+  objective_function <- data.frame(time = t_exact, value = f_exact)
+  lambda_reordered_mcmc <- lambda_mcmc
+  for (i in 1:mcmcIterations) {
+    lambda <- matrix(lambda_mcmc_varimax[i, ], ncol = q, 
+                     nrow = p, byrow = TRUE)
+    switchedMatrix <- matrix(c_vectors[i, ], ncol = q, nrow = p, 
+                             byrow = T) * lambda[, v_vectors[i, ]]
+    lambda_reordered_mcmc[i, ] <- c(t(switchedMatrix))
+  }
+  lambda_reordered_mcmc <- as.mcmc(lambda_reordered_mcmc)
+  result <- vector("list", length = 5)
+  result[[1]] <- lambda_reordered_mcmc
+  result[[2]] <- c_vectors
+  result[[3]] <- v_vectors
+  result[[4]] <- lambda_hat
+  result[[5]] <- objective_function
+  names(result) <- c("lambda_reordered_mcmc", "sign_vectors", 
+                     "permute_vectors", "lambda_hat", "objective_function")
+  class(result) <- c("list", "rsp")
+  return(result)
+}
