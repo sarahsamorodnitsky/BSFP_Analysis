@@ -652,9 +652,10 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
 stopCluster(cl)
 
 # Running the cross validation algorithm again, this time without sparsity
-cl <- makeCluster(3)
-registerDoParallel(cl)
-fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+# cl <- makeCluster(3)
+# registerDoParallel(cl)
+# fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+for (pair in ind_of_pairs[-c(1:12)]) {
   # Create a new vector of the outcome with the current pair set to NA
   fev1pp_cv <- fev1pp
   fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
@@ -705,6 +706,9 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
     Vs
   })
   
+  # Save the ranks
+  ranks <- fev1pp_cv_fit_nonsparse$ranks
+  
   # Saving the true outcomes for the missing subjects
   Y_pair <- matrix(list(), nrow = 1, ncol = 1)
   Y_pair[[1,1]] <- fev1pp_cv[[1,1]][pair:(pair+1),,drop = FALSE]
@@ -730,6 +734,12 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
   
   # Save just the relevant output
   save(Ym.draw_pair, ranks, convergence, file = paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
+  
+  # Remove large objects
+  rm(hiv_copd_data_pair, fev1pp_cv_fit_nonsparse, V.draw_pair, Vs.draw_pair, Ym.draw_pair)
+  
+  # Garbage collection
+  gc()
 }
 stopCluster(cl)
 
