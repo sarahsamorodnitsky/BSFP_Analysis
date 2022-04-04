@@ -210,7 +210,8 @@ fev1pp_training_fit_nonsparse_ls <- label_switching(U.draw = fev1pp_training_fit
                                                     r = fev1pp_training_fit_nonsparse$ranks[1],
                                                     r.vec = fev1pp_training_fit_nonsparse$ranks[-1],
                                                     nsample = nsample,
-                                                    thinned_iters_burnin = thinned_iters_burnin)
+                                                    thinned_iters_burnin = thinned_iters_burnin,
+                                                    nninit = TRUE)
 
 # Check that label switching correctly swapped the columns
 correct_swaps_structure <- correct_swaps_lm <- c()
@@ -349,7 +350,10 @@ load("~/HIV-COPD/Data/UnivariatePValuesUncombinedClusterComparison.rda", verbose
 
 # Creating colors for the plots
 ccstat_colors <- viridis(2)[clinical_data_soma$ccstat]
-cluster_colors <- viridis(2)[clusters.soma]
+cluster_colors <- viridis(3)[1:2][clusters.soma]
+
+# Creating shapes
+cluster_shapes <- c(3,4)[clusters.soma]
 
 # -------------------------------------
 # Joint structure
@@ -371,9 +375,11 @@ for (rs1 in 1:joint_rank) {
           col = ccstat_colors)
      
      # Plot with stand-out subjects as colors
-     plot(V_ls_nonsparse_mean_ordered[,rs1], V_ls_nonsparse_mean_ordered[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
+     plot(V_ls_nonsparse_mean_ordered[,rs1], V_ls_nonsparse_mean_ordered[,rs2], xlab = paste0("Joint Factor ", rs1),
           ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
-          col = cluster_colors)
+          col = cluster_colors, pch = cluster_shapes)
+     legend("topleft", col = c("#440154FF", "#21908CFF"), pch = c(3,4),
+            legend = c("Cluster 1", "Cluster 2"))
      par(mfrow = c(1,1))
    }
  } 
@@ -400,9 +406,11 @@ for (rs1 in 1:indiv_rank1) {
            col = ccstat_colors)
       
       # Plot with stand-out subjects as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,1]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,1]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+      plot(Vs_ls_nonsparse_mean_ordered[[1,1]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,1]][,rs2], xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Metabolomic ", rs1, " vs ", rs2),
-           col = cluster_colors)
+           col = cluster_colors, pch = cluster_shapes)
+      legend("bottomleft", col = c("#440154FF", "#21908CFF"), pch = c(3,4),
+             legend = c("Cluster 1", "Cluster 2"))
       par(mfrow = c(1,1))
     }
   } 
@@ -422,9 +430,9 @@ for (rs1 in 1:indiv_rank2) {
            col = ccstat_colors)
       
       # Plot with stand-out subjects as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,2]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,2]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+      plot(Vs_ls_nonsparse_mean_ordered[[1,2]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,2]][,rs2], xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Proteomic ", rs1, " vs ", rs2),
-           col = cluster_colors)
+           col = cluster_colors, pch = cluster_shapes)
       par(mfrow = c(1,1))
     }
   } 
@@ -746,14 +754,15 @@ stopCluster(cl)
 # Loading in the predicted outcome iteratively for each pair and computing
 # the posterior mean predicted outcome. Comparing to the true FEV1pp 
 
-fev1pp_cv_sparsity <- c()
-convergence_cv_sparsity <- c()
-for (pair in ind_of_pairs) {
+fev1pp_cv_sparsity <- convergence_cv_sparsity <- c()
+for (pair in ind_of_pairs[-8]) {
+  # Sparse results --
+  
   # Load in the results
   load(paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
   
   # Combine the samples
-  samps <- do.call(cbind, do.call(cbind, Ym.draw))
+  samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
   
   # Take a burn-in
   samps_burnin <- samps[,thinned_iters_burnin]
@@ -774,14 +783,13 @@ cor.test(fev1pp_cv_sparsity, c(fev1pp[[1,1]]))
 # the posterior mean predicted outcome. Comparing to the true FEV1pp 
 # Using the non-sparse model
 
-fev1pp_cv <- c()
-convergence_cv_nonsparse <- c()
+fev1pp_cv <- convergence_cv_nonsparse <- c()
 for (pair in ind_of_pairs) {
   # Load in the results
   load(paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
   
   # Combine the samples
-  samps <- do.call(cbind, do.call(cbind, Ym.draw))
+  samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
   
   # Take a burn-in
   samps_burnin <- samps[,thinned_iters_burnin]
