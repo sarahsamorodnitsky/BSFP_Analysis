@@ -47,6 +47,14 @@ s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
 
 
 # -----------------------------------------------------------------------------
+# test
+# -----------------------------------------------------------------------------
+
+s2nX <- s2nY <- 99
+test.res <- run_each_mod(mod = "test", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                         s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+
+# -----------------------------------------------------------------------------
 # sJIVE
 # -----------------------------------------------------------------------------
 
@@ -234,15 +242,17 @@ simulation_results <- data.frame(s2nX = numeric(),
                                  Metric = character(),
                                  BPMF = numeric(),
                                  `BIDIFAC+` = numeric(),
+                                 test = numeric(),
                                  check.names = FALSE)
 
 # Iterate through the s2ns and append to the table
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Current results
-    res <- create_simulation_table(mod.list = c("BPMF", "BIDIFAC+"),
+    res <- create_simulation_table(mod.list = c("BPMF", "BIDIFAC+", "test"),
                                    path.list = list(BPMF = "~/BayesianPMF/03Simulations/BPMF/",
-                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/"),
+                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/",
+                                                    test = "~/BayesianPMF/03Simulations/test/"),
                                    s2nX = s2nX, 
                                    s2nY = s2nY)
     # Save
