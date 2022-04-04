@@ -20,7 +20,7 @@ ranks <- c(5,5,5)
 p.vec = c(100, 100)
 
 # Sample size 
-n = 100
+n = 300
 
 # Parameters for data generation
 true_params <- list(error_vars = c(1,1), # Error variance for each source
