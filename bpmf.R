@@ -2675,7 +2675,13 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
   packs <- c("Matrix", "MASS", "truncnorm", "r.jive")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
-    seed <- sim_iter + which(models %in% mod) * nsim
+    if (mod == "test") {
+      seed <- sim_iter + which(models %in% "BIDIFAC+") * nsim
+    }
+    
+    if (mod != "test") {
+      seed <- sim_iter + which(models %in% mod) * nsim
+    }
     set.seed(seed)
     
     # -------------------------------------------------------------------------
@@ -2873,7 +2879,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       indiv.scores <- lapply(1:q, function(source) {
         if (indiv.rank[source] != 0) {
           svd.source <- svd(mod.individual[[source]])
-          svd.source$v[,1:indiv.rank[source]]
+          (svd.source$v[,1:indiv.rank[source]])
         }
       })
     }
@@ -3028,12 +3034,14 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       })
     }
     
-    # Combining the ranks
-    mod.ranks <- c(joint.rank, indiv.rank)
-    
-    # Combining all scores together
-    all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
-    colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
+    if (mod != "test") {
+      # Combining the ranks
+      mod.ranks <- c(joint.rank, indiv.rank)
+      
+      # Combining all scores together
+      all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
+      colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
+    }
     
     # -------------------------------------------------------------------------
     # As applicable, use structure in Bayesian linear model
@@ -3093,26 +3101,75 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     }
     
     # -------------------------------------------------------------------------
+    # Testing the model fit on the true scores (to be removed later)
+    # -------------------------------------------------------------------------
+    
+    if (mod == "test") {
+      # Set the true ranks to be mod.ranks
+      mod.ranks <- ranks
+      joint.rank <- mod.ranks[1]
+      indiv.rank <- mod.ranks[-1]
+      
+      # Set the true scores to be the all.scores.train
+      true.scores <- cbind(Y[[1,1]], sim_data$V[[1,1]], do.call(cbind, sim_data$Vs))
+      colnames(true.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
+      
+      # Subset the scores to just the training data
+      true.scores.train <- true.scores[1:n,,drop=FALSE]
+      
+      # Fitting the Bayesian linear model
+      mod.bayes <- bpmf(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
+                        ranks = mod.ranks, scores = true.scores.train[,-1], nsample = nsample)
+      
+      # Calculate the predicted E(Y) at each Gibbs sampling iteration using training and testing scores
+      Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
+        VStar.iter <- cbind(1, true.scores[,-1])
+        beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]] # Beta depends only on training data
+        VStar.iter %*% beta.iter
+      })
+      
+      Y.fit <- Reduce("+", Y.fit.iter)/length(Y.fit.iter)
+      
+      # Calculate the coverage of training E(Y) and test E(Y)
+      Y.fit.iter <- do.call(cbind, Y.fit.iter)
+      ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
+      
+      coverage_EY_train <- mean(sapply(1:n, function(i) {
+        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
+      }))
+      
+      coverage_EY_test <- mean(sapply((n+1):(2*n), function(i) {
+        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
+      }))
+    }
+    
+    # -------------------------------------------------------------------------
     # Assess recovery of underlying joint and individual structure
     # -------------------------------------------------------------------------
     
-    # Joint structure
-    joint.recovery.structure.train <- mean(sapply(1:q, function(source) {
-      frob(mod.joint[[source]][,1:n] - joint.structure_train[[source,1]])/frob(joint.structure_train[[source,1]])
-    }))
+    if (mod == "test") {
+      joint.recovery.structure.train <- joint.recovery.structure.test <- indiv.recovery.structure.train <- indiv.recovery.structure.test <- NA
+    }
     
-    joint.recovery.structure.test <- mean(sapply(1:q, function(source) {
-      frob(mod.joint[[source]][,(n+1):(2*n)] - joint.structure_test[[source,1]])/frob(joint.structure_test[[source,1]])
-    }))
-    
-    # Individual structure
-    indiv.recovery.structure.train <- mean(sapply(1:q, function(source) {
-      frob(mod.individual[[source]][,1:n] - indiv.structure_train[[source,1]])/frob(indiv.structure_train[[source,1]])
-    }))
-    
-    indiv.recovery.structure.test <- mean(sapply(1:q, function(source) {
-      frob(mod.individual[[source]][,(n+1):(2*n)] - indiv.structure_test[[source,1]])/frob(indiv.structure_test[[source,1]])
-    }))
+    if (mod != "test") {
+      # Joint structure
+      joint.recovery.structure.train <- mean(sapply(1:q, function(source) {
+        frob(mod.joint[[source]][,1:n] - joint.structure_train[[source,1]])/frob(joint.structure_train[[source,1]])
+      }))
+      
+      joint.recovery.structure.test <- mean(sapply(1:q, function(source) {
+        frob(mod.joint[[source]][,(n+1):(2*n)] - joint.structure_test[[source,1]])/frob(joint.structure_test[[source,1]])
+      }))
+      
+      # Individual structure
+      indiv.recovery.structure.train <- mean(sapply(1:q, function(source) {
+        frob(mod.individual[[source]][,1:n] - indiv.structure_train[[source,1]])/frob(indiv.structure_train[[source,1]])
+      }))
+      
+      indiv.recovery.structure.test <- mean(sapply(1:q, function(source) {
+        frob(mod.individual[[source]][,(n+1):(2*n)] - indiv.structure_test[[source,1]])/frob(indiv.structure_test[[source,1]])
+      }))
+    }
     
     # -------------------------------------------------------------------------
     # Calculate prediction error for test data
