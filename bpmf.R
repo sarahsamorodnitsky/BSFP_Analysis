@@ -1430,7 +1430,7 @@ check_availability <- function(param, compare) {
 }
 
 # Generate fake data depending on conditions
-bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness, entrywise, prop_missing, sparsity) {
+bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness, entrywise, prop_missing, sparsity, identically_zero = FALSE) {
   # Generates fake data depending on the dims provided in p.vec, n, and ranks
   # and the true parameters provided in `true_params`
   
@@ -1572,9 +1572,15 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
       p.prior <- matrix(rbeta(1, 1, 1), ncol = 1)
       gamma <- matrix(rbinom(n_beta, size = 1, prob = p.prior), ncol = 1)
       gamma[1,] <- 1 # Always include the intercept
+  
       diag(Sigma_beta)[gamma == 0] <- 1/1000
       beta <- matrix(list(), nrow = 1, ncol = 1)
       beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
+      
+      # If desired, set spike coefficients to be identically 0
+      if (identically_zero) {
+        beta[[1,1]][gamma == 0] <- 0
+      }
     }
     
     # Combine the Vs
