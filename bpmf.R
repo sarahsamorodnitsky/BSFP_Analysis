@@ -173,13 +173,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   
   # If initializing with nuclear norm, set initialize values to posterior mode
   if (nninit) {
-    # Joint structure
-    
-    # Individual structure
-    
+
     V0 <- matrix(list(), nrow = 1, ncol = 1)
     if (r > 0) {
-      V0[[1,1]] <- svd(rank_init$C[[1,1]])$v[,1:r, drop = FALSE]
+      svd.joint <- svd(rank_init$C[[1,1]])
+      V0[[1,1]] <- (svd.joint$v[,1:r, drop = FALSE]) %*% diag(svd.joint$d[1:r], nrow = r)
     } 
     if (r == 0) {
       V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
@@ -201,8 +199,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       # Initialize W and V
       if (r.vec[s] > 0) {
-        Vs0[[1,s]] <- svd(rank_init$I[[s,1]])$v[,1:r.vec[s], drop = FALSE]
-        W0[[s,s]] <- svd(rank_init$I[[s,1]])$u[,1:r.vec[s], drop = FALSE]
+        svd.indiv.s <- svd(rank_init$I[[s,1]])
+        Vs0[[1,s]] <- (svd.indiv.s$v[,1:r.vec[s], drop = FALSE]) %*% diag(svd.joint$d[1:r.vec[s]], nrow = r.vec[s])
+        W0[[s,s]] <- svd.indiv.s$u[,1:r.vec[s], drop = FALSE]
         
         for (ss in 1:q) {
           if (ss != s) {
@@ -2870,7 +2869,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       # Obtaining the joint scores
       if (joint.rank != 0)  {
         svd.joint <- svd(mod.joint[[1]])
-        joint.scores <- (svd.joint$v[,1:joint.rank]) %*% diag(svd.joint$d[1:joint.rank])
+        joint.scores <- (svd.joint$v[,1:joint.rank,drop=FALSE]) %*% diag(svd.joint$d[1:joint.rank], nrow = joint.rank)
       }
       if (joint.rank == 0) {
         joint.scores <- NULL
@@ -2880,7 +2879,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       indiv.scores <- lapply(1:q, function(source) {
         if (indiv.rank[source] != 0) {
           svd.source <- svd(mod.individual[[source]])
-          (svd.source$v[,1:indiv.rank[source]]) %*% diag(svd.source$d[1:indiv.rank[source]])
+          (svd.source$v[,1:indiv.rank[source]]) %*% diag(svd.source$d[1:indiv.rank[source]], nrow = indiv.rank[source])
         }
       })
     }
