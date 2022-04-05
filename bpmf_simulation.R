@@ -242,17 +242,15 @@ simulation_results <- data.frame(s2nX = numeric(),
                                  Metric = character(),
                                  BPMF = numeric(),
                                  `BIDIFAC+` = numeric(),
-                                 test = numeric(),
                                  check.names = FALSE)
 
 # Iterate through the s2ns and append to the table
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Current results
-    res <- create_simulation_table(mod.list = c("BPMF", "BIDIFAC+", "test"),
+    res <- create_simulation_table(mod.list = c("BPMF", "BIDIFAC+"),
                                    path.list = list(BPMF = "~/BayesianPMF/03Simulations/BPMF/",
-                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/",
-                                                    test = "~/BayesianPMF/03Simulations/test/"),
+                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/"),
                                    s2nX = s2nX, 
                                    s2nY = s2nY)
     # Save
