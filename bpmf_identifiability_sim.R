@@ -45,4 +45,5 @@ nsim <- 100
 # -----------------------------------------------------------------------------
 
 ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
-                                         model_params, sparsity = TRUE, nsim = 100, nsample = 2000)
+                                         model_params, sparsity = TRUE, s2nX = 99, s2nY = 99,
+                                         nsim = 100, nsample = 2000)
