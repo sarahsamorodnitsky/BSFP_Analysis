@@ -3274,7 +3274,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data = true_data, Y = Y, nninit = TRUE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
+    res <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
     
     # Extract the posterior samples
     U.draw <- res$U.draw
