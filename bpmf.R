@@ -3206,7 +3206,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
 }
 
 # Simulation study for assessing adjustment of label switching (permutation invariance)
-identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, nsim, nsample, n_clust = 10) {
+identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, identically_zero = TRUE, s2nX, s2nY, nsim, nsample, n_clust = 10) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -3217,6 +3217,8 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   # response = string in c(NULL, "continuous", "binary")
   # true_params = the list of true parameters under which to generate data
   # sparsity = should the data be generated with sparsity in the response? (Boolean)
+  # identically_zero = should the coefficients in the spike under sparsity be identically 0?
+  # s2nX, s2nY = signal-to-noise ratio in X and Y
   # nsim = number of simulations to run
   # nsample = number of Gibbs sampling iterations to draw for the linear model
   # n_clust = how many clusters to run simulation in parallel?
@@ -3243,7 +3245,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # -------------------------------------------------------------------------
     
     # Generate n samples
-    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness = NULL, entrywise = NULL, prop_missing = NULL, sparsity = sparsity)
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX = s2nX, s2nY = s2nY, response, missingness = NULL, entrywise = NULL, prop_missing = NULL, sparsity = sparsity, identically_zero = identically_zero)
     
     # Saving the data
     true_data <- sim_data$data
@@ -3272,7 +3274,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
+    res <- bpmf(data = true_data, Y = Y, nninit = TRUE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
     
     # Extract the posterior samples
     U.draw <- res$U.draw
@@ -3324,7 +3326,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # -------------------------------------------------------------------------
     
     ssd <- c(ssd.ls, ssd.non.ls)
-    names(ssd) <- c("Corrected", "Non-Correceted")
+    names(ssd) <- c("Corrected", "Non-Corrected")
     ssd
   }
   
