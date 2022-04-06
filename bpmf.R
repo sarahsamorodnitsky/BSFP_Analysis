@@ -3222,7 +3222,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
 }
 
 # Simulation study for assessing adjustment of label switching (permutation invariance)
-identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, identically_zero = TRUE, s2nX, s2nY, nsim, nsample, n_clust = 10) {
+identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, identically_zero = TRUE, s2nX, s2nY, init_at_truth, nsim, nsample, n_clust = 10) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -3276,22 +3276,35 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # The inclusion indicators
     true.gammas <- sim_data$gamma
     
-    # Save the true V and Vs
+    # Save the true components of the factorization
     true.V <- sim_data$V
     true.Vs <- sim_data$Vs
+    true.U <- sim_data$U
+    true.W <- sim_data$W
 
     # Save a burn-in
     burnin <- nsample/2
     thinned_iters <- seq(1, nsample, by = 10)
     thinned_iters_burnin <- seq(burnin, nsample, by = 10)
     
+    # Save the true values to use as the initial values
+    starting_values <- list(V = true.V, U = true.U, Vs = true.Vs, W = true.W)
+    
     # -------------------------------------------------------------------------
     # Run the model and extract results
     # -------------------------------------------------------------------------
     
-    # Gibbs sampling
-    res <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
+    # If initializing with the priors
+    if (!init_at_truth) {
+      res <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
+      
+    }
     
+    # If initializing at the true values
+    if (init_at_truth) {
+      res <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE, starting_values = starting_values)
+    }
+  
     # Extract the posterior samples
     U.draw <- res$U.draw
     V.draw <- res$V.draw
