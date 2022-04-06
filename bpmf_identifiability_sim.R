@@ -41,9 +41,17 @@ nsample <- 2000
 nsim <- 100
 
 # -----------------------------------------------------------------------------
-# Run the simulation
+# Run the simulation without initializing at the true scores
 # -----------------------------------------------------------------------------
 
 ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
                                          model_params, sparsity = TRUE, s2nX = 99, s2nY = 99,
-                                         nsim = 100, nsample = 2000)
+                                         init_at_truth = FALSE, nsim = 100, nsample = 2000)
+
+# -----------------------------------------------------------------------------
+# Run the simulation while initializing at the true scores
+# -----------------------------------------------------------------------------
+
+ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
+                                         model_params, sparsity = TRUE, s2nX = 99, s2nY = 99,
+                                         init_at_truth = TRUE, nsim = 100, nsample = 2000)
