@@ -14,7 +14,7 @@ library(truncnorm)
 # Bayesian PMF functions
 # -----------------------------------------------------------------------------
 
-bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE) {
+bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
   
@@ -29,7 +29,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   # scores = if using structure from another method to fit a linear model, provide joint and individual scores here.
   #   in this case, ranks should be provided and nninit = FALSE, Y != NULL
   # nsample = number of Gibbs sampling iterations
-  # progress = should the progress of the sampler be displayed? 
+  # progress = should the progress of the sampler be displayed?
+  # starting_values = list of starting values for V, U, W, Vs. If NULL and nninit = TRUE, init with BIDIFAC+,
+  #    if NULL and nninit = FALSE, init from prior. If not NULL, will init with provided starting values unless 
+  #    nninit. 
   # ---------------------------------------------------------------------------
   
   # ---------------------------------------------------------------------------
@@ -237,63 +240,76 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   
   # If ranks provided, initialize with prior
   if (!nninit) {
-    V0 <- matrix(list(), nrow = 1, ncol = 1)
-    if (r > 0) {
-      V0[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
-    } 
-    if (r == 0) {
-      V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
-    }
     
-    U0 <- matrix(list(), nrow = q, ncol = 1)
-    Vs0 <- matrix(list(), nrow = 1, ncol = q)
-    W0 <- matrix(list(), nrow = q, ncol = q)
-    
-    for (s in 1:q) {
-      
-      # Initialize U
+    # If no starting values were provided, initialize from priors
+    if (is.null(starting_values)) {
+      V0 <- matrix(list(), nrow = 1, ncol = 1)
       if (r > 0) {
-        U0[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
+        V0[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
       } 
       if (r == 0) {
-        U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
       }
       
-      # Initialize W and V
-      if (r.vec[s] > 0) {
-        Vs0[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
-        W0[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r.vec[s])
+      U0 <- matrix(list(), nrow = q, ncol = 1)
+      Vs0 <- matrix(list(), nrow = 1, ncol = q)
+      W0 <- matrix(list(), nrow = q, ncol = q)
+      
+      for (s in 1:q) {
         
-        for (ss in 1:q) {
-          if (ss != s) {
-            if (r.vec[ss] > 0) {
-              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+        # Initialize U
+        if (r > 0) {
+          U0[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
+        } 
+        if (r == 0) {
+          U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        }
+        
+        # Initialize W and V
+        if (r.vec[s] > 0) {
+          Vs0[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
+          W0[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r.vec[s])
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
             }
-            
-            if (r.vec[ss] == 0) {
-              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+          }
+        } 
+        if (r.vec[s] == 0) {
+          Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
+          W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
             }
           }
         }
-      } 
-      if (r.vec[s] == 0) {
-        Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
-        W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
         
-        for (ss in 1:q) {
-          if (ss != s) {
-            if (r.vec[ss] > 0) {
-              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
-            }
-            
-            if (r.vec[ss] == 0) {
-              W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
-            }
-          }
-        }
       }
-      
     }
+    
+    # If starting values were provided, use them as initial values
+    if (!is.null(starting_values)) {
+      V0 <- starting_values$V
+      U0 <- starting_values$U
+      W0 <- starting_values$W
+      Vs0 <- starting_values$Vs
+    }
+
   }
   
   if (response_given) {
