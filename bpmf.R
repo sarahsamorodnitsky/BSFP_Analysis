@@ -1446,7 +1446,7 @@ check_availability <- function(param, compare) {
 }
 
 # Generate fake data depending on conditions
-bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness, entrywise, prop_missing, sparsity, identically_zero = FALSE) {
+bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness, entrywise, prop_missing, sparsity, identically_zero = FALSE, num_in_spike = NULL) {
   # Generates fake data depending on the dims provided in p.vec, n, and ranks
   # and the true parameters provided in `true_params`
   
@@ -1463,6 +1463,9 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   # entrywise = NULL if missingness = NULL, TRUE if entrywise missingness, FALSE if columnwise missingness
   # prop_missing = NULL if missingness = NULL, otherwise the proportion of entries missingness
   # sparsity = TRUE if generate regression coefficients under spike-and-slab prior, FALSE otherwise
+  # identically_zero = TRUE if generating response with sparsity and want spike coefficients to be exactly 0
+  # num_in_spike (vec of ints) = number of coefficients to be generated from spike if generating response with sparsity.
+  #     Should have an integer for joint and each individual structure. May be NULL if want to generate data under prior. 
   # ---------------------------------------------------------------------------
   
   # -------------------------------------------------------------------------
@@ -1585,9 +1588,40 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
     }
     
     if (sparsity) {
+      
       p.prior <- matrix(rbeta(1, 1, 1), ncol = 1)
-      gamma <- matrix(rbinom(n_beta, size = 1, prob = p.prior), ncol = 1)
-      gamma[1,] <- 1 # Always include the intercept
+      
+      # If no prior specification on number of coefficients in spike
+      if (is.null(num_in_spike)) {
+        gamma <- matrix(rbinom(n_beta, size = 1, prob = p.prior), ncol = 1)
+        gamma[1,] <- 1 # Always include the intercept
+      }
+      
+      # If user specifies number of coefficients in spike, randomly choose which
+      if (!is.null(num_in_spike)) {
+        gamma <- matrix(1, nrow = n_beta, ncol = 1) 
+        
+        # Randomly choose which components to be in the spike from each joint and individual structure
+        spike_inds <- c()
+        
+        # Randomly choose joint components for spike
+        joint_spike_inds <- sort(sample(x = c(2:r), size = num_in_spike[1], replace = FALSE))
+        spike_inds <- c(spike_inds, joint_spike_inds) 
+        
+        # Randomly choose which individual components for spike
+        for (s in 1:q) {
+          if (s == 1) {
+            indiv_spike_inds_s <- 1 + r + sort(sample(x = c(1:r.vec[s]), size = num_in_spike[2], replace = FALSE))
+          }
+          
+          if (s != 1) {
+            indiv_spike_inds_s <- 1 + r + sum(r.vec[1:(s-1)]) + sort(sample(x = c(1:r.vec[s]), size = num_in_spike[s], replace = FALSE))
+          }
+          spike_inds <- c(spike_inds, indiv_spike_inds_s)
+        }
+        
+        gamma[spike_inds,] <- 0
+      }
   
       diag(Sigma_beta)[gamma == 0] <- 1/1000
       beta <- matrix(list(), nrow = 1, ncol = 1)
@@ -3222,7 +3256,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
 }
 
 # Simulation study for assessing adjustment of label switching (permutation invariance)
-identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, identically_zero = TRUE, s2nX, s2nY, init_at_truth, nsim, nsample, n_clust = 10) {
+identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_params, sparsity = TRUE, identically_zero = TRUE, s2nX, s2nY, init_at_truth, num_in_spike = NULL, nsim, nsample, n_clust = 10) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -3249,7 +3283,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "label_switching")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive")
+  packs <- c("Matrix", "MASS", "truncnorm")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     
     # Set seed
@@ -3261,7 +3295,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # -------------------------------------------------------------------------
     
     # Generate n samples
-    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX = s2nX, s2nY = s2nY, response, missingness = NULL, entrywise = NULL, prop_missing = NULL, sparsity = sparsity, identically_zero = identically_zero)
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX = s2nX, s2nY = s2nY, response, missingness = NULL, entrywise = NULL, prop_missing = NULL, sparsity = sparsity, identically_zero = identically_zero, num_in_spike = num_in_spike)
     
     # Saving the data
     true_data <- sim_data$data
