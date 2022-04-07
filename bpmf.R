@@ -203,7 +203,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       # Initialize W and V
       if (r.vec[s] > 0) {
         svd.indiv.s <- svd(rank_init$I[[s,1]])
-        Vs0[[1,s]] <- (svd.indiv.s$v[,1:r.vec[s], drop = FALSE]) %*% diag(svd.joint$d[1:r.vec[s]], nrow = r.vec[s])
+        Vs0[[1,s]] <- (svd.indiv.s$v[,1:r.vec[s], drop = FALSE]) %*% diag(svd.indiv.s$d[1:r.vec[s]], nrow = r.vec[s])
         W0[[s,s]] <- svd.indiv.s$u[,1:r.vec[s], drop = FALSE]
         
         for (ss in 1:q) {
@@ -238,7 +238,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     }
   }
   
-  # If ranks provided, initialize with prior
+  # If ranks provided, initialize with prior or use given starting values
   if (!nninit) {
     
     # If no starting values were provided, initialize from priors
