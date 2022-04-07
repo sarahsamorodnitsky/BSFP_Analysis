@@ -41,7 +41,7 @@ nsample <- 2000
 nsim <- 100
 
 # -----------------------------------------------------------------------------
-# Run the simulation without initializing at the true scores
+# Run the simulation without initializing at the true scores (s2nX=s2nY=99)
 # -----------------------------------------------------------------------------
 
 ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
@@ -49,9 +49,34 @@ ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous
                                          init_at_truth = FALSE, nsim = 100, nsample = 2000)
 
 # -----------------------------------------------------------------------------
-# Run the simulation while initializing at the true scores
+# Run the simulation while initializing at the true scores (s2nX=s2nY=99)
 # -----------------------------------------------------------------------------
 
 ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
                                          model_params, sparsity = TRUE, s2nX = 99, s2nY = 99,
-                                         init_at_truth = TRUE, nsim = 100, nsample = 2000)
+                                         init_at_truth = TRUE, num_in_spike = c(2,2,2), nsim = 100, nsample = 2000)
+
+settings <- list(s2nX = 99, s2nY = 99, init_at_truth = TRUE, num_in_spike = c(2,2,2))
+save(ident_sim_results, settings,
+     file = "~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX99_s2nY99_init_at_truth.rda")
+
+# -----------------------------------------------------------------------------
+# Run the simulation while initializing at the true scores (s2nX=99, s2nY=NULL)
+# -----------------------------------------------------------------------------
+
+ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
+                                         model_params, sparsity = TRUE, s2nX = 99, s2nY = NULL,
+                                         init_at_truth = TRUE, num_in_spike = c(2,2,2), nsim = 100, nsample = 2000)
+
+settings <- list(s2nX = 99, s2nY = NULL, init_at_truth = TRUE, num_in_spike = c(2,2,2))
+save(ident_sim_results, settings,
+     file = "~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX99_s2nYNULL_init_at_truth.rda")
+
+
+# -----------------------------------------------------------------------------
+# Run the simulation while initializing at the true scores (s2nX=s2nY=NULL)
+# -----------------------------------------------------------------------------
+
+ident_sim_results <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
+                                         model_params, sparsity = TRUE, s2nX = 0.1, s2nY = NULL,
+                                         init_at_truth = TRUE, num_in_spike = c(2,2,2), nsim = 100, nsample = 2000)
