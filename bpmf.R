@@ -2957,8 +2957,9 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       indiv.rank <- mod.out$rankA
       
       # Obtaining the joint scores
-      if (joint.rank != 0) {
-        joint.scores <- svd(mod.joint[[1]])$v[,1:joint.rank]
+      if (joint.rank != 0) { 
+        svd.joint <- svd(mod.joint[[1]])
+        joint.scores <- (svd.joint$v[,1:joint.rank, drop = FALSE]) %*% diag(svd.joint$d[1:joint.rank], nrow = joint.rank)
       }
       if (joint.rank == 0) {
         joint.scores <- NULL
@@ -2968,7 +2969,7 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
       indiv.scores <- lapply(1:q, function(source) {
         if (indiv.rank[source] != 0) {
           svd.source <- svd(mod.individual[[source]])
-          svd.source$v[,1:indiv.rank[source]]
+          (svd.source$v[,1:indiv.rank[source]]) %*% diag(svd.source$d[1:indiv.rank[source]], nrow = indiv.rank[source])
         }
       })
     }
