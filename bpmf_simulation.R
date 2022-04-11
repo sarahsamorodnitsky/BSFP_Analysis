@@ -63,20 +63,11 @@ start <- Sys.time()
 sJIVE.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
-for (s2nX in s2nX.list[2:7]) {
+for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
-    if (s2nX == 9) {
-      if (s2nY != 3) {
-        sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                         s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
-        ind <- ind + 1
-      }
-    }
-    if (s2nX != 9) {
-      sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                       s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
-      ind <- ind + 1
-    }
+    sJIVE.res[[ind]] <- run_each_mod(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+    ind <- ind + 1
   }
 }
 
