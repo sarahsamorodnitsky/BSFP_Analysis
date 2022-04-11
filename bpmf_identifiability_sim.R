@@ -44,146 +44,90 @@ nsim <- 100
 s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
 
 # -----------------------------------------------------------------------------
-# Run the simulation 
+# Run the simulation with no s2n adjustment in Y
 # -----------------------------------------------------------------------------
 
 # Initialize a list to contain the results
 ident_res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1 # Index the results
 
-# Iterate through the different conditions
+# Initialize at the truth
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
+  # -----------------------------------------------------------------------------
+  # Run the simulation with no s2n adjustment in Y, initializing at the truth
+  # -----------------------------------------------------------------------------
+  
+  res <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
+                             model_params, sparsity = TRUE, s2nX = s2nX, s2nY = NULL,
+                             init_at_truth = TRUE, nsim = nsim, nsample = nsample)
+  ident_res[[ind]] <- res
+  
+  # Save the results
+  settings <- list(s2nX = s2nX, s2nY = NULL, init_at_truth = TRUE, num_in_spike = c(2,2,2))
+  save(res, settings,
+       file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_TRUE.rda"))
+  
+  # Update counter
+  ind <-  ind + 1
+  
+  # Remove res to save on memory
+  rm(res)
+  gc()
+}
+
+# Do not initialize at the truth
+for (s2nX in s2nX.list) {
+  # -----------------------------------------------------------------------------
+  # Run the simulation with no s2n adjustment in Y, initializing at the truth
+  # -----------------------------------------------------------------------------
+
+  res <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
+                             model_params, sparsity = TRUE, s2nX = s2nX, s2nY = NULL,
+                             init_at_truth = FALSE, nsim = nsim, nsample = nsample)
+  ident_res[[ind]] <- res
+
+  # Save the results
+  settings <- list(s2nX = s2nX, s2nY = NULL, init_at_truth = TRUE, num_in_spike = c(2,2,2))
+  save(res, settings,
+       file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_FALSE.rda"))
+
+  # Update counter
+  ind <-  ind + 1
+
+  # Remove res to save on memory
+  rm(res)
+  gc()
+}
+
+# -----------------------------------------------------------------------------
+# Examining the results
+# -----------------------------------------------------------------------------
+
+# Initialize a table to contain results
+identifiability_results <- data.frame(s2nX = rep(s2nX.list, 2),
+                                      init_at_truth = rep(c(TRUE, FALSE), each = 3),
+                                      CorrectedSSD = numeric(6),
+                                      NonCorrectedSSD = numeric(6))
+
+# Iterate through the conditions
+for (init_at_truth in c(TRUE, FALSE)) { # Did we initialize at at the true value?
+  for (s2nX in s2nX.list) { # What was the s2n for X?
+    # Load in the results
+    load(paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_", init_at_truth,".rda"), verbose = TRUE)
     
-    # -----------------------------------------------------------------------------
-    # Run the simulation with no s2n adjustment in Y, initializing at the truth
-    # -----------------------------------------------------------------------------
+    # Compute the SSDs
+    corrected_ssd <- mean(res[,1])
+    noncorrected_ssd <- mean(res[,2])
     
-    res <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
-                               model_params, sparsity = TRUE, s2nX = s2nX, s2nY = NULL,
-                               init_at_truth = TRUE, nsim = nsim, nsample = nsample)
-    ident_res[[ind]] <- res
+    # Save the SSDs in the table
+    identifiability_results[identifiability_results$s2nX == s2nX & 
+                              identifiability_results$init_at_truth == init_at_truth,]$CorrectedSSD <- corrected_ssd
     
-    # Save the results
-    settings <- list(s2nX = s2nX, s2nY = NULL, init_at_truth = TRUE, num_in_spike = c(2,2,2))
-    save(res, settings,
-         file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_TRUE.rda"))
-    
-    # Update counter
-    ind <-  ind + 1
-    
-    # Remove res to save on memory
-    rm(res)
-    gc()
+    identifiability_results[identifiability_results$s2nX == s2nX & 
+                              identifiability_results$init_at_truth == init_at_truth,]$NonCorrectedSSD <- noncorrected_ssd
   }
 }
 
-for (s2nX in s2nX.list) {
-#  for (s2nY in s2nY.list) {
-    
-    # -----------------------------------------------------------------------------
-    # Run the simulation with no s2n adjustment in Y, initializing at the truth
-    # -----------------------------------------------------------------------------
-    
-    res <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
-                               model_params, sparsity = TRUE, s2nX = s2nX, s2nY = NULL,
-                               init_at_truth = FALSE, nsim = nsim, nsample = nsample)
-    ident_res[[ind]] <- res
-    
-    # Save the results
-    settings <- list(s2nX = s2nX, s2nY = NULL, init_at_truth = TRUE, num_in_spike = c(2,2,2))
-    save(res, settings,
-         file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_FALSE.rda"))
-    
-    # Update counter
-    ind <-  ind + 1
-    
-    # Remove res to save on memory
-    rm(res)
-    gc()
-#  }
-}
-
-# -----------------------------------------------------------------------------
-# Run the simulation with no s2n adjustment in Y, initializing at the truth
-# -----------------------------------------------------------------------------
-
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    
-    # -----------------------------------------------------------------------------
-    # Run the simulation with no s2n adjustment in Y, initializing at the truth
-    # -----------------------------------------------------------------------------
-    
-    res <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
-                               model_params, sparsity = TRUE, s2nX = s2nX, s2nY = s2nY,
-                               init_at_truth = TRUE, nsim = nsim, nsample = nsample)
-    
-    ident_res[[ind]] <- res
-    
-    # Save the results
-    settings <- list(s2nX = s2nX, s2nY = NULL, init_at_truth = FALSE, num_in_spike = c(2,2,2))
-    save(res, settings,
-         file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_TRUE.rda"))
-    
-    
-    # Update counter
-    ind <-  ind + 1
-    
-    # Remove res to save on memory
-    rm(res)
-    gc()
-  }
-}
-
-
-
-# -----------------------------------------------------------------------------
-# Run the simulation with s2n adjustment in Y, initializing at the truth
-# -----------------------------------------------------------------------------
-
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    
-    # -----------------------------------------------------------------------------
-    # Run the simulation with no s2n adjustment in Y, without initializing at the truth
-    # -----------------------------------------------------------------------------
-    
-    res <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
-                               model_params, sparsity = TRUE, s2nX = s2nX, s2nY = s2nY,
-                               init_at_truth = FALSE, nsim = nsim, nsample = nsample)
-    
-    ident_res[[ind]] <- res
-    
-    # Save the results
-    settings <- list(s2nX = s2nX, s2nY = NULL, init_at_truth = FALSE, num_in_spike = c(2,2,2))
-    save(res, settings,
-         file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_FALSE.rda"))
-    
-    
-    # Update counter
-    ind <-  ind + 1
-    
-    # Remove res to save on memory
-    rm(res)
-    gc()
-  }
-}
-
-# -----------------------------------------------------------------------------
-# Run the simulation with s2n adjustment in Y, without initializing at the truth
-# -----------------------------------------------------------------------------
-
-res <- identifiability_sim(p.vec, n, ranks, response = "continuous", true_params,
-                           model_params, sparsity = TRUE, s2nX = s2nX, s2nY = s2nY,
-                           init_at_truth = FALSE, nsim = nsim, nsample = nsample)
-
-ident_res[[ind]] <- res
-
-# Save the results
-settings <- list(s2nX = s2nX, s2nY = s2nY, init_at_truth = FALSE, num_in_spike = c(2,2,2))
-save(res, settings,
-     file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_", s2nY, "_spike222_initattruth_FALSE.rda"))
-
-# Update counter
-ind <-  ind + 1
+# Display results
+library(xtable)
+print(xtable(identifiability_results, digits = 4))
