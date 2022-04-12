@@ -3393,6 +3393,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     names(ssd) <- c("Corrected", "Non-Corrected")
     ssd
   }
+  stopCluster(cl)
   
   # Return the results
   sim_results
