@@ -41,7 +41,8 @@ nsample <- 2000
 nsim <- 100
 
 # Saving the different potential s2n's for X and Y
-s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
+# s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
+s2nX.list <- s2nY.list <- c(1000, 75, 50, 25, 10, 5)
 
 # -----------------------------------------------------------------------------
 # Run the simulation with no s2n adjustment in Y
@@ -107,7 +108,8 @@ for (s2nX in s2nX.list) {
 identifiability_results <- data.frame(s2nX = rep(s2nX.list, 2),
                                       init_at_truth = rep(c(TRUE, FALSE), each = 3),
                                       CorrectedSSD = numeric(6),
-                                      NonCorrectedSSD = numeric(6))
+                                      NonCorrectedSSD = numeric(6),
+                                      Diff = numeric(6))
 
 # Iterate through the conditions
 for (init_at_truth in c(TRUE, FALSE)) { # Did we initialize at at the true value?
@@ -127,6 +129,9 @@ for (init_at_truth in c(TRUE, FALSE)) { # Did we initialize at at the true value
                               identifiability_results$init_at_truth == init_at_truth,]$NonCorrectedSSD <- noncorrected_ssd
   }
 }
+
+# Calculate the difference
+identifiability_results$Diff <- identifiability_results$CorrectedSSD - identifiability_results$NonCorrectedSSD
 
 # Display results
 library(xtable)
