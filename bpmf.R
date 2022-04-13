@@ -3288,7 +3288,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     
     # Set seed
-    seed <- sim_iter
+    seed <- sim_iter + 100
     set.seed(seed)
     
     # -------------------------------------------------------------------------
