@@ -3283,7 +3283,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
-             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "label_switching")
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "factor_switching")
   packs <- c("Matrix", "MASS", "truncnorm")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     
@@ -3361,7 +3361,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # -------------------------------------------------------------------------
     
     # Apply algorithm
-    res.ls <- label_switching(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
+    res.ls <- factor_switching(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
                               gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
                               nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
                               nninit = FALSE, pivot = list(true.V, true.Vs))
@@ -4389,8 +4389,8 @@ create_simulation_table <- function(mod.list, path.list, s2nX, s2nY) {
 # Addressing the factor switching problem
 # -----------------------------------------------------------------------------
 
-# The label switching algorithm: matches results to the posterior mode
-label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample, thinned_iters_burnin, nninit = TRUE, pivot = NULL) {
+# The factor switching algorithm: matches results to the posterior mode
+factor_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample, thinned_iters_burnin, nninit = TRUE, pivot = NULL) {
   
   # ---------------------------------------------------------------------------
   # Arguments: 
@@ -4502,6 +4502,7 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
     # -------------------------------------------------------------------------
     # Storing the current V, U, beta, and gamma
     # -------------------------------------------------------------------------
+    
     current_V <- V.draw[[iter]]
     current_U <- U.draw[[iter]]
     current_Vs <- Vs.draw[[iter]]
@@ -4561,9 +4562,15 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
       }
     }
     
+    # -------------------------------------------------------------------------
+    # Finding the optimal order
+    # -------------------------------------------------------------------------
+    
     # Storing the swaps and signs
     current_swaps_joint <- current_signs_joint <- c()
     current_swaps_indiv <- current_signs_indiv <- lapply(1:q, function(s) c())
+    
+    # Start with the joint structure
     
     for (k in 1:r) {
       # for each column in the pivot, rearrange the columns in draws to match the order
@@ -4571,7 +4578,7 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
       jk <- which.max(abs(corrs)) # storing the index of the highest correlation
       ak <- sign(corrs[jk]) # storing the sign of that correlation
       
-      # Setting the kth column of \tilde_V to be the ak*current_V[,jk] column. 
+      # Setting the kth column of tilde_V to be the ak*current_V[,jk] column. 
       tilde_V[[1,1]][,k] <- ak*current_V[[1,1]][,jk]
       
       # Rearranging the corresponding column in U:
@@ -4600,6 +4607,8 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
       # Removing the already-swapped columns in current_V from the running:
       current_V[[1,1]][,jk] <- NA
     }
+    
+    # Then the individual structures
     
     for (s in 1:q) {
       for (k in 1:r.vec[s]) {
@@ -4638,6 +4647,7 @@ label_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamma
     }
     
     # Combine the betas 
+    
     if (!is.null(betas)) {
       tilde_beta[[1,1]] <- rbind(current_beta[[1,1]][1], tilde_beta_joint[[1,1]], do.call(rbind, tilde_beta_indiv))
     }
