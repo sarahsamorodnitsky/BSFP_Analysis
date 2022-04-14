@@ -4856,6 +4856,478 @@ factor_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamm
        order_indiv = order_indiv)
 }
 
+# Creating an alternative factor switching algorithm
+factor_switching_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, n, p.vec, nsample, thinned_iters_burnin, BIDIFAC_solution) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
+  # draws (list): the draws to swap according to the pivot
+  # rank (int): number of columns to iterate through
+  # loadings (list): the corresponding loadings for each draw of the matrix to swap
+  # betas (double vec): list of vectors of the coefficients drawn at each iteration
+  # gammas (int vec): list of vectors of the inclusion indicators drawn at each iteration
+  # r (int) = joint rank
+  # r.vec (c(ints)) = vector of individual ranks
+  # nsample (int) = number of posterior samples
+  # thinned_iters_burnin (c(ints)) = vector of indices for samples after burn-in + thinning if desired
+  # nninit (boolean) = TRUE if initialized at theoretical posterior mode or FALSE if use posterior mean as pivot
+  # pivot (list) = list of V and Vs to use as pivots. If NULL, must provide nninit. 
+  # ---------------------------------------------------------------------------
+  
+  # Saving the number of sources
+  q <- length(r.vec)
+  
+  # Returning the swapped matrices
+  swapped_U.draw <- lapply(1:length(U.draw), function(iter) list())
+  swapped_V.draw <- lapply(1:length(V.draw), function(iter) list())
+  swapped_W.draw <- lapply(1:length(W.draw), function(iter) list())
+  swapped_Vs.draw <- lapply(1:length(Vs.draw), function(iter) list())
+  swapped_betas <- lapply(1:length(betas), function(iter) list())
+  swapped_gammas <- lapply(1:length(gammas), function(iter) list())
+  
+  # Returning the swaps made so they can be undone
+  swaps_made <- lapply(1:length(swapped_U.draw), function(iter) list())
+  
+  # Storing the sign changes so they can be undone
+  signs_changed <- lapply(1:length(swapped_U.draw), function(iter) list())
+  
+  # Storing the BIDIFAC+ solutions
+  V.bid <- BIDIFAC_solution$V
+  U.bid <- BIDIFAC_solution$U
+  Vs.bid <- BIDIFAC_solution$Vs
+  W.bid <- BIDIFAC_solution$W
+  
+  # Save the posterior variances
+  sd_joint <- sqrt(1/(sqrt(n) + sqrt(sum(p.vec))))
+  sd_indiv <- sqrt(sapply(p.vec, function(ps) 1/(sqrt(n) + sqrt(ps))))
+  
+  for (iter in 1:length(U.draw)) {
+    # -------------------------------------------------------------------------
+    # Initializing for iter
+    # 
+    # For each iteration, arrange the columns of each draw to match that 
+    # of the pivot. 
+    # -------------------------------------------------------------------------
+    
+    # Initializing the rearranged version
+    tilde_V <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_U <- matrix(list(), nrow = q, ncol = 1)
+    tilde_W <- matrix(list(), nrow = q, ncol = q)
+    tilde_Vs <- matrix(list(), nrow = 1, ncol = q)
+    
+    tilde_beta <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_beta_joint <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_beta_indiv <- matrix(list(), nrow = q, ncol = 1)
+    
+    tilde_gamma <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_gamma_joint <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_gamma_indiv <- matrix(list(), nrow = q, ncol = 1)
+    
+    tilde_V[[1,1]] <- matrix(nrow = nrow(V.draw[[1]][[1,1]]), ncol = ncol(V.draw[[1]][[1,1]]))
+    
+    for (s in 1:q) {
+      tilde_U[[s,1]] <- matrix(nrow = nrow(U.draw[[1]][[s,1]]), ncol = ncol(U.draw[[1]][[s,1]]))
+      tilde_W[[s,s]] <- matrix(nrow = nrow(W.draw[[1]][[s,s]]), ncol = ncol(W.draw[[1]][[s,s]]))
+      tilde_Vs[[1,s]] <- matrix(nrow = nrow(Vs.draw[[1]][[1,s]]), ncol = ncol(Vs.draw[[1]][[1,s]]))
+      
+      for (ss in 1:q) {
+        if (ss != s) {
+          tilde_W[[s,ss]] <- matrix(0, nrow = nrow(W.draw[[1]][[s,s]]), ncol = ncol(W.draw[[1]][[ss,ss]]))
+        }
+      }
+    }
+    
+    n_beta <- 1 + r + sum(r.vec)
+    tilde_beta[[1,1]] <- matrix(nrow = n_beta, ncol = 1)
+    tilde_beta_joint[[1,1]] <- matrix(nrow = r, ncol = 1)
+    
+    tilde_gamma[[1,1]] <- matrix(nrow = n_beta, ncol = 1)
+    tilde_gamma_joint[[1,1]] <- matrix(nrow = r, ncol = 1)
+    
+    for (s in 1:q) {
+      tilde_beta_indiv[[s,1]] <- matrix(nrow = r.vec[s], ncol = 1)
+      tilde_gamma_indiv[[s,1]] <- matrix(nrow = r.vec[s], ncol = 1)
+    }
+    
+    # -------------------------------------------------------------------------
+    # Storing the current V, U, beta, and gamma
+    # -------------------------------------------------------------------------
+    
+    current_V <- V.draw[[iter]]
+    current_U <- U.draw[[iter]]
+    current_Vs <- Vs.draw[[iter]]
+    current_W <- W.draw[[iter]]
+    
+    if (!is.null(betas)) {
+      current_beta <- betas[[iter]]
+      current_beta_indiv <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Joint effect
+      if (r != 0) {
+        current_beta_joint <- current_beta[[1,1]][2:(r+1),, drop = FALSE] 
+      } else {
+        current_beta_joint <- NULL
+      }
+      
+      # Individual effects
+      current_beta_indiv.temp <- current_beta[[1,1]][(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) {
+            current_beta_indiv[[s, 1]] <- current_beta_indiv.temp[1:r.vec[s],, drop = FALSE] 
+          }
+          if (s != 1) {
+            current_beta_indiv[[s, 1]] <- current_beta_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+      }
+    }
+    
+    if (!is.null(gammas)) {
+      current_gamma <- gammas[[iter]] 
+      current_gamma_indiv <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Joint effect
+      if (r != 0) {
+        current_gamma_joint <- current_gamma[[1,1]][2:(r+1),, drop = FALSE]
+      } else {
+        current_gamma_joint <- NULL
+      }
+      
+      # Individual effects
+      current_gamma_indiv.temp <- current_gamma[[1,1]][(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) {
+            current_gamma_indiv[[s,1]] <- current_gamma_indiv.temp[1:r.vec[s],, drop = FALSE] 
+          }
+          if (s != 1) {
+            current_gamma_indiv[[s,1]] <- current_gamma_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+      }
+    }
+    
+    # -------------------------------------------------------------------------
+    # Finding the optimal order
+    # -------------------------------------------------------------------------
+    
+    # Storing the swaps and signs
+    current_swaps_joint <- current_signs_joint <- c()
+    current_swaps_indiv <- current_signs_indiv <- lapply(1:q, function(s) c())
+    
+    # Start with the joint structure
+    
+    for (k in 1:r) {
+      # For each factor, calculate the log-density given the BIDIFAC+ solution for both signs
+      dens_pos <- apply(current_V[[1,1]], 2, function(current_col) -sum(dnorm(current_col, mean = V.bid[[1,1]][,k], sd = rep(sd_joint, n), log = TRUE))) # corrs <- apply(current_V[[1,1]], 2, function(current_col) cor(current_col, pivot_V[[1,1]][,k]))
+      dens_neg <- apply(current_V[[1,1]], 2, function(current_col) -sum(dnorm(-current_col, mean = V.bid[[1,1]][,k], sd = rep(sd_joint, n), log = TRUE))) # corrs <- apply(current_V[[1,1]], 2, function(current_col) cor(current_col, pivot_V[[1,1]][,k]))
+      
+      # Which sign had the higher negative log density?
+      ak <- if (max(dens_pos, dens_neg, na.rm = TRUE) %in% dens_pos) 1 else -1
+      
+      # Save the index if the sign change was pos or neg
+      if (ak == 1) {
+        jk <- which.max(abs(dens_pos)) 
+      }
+      
+      if (ak == -1) {
+        jk <- which.max(abs(dens_neg)) 
+      }
+      
+      # Setting the kth column of tilde_V to be the ak*current_V[,jk] column. 
+      tilde_V[[1,1]][,k] <- ak*current_V[[1,1]][,jk]
+      
+      # Rearranging the corresponding column in U:
+      for (s in 1:q) {
+        tilde_U[[s,1]][,k] <- ak*current_U[[s,1]][,jk]
+      }
+      
+      # Rearranging the corresponding rows in betas:
+      if (!is.null(betas)) {
+        tilde_beta_joint[[1,1]][k,] <- ak*current_beta_joint[jk,]
+      }
+      
+      # Rearranging the corresponding rows in the gammas:
+      if (!is.null(gammas)) {
+        tilde_gamma_joint[[1,1]][k,] <- current_gamma_joint[jk,]
+      }
+      
+      # Recording what swap was made. The first entry would be the column index
+      # of current_V that was moved to the first spot. The second index would be 
+      # the column index of current_V that was moved to the second column, etc. 
+      current_swaps_joint[k] <- jk
+      
+      # Recording the sign change (if any) that was made
+      current_signs_joint[k] <- ak
+      
+      # Removing the already-swapped columns in current_V from the running:
+      current_V[[1,1]][,jk] <- NA
+    }
+    
+    # Then the individual structures
+    
+    for (s in 1:q) {
+      for (k in 1:r.vec[s]) {
+        # For each factor, calculate the log-density given the BIDIFAC+ solution for both signs
+        dens_pos <- apply(current_Vs[[1,s]], 2, function(current_col) -sum(dnorm(current_col, mean = Vs.bid[[1,s]][,k], sd = rep(sd_indiv[s], n), log = TRUE))) # corrs <- apply(current_Vs[[1,s]], 2, function(current_col) cor(current_col, pivot_Vs[[1,s]][,k])) 
+        dens_neg <- apply(current_Vs[[1,s]], 2, function(current_col) -sum(dnorm(-current_col, mean = Vs.bid[[1,s]][,k], sd = rep(sd_indiv[s], n), log = TRUE))) # corrs <- apply(current_Vs[[1,s]], 2, function(current_col) cor(current_col, pivot_Vs[[1,s]][,k])) 
+        
+        # Which sign had the higher negative log density?
+        ak <- if (max(dens_pos, dens_neg, na.rm = TRUE) %in% dens_pos) 1 else -1
+        
+        # Save the index if the sign change was pos or neg
+        if (ak == 1) {
+          jk <- which.max(abs(dens_pos)) 
+        }
+        
+        if (ak == -1) {
+          jk <- which.max(abs(dens_neg)) 
+        }
+        
+        # Setting the kth column of \tilde_Vs to be the ak*current_Vs[,jk] column. 
+        tilde_Vs[[1,s]][,k] <- ak*current_Vs[[1,s]][,jk]
+        
+        # Rearranging the corresponding column in W:
+        tilde_W[[s,s]][,k] <- ak*current_W[[s,s]][,jk]
+        
+        # Rearranging the corresponding rows in betas:
+        if (!is.null(betas)) {
+          tilde_beta_indiv[[s,1]][k,] <- ak*current_beta_indiv[[s,1]][jk,]
+        }
+        
+        # Rearranging the corresponding rows in the gammas:
+        if (!is.null(gammas)) {
+          tilde_gamma_indiv[[s,1]][k,] <- current_gamma_indiv[[s,1]][jk,]
+        }
+        
+        # Recording what swap was made. The first entry would be the column index
+        # of current_V that was moved to the first spot. The second index would be 
+        # the column index of current_V that was moved to the second column, etc. 
+        current_swaps_indiv[[s]][k] <- jk
+        
+        # Recording the sign change (if any) that was made
+        current_signs_indiv[[s]][k] <- ak
+        
+        # Removing the already-swapped columns in current_V from the running:
+        current_Vs[[1,s]][,jk] <- NA
+      }
+    }
+    
+    # Combine the betas 
+    
+    if (!is.null(betas)) {
+      tilde_beta[[1,1]] <- rbind(current_beta[[1,1]][1], tilde_beta_joint[[1,1]], do.call(rbind, tilde_beta_indiv))
+    }
+    
+    # Combine the gammas
+    if (!is.null(gammas)) {
+      tilde_gamma[[1,1]] <- rbind(current_gamma[[1,1]][1], tilde_gamma_joint[[1,1]], do.call(rbind, tilde_gamma_indiv))
+    }
+    
+    # Storing the swapped samples
+    swapped_V.draw[[iter]] <- tilde_V
+    swapped_U.draw[[iter]] <- tilde_U
+    swapped_W.draw[[iter]] <- tilde_W
+    swapped_Vs.draw[[iter]] <- tilde_Vs
+    
+    if (!is.null(betas)) swapped_betas[[iter]] <- tilde_beta
+    
+    if (!is.null(gammas)) swapped_gammas[[iter]] <- tilde_gamma
+    
+    # Storing the swaps made
+    swaps_made[[iter]] <- list(current_swaps_joint = current_swaps_joint, current_swaps_indiv = current_swaps_indiv)
+    
+    # Storing the signs changed
+    signs_changed[[iter]] <- list(current_signs_joint = current_signs_joint, current_signs_indiv = current_signs_indiv)
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Calculating the posterior mean for each parameter
+  # ---------------------------------------------------------------------------
+  
+  V.mean <- matrix(list(), nrow = 1, ncol = 1)
+  V.mean[[1,1]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+    swapped_V.draw[[iter]][[1,1]]
+  }))/length(thinned_iters_burnin)
+  
+  U.mean <- matrix(list(), nrow = q, ncol = 1)
+  W.mean <- matrix(list(), nrow = q, ncol = q)
+  Vs.mean <- matrix(list(), nrow = 1, ncol = q)
+  
+  for (s in 1:q) {
+    U.mean[[s,1]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_U.draw[[iter]][[s,1]]
+    }))/length(thinned_iters_burnin)
+    
+    Vs.mean[[1,s]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_Vs.draw[[iter]][[1,s]]
+    }))/length(thinned_iters_burnin)
+    
+    W.mean[[s,s]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_W.draw[[iter]][[s,s]]
+    }))/length(thinned_iters_burnin)
+    
+    for (ss in 1:q) {
+      if (ss != s) {
+        W.mean[[s,ss]] <- swapped_W.draw[[1]][[s,ss]]
+      }
+    }
+  }
+  
+  if (!is.null(betas)) {
+    betas.mean <- matrix(list(), nrow = 1, ncol = 1)
+    
+    betas.mean[[1,1]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_betas[[iter]][[1,1]]
+    }))/length(thinned_iters_burnin)
+  }
+  
+  if (!is.null(gammas)) {
+    gammas.mean <- matrix(list(), nrow = 1, ncol = 1)
+    
+    gammas.mean[[1,1]] <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
+      swapped_gammas[[iter]][[1,1]]
+    }))/length(thinned_iters_burnin)
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Ordering the results in the posterior mean to be ordered most-to-least
+  # variance explained
+  # ---------------------------------------------------------------------------
+  
+  # Joint structure
+  
+  # Calculate the variance explained by each of the r factors (using Frobenius norm)
+  var_exp_joint <- c()
+  for (i in 1:r) {
+    var_exp_joint[i] <- frob(U.mean[[1,1]][,i, drop = FALSE] %*% t(V.mean[[1,1]])[i,, drop = FALSE])
+  }
+  
+  # Order the factors 
+  order_joint <- order(var_exp_joint, decreasing = TRUE)
+  
+  # Reorder the joint and individual factors
+  V.mean.reorder <- V.mean; U.mean.reorder <- U.mean
+  V.mean.reorder[[1,1]] <- V.mean[[1,1]][,order_joint]
+  
+  for (s in 1:q) {
+    U.mean.reorder[[s,1]] <- U.mean[[s,1]][,order_joint]
+  }
+  
+  # Individual structure
+  var_exp_indiv <- order_indiv <- matrix(list(), nrow = q, ncol = 1)
+  W.mean.reorder <- W.mean; Vs.mean.reorder <- Vs.mean
+  
+  for (s in 1:q) {
+    for (i in 1:r.vec[s]) {
+      var_exp_indiv[[s,1]][i] <- frob(W.mean[[s,s]][,i, drop = FALSE] %*% t(Vs.mean[[1,s]])[i,, drop = FALSE])
+    }
+    order_indiv[[s,1]] <- order(var_exp_indiv[[s,1]], decreasing = TRUE)
+    
+    # Order the factors
+    W.mean.reorder[[s,s]] <- W.mean[[s,s]][,order_indiv[[s,1]]]
+    Vs.mean.reorder[[1,s]] <- Vs.mean[[1,s]][,order_indiv[[s,1]]]
+  }
+  
+  # Betas
+  if (!is.null(betas)) {
+    betas.mean.reorder <- betas.mean
+    betas.mean.indiv <- betas.mean.indiv.reorder <- matrix(list(), nrow = q, ncol = 1)
+    
+    # Joint effect
+    if (r != 0) {
+      betas.mean.joint <- betas.mean.reorder[[1,1]][2:(r+1),, drop = FALSE] 
+      betas.mean.joint.reorder <- betas.mean.joint[order_joint,, drop = FALSE]
+    } else {
+      betas.mean.joint <- betas.mean.joint.reorder <-  NULL
+    }
+    
+    # Individual effects
+    betas.mean.indiv.temp <- betas.mean.reorder[[1,1]][(r+2):n_beta,, drop = FALSE]
+    
+    for (s in 1:q) {
+      # If there is an individual effect
+      if (r.vec[s] != 0) {
+        if (s == 1) {
+          betas.mean.indiv[[s, 1]] <- betas.mean.indiv.temp[1:r.vec[s],, drop = FALSE] 
+        }
+        if (s != 1) {
+          betas.mean.indiv[[s, 1]] <- betas.mean.indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
+        betas.mean.indiv.reorder[[s,1]] <- betas.mean.indiv[[s, 1]][order_indiv[[s,1]],, drop = FALSE]
+      }
+    }
+    
+    betas.mean.reorder <- rbind(betas.mean[[1,1]][1,], betas.mean.joint.reorder, do.call(rbind, betas.mean.indiv.reorder))
+  }
+  
+  if (is.null(betas)) {
+    betas.mean.reorder <- NULL
+  }
+  
+  # Gammas
+  
+  if (!is.null(gammas)) {
+    gammas.mean.reorder <- gammas.mean
+    gammas.mean.indiv <- gammas.mean.indiv.reorder <- matrix(list(), nrow = q, ncol = 1)
+    
+    # Joint effect
+    if (r != 0) {
+      gammas.mean.joint <- gammas.mean[[1,1]][2:(r+1),, drop = FALSE]
+      gammas.mean.joint.reorder <- gammas.mean.joint[order_joint,, drop = FALSE]
+    } else {
+      gammas.mean.joint <- gammas.mean.joint.reorder <- NULL
+    }
+    
+    # Individual effects
+    gammas.mean.indiv.temp <- gammas.mean[[1,1]][(r+2):n_beta,, drop = FALSE]
+    
+    for (s in 1:q) {
+      # If there is an individual effect
+      if (r.vec[s] != 0) {
+        if (s == 1) {
+          gammas.mean.indiv[[s,1]] <- gammas.mean.indiv.temp[1:r.vec[s],, drop = FALSE] 
+        }
+        if (s != 1) {
+          gammas.mean.indiv[[s,1]] <- gammas.mean.indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
+        gammas.mean.indiv.reorder[[s,1]] <- gammas.mean.indiv[[s,1]][order_indiv[[s,1]],, drop = FALSE]
+      }
+    }
+    
+    gammas.mean.reorder <- rbind(gammas.mean[[1,1]][1,], gammas.mean.joint.reorder, do.call(rbind, gammas.mean.indiv.reorder))
+  }
+  
+  if (is.null(gammas)) {
+    gammas.mean.reorder <- NULL
+  }
+  
+  # Return
+  list(swapped_V.draw = swapped_V.draw, 
+       swapped_U.draw = swapped_U.draw, 
+       swapped_Vs.draw = swapped_Vs.draw, 
+       swapped_W.draw = swapped_W.draw,
+       swapped_betas = swapped_betas,
+       swapped_gammas = swapped_gammas,
+       swaps_made = swaps_made, 
+       signs_changed = signs_changed,
+       V.mean.reorder = V.mean.reorder,
+       U.mean.reorder = U.mean.reorder,
+       Vs.mean.reorder = Vs.mean.reorder,
+       W.mean.reorder = W.mean.reorder,
+       betas.mean.reorder = betas.mean.reorder,
+       gammas.mean.reorder = gammas.mean.reorder,
+       var_exp_joint = var_exp_joint, 
+       order_joint = order_joint, 
+       var_exp_indiv = var_exp_indiv,
+       order_indiv = order_indiv)
+}
+
 # Papastamoulis and Ntzoufras algorithm for factor switching (from the factor.switching package)
 rsp_exact <- function (lambda_mcmc, maxIter = 100, threshold = 1e-06, verbose = TRUE, 
                        rotate = TRUE, printIter = 1000) {
