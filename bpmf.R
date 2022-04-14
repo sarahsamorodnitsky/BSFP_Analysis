@@ -3283,12 +3283,12 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
-             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "factor_switching")
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "factor_switching", "factor_switching_V2")
   packs <- c("Matrix", "MASS", "truncnorm")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     
     # Set seed
-    seed <- sim_iter + 100
+    seed <- sim_iter + 200
     set.seed(seed)
     
     # -------------------------------------------------------------------------
@@ -3357,7 +3357,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     post.non.ls[post.non.ls < 0.5] <- 0
     
     # -------------------------------------------------------------------------
-    # Apply the label switching algorithm 
+    # Apply the label switching algorithm using correlation
     # -------------------------------------------------------------------------
     
     # Apply algorithm
@@ -3375,12 +3375,33 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     post.ls[post.ls < 0.5] <- 0
     
     # -------------------------------------------------------------------------
+    # Apply the label switching algorithm using normal density
+    # -------------------------------------------------------------------------
+    
+    # Apply algorithm
+    res.ls2 <- factor_switching_V2(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
+                                   gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
+                                   n, p.vec, nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
+                                   BIDIFAC_solution = list(V = true.V, U = true.U, Vs = true.Vs, W = true.W))
+    
+    # Save gammas
+    gammas.draw.ls2 <- do.call(cbind, lapply(res.ls2$swapped_gammas, function(iter) iter[[1,1]]))
+    
+    # Calculate the posterior inclusion indicators
+    post.ls2 <- rowMeans(gammas.draw.ls2[,thinned_iters_burnin])
+    post.ls2[post.ls2 >= 0.5] <- 1
+    post.ls2[post.ls2 < 0.5] <- 0
+    
+    # -------------------------------------------------------------------------
     # Compare the true gammas indicator vector to the label swapped and non-label
     # swapped versions
     # -------------------------------------------------------------------------
     
-    # Label swapped
+    # Label swapped with correlation
     ssd.ls <- frob(true.gammas - post.ls)/length(true.gammas)
+    
+    # Label swapped with log density
+    ssd.ls2 <- frob(true.gammas - post.ls2)/length(true.gammas)
     
     # Non-label swapped
     ssd.non.ls <- frob(true.gammas - post.non.ls)/length(true.gammas)
