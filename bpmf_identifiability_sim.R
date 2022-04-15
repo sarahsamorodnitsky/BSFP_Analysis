@@ -65,7 +65,7 @@ for (s2nX in s2nX.list) {
   # Save the results
   settings <- list(s2nX = s2nX, s2nY = NULL, init_at_truth = TRUE, num_in_spike = c(2,2,2))
   save(res, settings,
-       file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_TRUE_set2.rda"))
+       file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_TRUE_set3.rda"))
   
   # Update counter
   ind <-  ind + 1
@@ -89,7 +89,7 @@ for (s2nX in s2nX.list) {
   # Save the results
   settings <- list(s2nX = s2nX, s2nY = NULL, init_at_truth = TRUE, num_in_spike = c(2,2,2))
   save(res, settings,
-       file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_FALSE_set2.rda"))
+       file = paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_FALSE_set3.rda"))
 
   # Update counter
   ind <-  ind + 1
@@ -114,18 +114,25 @@ identifiability_results <- data.frame(s2nX = rep(s2nX.list, 2),
 for (init_at_truth in c(TRUE, FALSE)) { # Did we initialize at at the true value?
   for (s2nX in s2nX.list) { # What was the s2n for X?
     # Load in the results from set 1
-    load(paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_", init_at_truth,".rda"), verbose = TRUE)
+    # load(paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_", init_at_truth,".rda"), verbose = TRUE)
+    # 
+    # # Compute the SSDs
+    # corrected_ssd_set1 <- mean(res[,1])
+    # noncorrected_ssd_set1 <- mean(res[,2])
+    
+    # # Load in the results from set 2
+    # load(paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_", init_at_truth,"_set2.rda"), verbose = TRUE)
+    # 
+    # # Compute the SSDs
+    # corrected_ssd_set2 <- mean(res[,1])
+    # noncorrected_ssd_set2 <- mean(res[,2])
+    
+    # Load in the results from set 3
+    load(paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_", init_at_truth,"_set3.rda"), verbose = TRUE)
     
     # Compute the SSDs
-    corrected_ssd_set1 <- mean(res[,1])
-    noncorrected_ssd_set1 <- mean(res[,2])
-    
-    # Load in the results from set 2
-    load(paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_", init_at_truth,"_set2.rda"), verbose = TRUE)
-    
-    # Compute the SSDs
-    corrected_ssd_set2 <- mean(res[,1])
-    noncorrected_ssd_set2 <- mean(res[,2])
+    corrected_ssd_set3 <- mean(res[,1])
+    noncorrected_ssd_set3 <- mean(res[,2])
     
     # Save the SSDs in the table
     identifiability_results[identifiability_results$s2nX == s2nX & 
