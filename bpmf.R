@@ -5501,3 +5501,360 @@ rsp_exact <- function (lambda_mcmc, maxIter = 100, threshold = 1e-06, verbose = 
   return(result)
 }
 
+# Modying the Papastamoulis and Ntzoufras algorithm
+rsp_test <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, gammas.draw = NULL, r, r.vec, BIDIFAC_solution, maxIter = 10) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  # ---------------------------------------------------------------------------
+  
+  # Load in solver for identifying best sign swapping solution
+  library(lpSolve)
+  
+  # Save basic information
+  nsample <- length(U.draw)
+  n <- nrow(V.draw[[1]][[1,1]])
+  p.vec <- sapply(U.draw[[1]], nrow)
+  q <- length(p.vec)
+  n_beta <- 1 + r + sum(r.vec)
+  
+  # Save the BIDIFAC solution
+  V.bid <- BIDIFAC_solution$V
+  U.bid <- BIDIFAC_solution$U
+  W.bid <- BIDIFAC_solution$W
+  Vs.bid <- BIDIFAC_solution$Vs
+  
+  # Create lists for swapped factors and loadings
+  U.draw.swapped <- U.draw
+  V.draw.swapped <- V.draw
+  W.draw.swapped <- W.draw
+  Vs.draw.swapped <- Vs.draw
+  
+  # Create lists for the swapped betas and gammas if provided
+  betas.swapped <- betas.draw
+  gammas.swapped <- gammas.draw
+  
+  betas.joint.swapped <- gammas.joint.swapped <- lapply(1:nsample, function(iter) matrix(list(), nrow = 1, ncol = 1))
+  betas.indiv.swapped <- gammas.indiv.swapped <- lapply(1:nsample, function(iter) matrix(list(), nrow = q, ncol = 1))
+  
+  # ---------------------------------------------------------------------------
+  # Permute the joint factors
+  # ---------------------------------------------------------------------------
+  
+  # Enumerate all possible sign changes
+  all_signs <- array(data = 1, dim = c(2^r, r))
+  l <- 1
+  if (r > 1) {
+    for (i in 1:(r - 1)) {
+      pos <- combn(1:r, i)
+      j <- dim(pos)[2]
+      for (k in 1:j) {
+        l <- l + 1
+        all_signs[l, pos[, k]] <- rep(-1, i)
+      }
+    }
+  }
+  all_signs[l + 1, ] <- rep(-1, r)
+  
+  # Create a cost matrix for V and Vs
+  cost.matrix.V <- matrix(numeric(r*r), nrow = r, ncol = r)
+  cost.matrix.Vs <- lapply(1:q, function(s) matrix(numeric(r.vec[s]*r.vec[s]), nrow = r.vec[s], ncol = r.vec[s]))
+  
+  # Number of possible sign combinations
+  dim_all_r_for_V <- 2^r
+  dim_all_r_for_Vs <- 2^r.vec
+  
+  # Number of column permutations
+  dim_all_perm_for_V <- factorial(r)
+  dim_all_perm_for_Vs <- factorial(r.vec)
+  
+  # Index for each factor
+  ind_V <- 1:r
+  ind_Vs <- lapply(1:q, function(s) 1:r.vec[s])
+  
+  # Matrix of possible sign changes
+  perm <- matrix(1:r, ncol = r, nrow = dim_all_r_for_V, byrow = TRUE) 
+  
+  # Cost for a particular sign change
+  costs <- numeric(dim_all_r_for_V) 
+  
+  # Sign changes for each iteration and for each factor
+  sign_vectors <- matrix(rep(1, r), ncol = r, nrow = nsample, byrow = TRUE) # c_vectors
+  
+  # Permutations for each iteration and for each factor
+  perm_vectors <- matrix(1:r, ncol = r, nrow = nsample, byrow = TRUE) # v_vectors
+  
+  # Vector to monitor convergence
+  objective_vec <- numeric(maxIter)
+  
+  # Set up for while loop
+  criterion <- TRUE
+  total.iter <- 1
+  
+  # Iterate until convergence
+  while (criterion & (total.iter <= maxIter)) {
+    
+    # Initialize the value of our objective function to monitor convergence
+    objective <- 0
+    
+    # Iterate through MCMC iterations 
+    for (iter in 1:nsample) {
+      
+      # Save current scores and loadings
+      current.V <- V.draw[[iter]]
+      current.U <- U.draw[[iter]]
+      
+      # Initialize beta.joint and gamma.joint
+      if (!is.null(betas.draw)) {
+        beta.joint <- betas.draw[[iter]][[1,1]][2:(r+1),,drop = FALSE]
+      }
+      
+      if (!is.null(gammas.draw)) {
+        gamma.joint <- gammas.draw[[iter]][[1,1]][2:(r+1),,drop = FALSE]
+      }
+      
+      # Iterate through all possible sign changes
+      for (i in 1:dim_all_r_for_V) {
+        # Save the current sign 
+        sign_vec <- all_signs[i, ]
+        
+        # Try a new sign
+        V.bid_switch <- matrix(sign_vec, ncol = r, nrow = n, byrow = T) * V.bid[[1,1]]
+        
+        # Calculate the cost of this sign change
+        for (j in 1:r) {
+          temp <- (current.V[[1,1]] - V.bid_switch[, j])^2
+          cost.matrix.V[j, ] <- colSums(temp)
+        }
+        
+        # Obtain the optimal sign
+        matr <- lp.assign(cost.matrix.V)$solution
+        for (j in 1:q) {
+          perm[i, j] <- ind_V[matr[, j] > 0]
+        }
+        # Now we have the best permutation for the ith sign change
+        
+        # Now we find the index that corresponds to this permutation
+        perm[i, ] <- order(perm[i, ])
+        
+        # Then we compute the total cost of this permutation for this sign change?
+        costs[i] <- sum(cost.matrix.V * matr)
+      }
+      
+      # Find the index of the minimum cost for the sign changes
+      minIndex <- order(costs)[1]
+      
+      # Find the permutation that corresponds to this minimum cost sign change for this iteration
+      perm_vectors[iter, ] <- perm[minIndex, ]
+      
+      # Find the sign change that corresponds to this minimum cost sign change for this iteration
+      sign_vectors[iter, ] <- all_signs[minIndex, ]
+      
+      # Swap the joint factors
+      V.draw.swapped[[iter]][[1,1]] <- matrix(sign_vectors[iter, ], ncol = r, nrow = n, byrow = T) * current.V[[1,1]][, perm_vectors[iter,]]
+      
+      for (s in 1:q) {
+        U.draw.swapped[[iter]][[s,1]] <- matrix(sign_vectors[iter, ], ncol = r, nrow = p.vec[s], byrow = T) * current.U[[s,1]][, perm_vectors[iter,]]
+      }
+      
+      # Swap the betas for joint factors
+      if (!is.null(betas.draw)) {
+        betas.joint.swapped[[iter]][[1,1]] <- sign_vectors[iter, ] * beta.joint[perm_vectors[iter,],,drop=FALSE]
+      }
+      
+      # Swap the gammas for joint factors
+      if (!is.null(gammas.draw)) {
+        gammas.joint.swapped[[iter]][[1,1]] <- gamma.joint[perm_vectors[iter,],,drop=FALSE]
+      }
+      
+      # Update the objective
+      objective <- objective + costs[minIndex]
+    }
+    
+    # Check for convergence
+    objective_vec[total.iter] <- objective
+    if (total.iter > 1) {
+      if (objective_vec[total.iter - 1] - objective_vec[total.iter] < threshold) criterion = FALSE
+    }
+
+    # Tabulating the total number of iterations
+    total.iter <- total.iter + 1
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Permute the individual factors
+  # ---------------------------------------------------------------------------
+  
+  # Create a cost matrix for V and Vs
+  cost.matrix.Vs <- lapply(1:q, function(s) matrix(numeric(r.vec[s]*r.vec[s]), nrow = r.vec[s], ncol = r.vec[s]))
+  
+  # Number of possible sign combinations
+  dim_all_r_for_Vs <- 2^r.vec
+  
+  # Number of column permutations
+  dim_all_perm_for_Vs <- factorial(r.vec)
+  
+  # Index for each factor
+  ind_Vs <- lapply(1:q, function(s) 1:r.vec[s])
+  
+  # Matrix of possible sign changes
+  perm_Vs <- lapply(1:q, function(s) matrix(1:r.vec[s], ncol = r.vec[s], nrow = dim_all_r_for_Vs[s], byrow = TRUE) )
+  
+  # Cost for a particular sign change
+  costs_Vs <- lapply(1:q, function(s) numeric(dim_all_r_for_Vs[s]) )
+  
+  # Sign changes for each iteration and for each factor
+  sign_vectors_Vs <- lapply(1:q, function(s) matrix(rep(1, r.vec[s]), ncol = r.vec[s], nrow = nsample, byrow = TRUE)) # c_vectors
+  
+  # Permutations for each iteration and for each factor
+  perm_vectors_Vs <- lapply(1:q, function(s) matrix(1:r.vec[s], ncol = r.vec[s], nrow = nsample, byrow = TRUE)) # v_vectors
+  
+  # For each source, iterate until convergence
+  for (s in 1:q) {
+    # Enumerate all possible sign changes
+    all_signs_s <- array(data = 1, dim = c(2^r.vec[s], r.vec[s]))
+    l <- 1
+    if (r.vec[s] > 1) {
+      for (i in 1:(r.vec[s] - 1)) {
+        pos <- combn(1:r.vec[s], i)
+        j <- dim(pos)[2]
+        for (k in 1:j) {
+          l <- l + 1
+          all_signs_s[l, pos[, k]] <- rep(-1, i)
+        }
+      }
+    }
+    all_signs_s[l + 1, ] <- rep(-1, r.vec[s])
+    
+    # Vector to monitor convergence
+    objective_vec <- numeric(maxIter)
+    
+    # Set up for while loop
+    criterion <- TRUE
+    total.iter <- 1
+    
+    while (criterion & (total.iter <= maxIter)) {
+      
+      # Initialize the value of our objective function to monitor convergence
+      objective <- 0
+      
+      # Iterate through MCMC iterations 
+      for (iter in 1:nsample) {
+        
+        # Save current scores and loadings
+        current.Vs <- Vs.draw[[iter]][[1,s]]
+        current.W <- W.draw[[iter]][[s,s]]
+        
+        # Initialize beta.indiv.s
+        if (!is.null(betas.draw)) {
+          # Select all the betas for individual factors
+          current_betas_indiv.temp <- betas.draw[[iter]][[1,1]][(r+2):n_beta,, drop = FALSE]
+          
+          # If we are at the first source
+          if (s == 1) {
+            beta.indiv.s <- current_betas_indiv.temp[1:r.vec[s],, drop = FALSE]
+          }
+          
+          # If we are not at the first source
+          if (s != 1) {
+            beta.indiv.s <- current_betas_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+        
+        # Initialize gamma.indiv.s
+        if (!is.null(gammas.draw)) {
+          # Select all the gammas for individual factors
+          current_gammas_indiv.temp <- gammas.draw[[iter]][[1,1]][(r+2):n_beta,, drop = FALSE]
+          
+          # If we are at the first source
+          if (s == 1) {
+            gamma.indiv.s <- current_gammas_indiv.temp[1:r.vec[s],, drop = FALSE]
+          }
+          
+          # If we are not at the first source
+          if (s != 1) {
+            gamma.indiv.s <- current_gammas_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+        
+        # Iterate through all possible sign changes
+        for (i in 1:dim_all_r_for_Vs[s]) {
+          # Save the current sign 
+          sign_vec <- all_signs_s[i, ]
+          
+          # Try a new sign
+          Vs.bid_switch <- matrix(sign_vec, ncol = r.vec[s], nrow = n, byrow = T) * Vs.bid[[1,s]]
+          
+          # Calculate the cost of this sign change
+          for (j in 1:r.vec[s]) {
+            temp <- (current.Vs - Vs.bid_switch[, j])^2
+            cost.matrix.Vs[[s]][j, ] <- colSums(temp)
+          }
+          
+          # Obtain the optimal sign
+          matr <- lp.assign(cost.matrix.Vs[[s]])$solution
+          for (j in 1:q) {
+            perm_Vs[[s]][i, j] <- ind_Vs[[s]][matr[, j] > 0]
+          }
+          # Now we have the best permutation for the ith sign change
+          
+          # Now we find the index that corresponds to this permutation
+          perm_Vs[[s]][i, ] <- order(perm_Vs[[s]][i, ])
+          
+          # Then we compute the total cost of this permutation for this sign change?
+          costs_Vs[[s]][i] <- sum(cost.matrix.Vs[[s]] * matr)
+        }
+        
+        # Find the index of the minimum cost for the sign changes
+        minIndex <- order(costs_Vs[[s]])[1]
+        
+        # Find the permutation that corresponds to this minimum cost sign change for this iteration
+        perm_vectors_Vs[[s]][iter, ] <- perm_Vs[[s]][minIndex, ]
+        
+        # Find the sign change that corresponds to this minimum cost sign change for this iteration
+        sign_vectors_Vs[[s]][iter, ] <- all_signs_s[minIndex, ]
+        
+        # Swap the individual factors
+        Vs.draw.swapped[[iter]][[1,s]] <- matrix(sign_vectors_Vs[[s]][iter, ], ncol = r.vec[s], nrow = n, byrow = T) * current.Vs[, perm_vectors_Vs[[s]][iter,]]
+        W.draw.swapped[[iter]][[s,s]] <- matrix(sign_vectors_Vs[[s]][iter, ], ncol = r.vec[s], nrow = p.vec[s], byrow = T) * current.W[, perm_vectors_Vs[[s]][iter,]]
+        
+        # Swap the betas for the individual factors
+        if (!is.null(betas.draw)) {
+          betas.indiv.swapped[[iter]][[s,1]] <- sign_vectors_Vs[[s]][iter, ] * beta.indiv.s[perm_vectors[iter,],,drop=FALSE]
+        }
+        
+        # Swap the gammas for the individual factors
+        if (!is.null(gammas.draw)) {
+          gammas.indiv.swapped[[iter]][[s,1]] <- gamma.indiv.s[perm_vectors[iter,],,drop=FALSE]
+        }
+        
+        # Update the objective
+        objective <- objective + costs[minIndex]
+      }
+      
+      # Check for convergence
+      objective_vec[total.iter] <- objective
+      if (total.iter > 1) {
+        if (objective_vec[total.iter - 1] - objective_vec[total.iter] < threshold) criterion = FALSE
+      }
+      
+      # Tabulating the total number of iterations
+      total.iter <- total.iter + 1
+    }
+  }
+  
+  # Combine the betas and gammas together
+  for (iter in 1:nsample) {
+    betas.swapped[[iter]][[1,1]] <- rbind(betas.swapped[[iter]][[1,1]][1,], betas.joint.swapped[[iter]][[1,1]], do.call(rbind, betas.indiv.swapped[[iter]]))
+    gammas.swapped[[iter]][[1,1]] <- rbind(gammas.swapped[[iter]][[1,1]][1,], gammas.joint.swapped[[iter]][[1,1]], do.call(rbind, gammas.indiv.swapped[[iter]]))
+  }
+  
+  # Return the swapped matrices
+  list(V.draw.swapped = V.draw.swapped,
+       U.draw.swapped = U.draw.swapped,
+       W.draw.swapped = W.draw.swapped,
+       Vs.draw.swapped = Vs.draw.swapped,
+       betas.swapped = betas.swapped,
+       gammas.swapped = gammas.swapped)
+}
+
