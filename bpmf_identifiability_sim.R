@@ -106,9 +106,9 @@ for (s2nX in s2nX.list) {
 # Initialize a table to contain results
 identifiability_results <- data.frame(s2nX = rep(s2nX.list, 2),
                                       init_at_truth = rep(c(TRUE, FALSE), each = length(s2nX.list)),
-                                      CorrectedSSD = numeric(2*length(s2nX.list)),
-                                      NonCorrectedSSD = numeric(2*length(s2nX.list)),
-                                      Diff = numeric(2*length(s2nX.list)))
+                                      CorrectedSSD1 = numeric(2*length(s2nX.list)),
+                                      CorrectedSSD2 = numeric(2*length(s2nX.list)),
+                                      NonCorrectedSSD = numeric(2*length(s2nX.list)))
 
 # Iterate through the conditions
 for (init_at_truth in c(TRUE, FALSE)) { # Did we initialize at at the true value?
@@ -131,15 +131,23 @@ for (init_at_truth in c(TRUE, FALSE)) { # Did we initialize at at the true value
     load(paste0("~/BayesianPMF/03Simulations/Identifiability/id_sim_s2nX_", s2nX, "_s2nY_NULL_spike222_initattruth_", init_at_truth,"_set3.rda"), verbose = TRUE)
     
     # Compute the SSDs
-    corrected_ssd_set3 <- mean(res[,1])
-    noncorrected_ssd_set3 <- mean(res[,2])
+    corrected_ssd1_set3 <- mean(res[,1])
+    corrected_ssd2_set3 <- mean(res[,2])
+    noncorrected_ssd_set3 <- mean(res[,3])
     
     # Save the SSDs in the table
-    identifiability_results[identifiability_results$s2nX == s2nX & 
-                              identifiability_results$init_at_truth == init_at_truth,]$CorrectedSSD <- mean(c(corrected_ssd_set1, corrected_ssd_set2))
+    identifiability_results[identifiability_results$s2nX == s2nX &
+                              identifiability_results$init_at_truth == init_at_truth,]$CorrectedSSD1 <- corrected_ssd1_set3
+    identifiability_results[identifiability_results$s2nX == s2nX &
+                              identifiability_results$init_at_truth == init_at_truth,]$CorrectedSSD2 <- corrected_ssd2_set3
+    identifiability_results[identifiability_results$s2nX == s2nX &
+                              identifiability_results$init_at_truth == init_at_truth,]$NonCorrectedSSD <- noncorrected_ssd_set3
     
-    identifiability_results[identifiability_results$s2nX == s2nX & 
-                              identifiability_results$init_at_truth == init_at_truth,]$NonCorrectedSSD <- mean(c(noncorrected_ssd_set1, noncorrected_ssd_set2))
+    # identifiability_results[identifiability_results$s2nX == s2nX & 
+    #                           identifiability_results$init_at_truth == init_at_truth,]$CorrectedSSD <- mean(c(corrected_ssd_set1, corrected_ssd_set2))
+    # 
+    # identifiability_results[identifiability_results$s2nX == s2nX & 
+    #                           identifiability_results$init_at_truth == init_at_truth,]$NonCorrectedSSD <- mean(c(noncorrected_ssd_set1, noncorrected_ssd_set2))
   }
 }
 
@@ -172,22 +180,30 @@ ssd_init_at_truth$s2nX <- factor(ssd_init_at_truth$s2nX)
 ssd_not_init_at_truth$s2nX <- factor(ssd_not_init_at_truth$s2nX)
 
 # Create the plot
-plot(factor(s2nX.list.plot), identifiability_results$CorrectedSSD[1:9], type = "n", 
+pdf("identifiability.pdf")
+plot(factor(s2nX.list.plot), identifiability_results$CorrectedSSD1[1:9], type = "n", 
      xlab = "Signal-to-Noise in Data", ylab = "Sum of Squared Deviations", 
      main = "Signal-to-Noise in Data vs. SSD")
 
 # Overlay lines on the plot
 
 # Initialized at the truth
-lines(ssd_init_at_truth$s2nX, ssd_init_at_truth$CorrectedSSD, lwd = 2)
-lines(ssd_init_at_truth$s2nX, ssd_init_at_truth$NonCorrectedSSD, lty = 2, lwd = 2)
+lines(ssd_init_at_truth$s2nX, ssd_init_at_truth$CorrectedSSD1, lwd = 2)
+lines(ssd_init_at_truth$s2nX, ssd_init_at_truth$CorrectedSSD2, lwd = 2, lty = 2)
+lines(ssd_init_at_truth$s2nX, ssd_init_at_truth$NonCorrectedSSD, lty = 3, lwd = 2)
 
 # Not initialized at the truth
-lines(ssd_not_init_at_truth$s2nX, ssd_not_init_at_truth$CorrectedSSD, col = 3, lwd = 2)
-lines(ssd_not_init_at_truth$s2nX, ssd_not_init_at_truth$NonCorrectedSSD, lty = 2, col = 3, lwd = 2)
+lines(ssd_not_init_at_truth$s2nX, ssd_not_init_at_truth$CorrectedSSD1, col = 2, lwd = 2)
+lines(ssd_not_init_at_truth$s2nX, ssd_not_init_at_truth$CorrectedSSD2, col = 2, lwd = 2, lty = 2)
+lines(ssd_not_init_at_truth$s2nX, ssd_not_init_at_truth$NonCorrectedSSD, lty = 3, col = 2, lwd = 2)
 
 # Add legend
 legend("topright",
-       legend = c("Init at Truth, Corrected", "Init at Truth, Not Corrected", 
-                  "Init Randomly, Corrected", "Init Randomly, Not Corrected"),
-       col = c(1, 1, 3, 3), lty = c(1, 2, 1, 2), cex = 0.5, lwd = c(2, 2, 2, 2))
+       legend = c("Init at Truth, Corrected (Corr)", 
+                  "Init at Truth, Corrected (E&C)", 
+                  "Init at Truth, Not Corrected", 
+                  "Init Randomly, Corrected (Corr)", 
+                  "Init Randomly, Corrected (E&C)", 
+                  "Init Randomly, Not Corrected"),
+       col = c(1, 1, 1, 2, 2, 2), lty = c(1, 2, 3, 1, 2, 3), cex = 0.5, lwd = c(2, 2, 2, 2, 2, 2))
+dev.off()
