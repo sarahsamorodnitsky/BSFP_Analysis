@@ -2693,7 +2693,7 @@ Y_predicted <- function(scores.draw, beta.draw, nsample) {
 }
 
 # Run each model being compared in model comparison simulation study
-run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust) {
+model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -2720,7 +2720,6 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
   # The model options
   models <- c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
   
-  start <- Sys.time()
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
@@ -3248,8 +3247,6 @@ run_each_mod <- function(mod, p.vec, n, ranks, response, true_params, model_para
     res
   }
   stopCluster(cl)
-  end <- Sys.time()
-  end - start
   
   # Return
   sim_results
