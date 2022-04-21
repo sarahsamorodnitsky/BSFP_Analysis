@@ -3280,7 +3280,8 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
-             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "factor_switching", "factor_switching_V2")
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "factor_switching", 
+             "factor_switching_permutation_plus_rotation", "erosheva_curtis_fs")
   packs <- c("Matrix", "MASS", "truncnorm")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     
@@ -3394,22 +3395,40 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     post.ls[post.ls < 0.5] <- 0
     
     # -------------------------------------------------------------------------
-    # Apply the label switching algorithm using normal density
+    # Apply the label switching algorithm using rotation correlation
     # -------------------------------------------------------------------------
     
     # Apply algorithm
-    res.ls2 <- factor_switching_V2(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
+    res.ls.rotate <- factor_switching_permutation_plus_rotation(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
+                                                                gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
+                                                                nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
+                                                                nninit = FALSE, pivot = list(true.V, true.Vs))
+    
+    # Save gammas
+    gammas.draw.ls.rotate <- do.call(cbind, lapply(res.ls.rotate$swapped_gammas, function(iter) iter[[1,1]]))
+    
+    # Calculate the posterior inclusion indicators
+    post.ls.rotate <- rowMeans(gammas.draw.ls.rotate[,thinned_iters_burnin])
+    post.ls.rotate[post.ls.rotate >= 0.5] <- 1
+    post.ls.rotate[post.ls.rotate < 0.5] <- 0
+    
+    # -------------------------------------------------------------------------
+    # Apply the label switching algorithm using the Erosheva and Curtis approach
+    # -------------------------------------------------------------------------
+    
+    # Apply algorithm
+    res.es <- erosheva_curtis_fs(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
                                    gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
                                    n, p.vec, nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
                                    BIDIFAC_solution = list(V = true.V, U = true.U, Vs = true.Vs, W = true.W))
     
     # Save gammas
-    gammas.draw.ls2 <- do.call(cbind, lapply(res.ls2$swapped_gammas, function(iter) iter[[1,1]]))
+    gammas.draw.es <- do.call(cbind, lapply(res.es$swapped_gammas, function(iter) iter[[1,1]]))
     
     # Calculate the posterior inclusion indicators
-    post.ls2 <- rowMeans(gammas.draw.ls2[,thinned_iters_burnin])
-    post.ls2[post.ls2 >= 0.5] <- 1
-    post.ls2[post.ls2 < 0.5] <- 0
+    post.es <- rowMeans(gammas.draw.es[,thinned_iters_burnin])
+    post.es[post.es >= 0.5] <- 1
+    post.es[post.es < 0.5] <- 0
     
     # -------------------------------------------------------------------------
     # Compare the true gammas indicator vector to the label swapped and non-label
@@ -3419,8 +3438,11 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # Label swapped with correlation
     ssd.ls <- frob(true.gammas - post.ls)/length(true.gammas)
     
+    # Label swapped with correlation and rotate
+    ssd.ls.rotate <- frob(true.gammas - post.ls.rotate)/length(true.gammas)
+    
     # Label swapped with log density
-    ssd.ls2 <- frob(true.gammas - post.ls2)/length(true.gammas)
+    ssd.es <- frob(true.gammas - post.es)/length(true.gammas)
     
     # Non-label swapped
     ssd.non.ls <- frob(true.gammas - post.non.ls)/length(true.gammas)
@@ -3549,8 +3571,8 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # Return
     # -------------------------------------------------------------------------
     
-    ssd_and_mse <- c(ssd.ls, ssd.ls2, ssd.non.ls, joint.slab.mse, joint.spike.mse, indiv.slab.mse, indiv.spike.mse)
-    names(ssd_and_mse) <- c("Corrected (Corr)", "Corrected (E&S)", "Non-Corrected", "Joint Slab MSE", "Joint Spike MSE", "Indiv Slab MSE", "Indiv Spike MSE")
+    ssd_and_mse <- c(ssd.ls, ssd.ls.rotate, ssd.es, ssd.non.ls, joint.slab.mse, joint.spike.mse, indiv.slab.mse, indiv.spike.mse)
+    names(ssd_and_mse) <- c("Corrected (Corr)", "Corrected (Corr + Rotate)", "Corrected (E&S)", "Non-Corrected", "Joint Slab MSE", "Joint Spike MSE", "Indiv Slab MSE", "Indiv Spike MSE")
     ssd_and_mse
   }
   stopCluster(cl)
@@ -5017,7 +5039,7 @@ factor_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamm
 }
 
 # Creating an alternative factor switching algorithm
-factor_switching_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, n, p.vec, nsample, thinned_iters_burnin, BIDIFAC_solution) {
+erosheva_curtis_fs <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, n, p.vec, nsample, thinned_iters_burnin, BIDIFAC_solution) {
   
   # ---------------------------------------------------------------------------
   # Arguments: 
@@ -5997,3 +6019,661 @@ rsp_test <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, gammas.
        gammas.swapped = gammas.swapped)
 }
 
+# Creating a new rotation-sign-permutation algorithm based on the Kabsch Algorithm
+factor_switching_plus_rotation <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gammas = NULL, r, r.vec, nsample, thinned_iters_burnin, nninit = TRUE, pivot = NULL) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
+  # draws (list): the draws to swap according to the pivot
+  # rank (int): number of columns to iterate through
+  # loadings (list): the corresponding loadings for each draw of the matrix to swap
+  # betas (double vec): list of vectors of the coefficients drawn at each iteration
+  # gammas (int vec): list of vectors of the inclusion indicators drawn at each iteration
+  # r (int) = joint rank
+  # r.vec (c(ints)) = vector of individual ranks
+  # nsample (int) = number of posterior samples
+  # thinned_iters_burnin (c(ints)) = vector of indices for samples after burn-in + thinning if desired
+  # nninit (boolean) = TRUE if initialized at theoretical posterior mode or FALSE if use posterior mean as pivot
+  # pivot (list) = list of V and Vs to use as pivots. If NULL, must provide nninit. 
+  # ---------------------------------------------------------------------------
+  
+  # Load in library for Kabsch and Procrustes algorithms
+  library(pracma)
+  
+  # Saving the number of sources
+  q <- length(r.vec)
+  
+  # Returning the swapped matrices
+  swapped_U.draw <- lapply(1:length(U.draw), function(iter) list())
+  swapped_V.draw <- lapply(1:length(V.draw), function(iter) list())
+  swapped_W.draw <- lapply(1:length(W.draw), function(iter) list())
+  swapped_Vs.draw <- lapply(1:length(Vs.draw), function(iter) list())
+  swapped_betas <- lapply(1:length(betas), function(iter) list())
+  swapped_gammas <- lapply(1:length(gammas), function(iter) list())
+  
+  # Returning the swaps made so they can be undone
+  swaps_made <- lapply(1:length(swapped_U.draw), function(iter) list())
+  
+  # Storing the sign changes so they can be undone
+  signs_changed <- lapply(1:length(swapped_U.draw), function(iter) list())
+  
+  # Setting the pivots to the posterior mode (result from BIDIFAC) or posterior mean
+  if (is.null(pivot)) {
+    if (nninit) {
+      pivot_V <- V.draw[[1]]
+      pivot_Vs <- Vs.draw[[1]]
+    }
+    
+    if (!nninit) {
+      V.draw.thinned.burnin <- lapply(V.draw[thinned_iters_burnin], function(iter) iter[[1,1]])
+      pivot_V <- matrix(list(), nrow = 1, ncol = 1)
+      pivot_V[[1,1]] <- Reduce("+", V.draw.thinned.burnin)/length(V.draw.thinned.burnin)
+      
+      Vs.draw.thinned.burnin <- Vs.draw[thinned_iters_burnin]
+      pivot_Vs <- matrix(list(), nrow = 1, ncol = q)
+      
+      for (s in 1:q) {
+        pivot_Vs[[1,s]] <- Reduce("+", lapply(Vs.draw.thinned.burnin, function(iter) iter[[1,s]]))/length(Vs.draw.thinned.burnin)
+      }
+    }
+  }
+  
+  # Setting the pivot to be user-chosen
+  if (!is.null(pivot)) {
+    pivot_V <- pivot[[1]]
+    pivot_Vs <- pivot[[2]]
+  }
+  
+  for (iter in 1:length(U.draw)) {
+    # -------------------------------------------------------------------------
+    # Initializing for iter
+    # 
+    # For each iteration, arrange the columns of each draw to match that 
+    # of the pivot. 
+    # -------------------------------------------------------------------------
+    
+    # Initializing the rearranged version
+    tilde_V <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_U <- matrix(list(), nrow = q, ncol = 1)
+    tilde_W <- matrix(list(), nrow = q, ncol = q)
+    tilde_Vs <- matrix(list(), nrow = 1, ncol = q)
+    
+    tilde_beta <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_beta_joint <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_beta_indiv <- matrix(list(), nrow = q, ncol = 1)
+    
+    tilde_gamma <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_gamma_joint <- matrix(list(), nrow = 1, ncol = 1)
+    tilde_gamma_indiv <- matrix(list(), nrow = q, ncol = 1)
+    
+    tilde_V[[1,1]] <- matrix(nrow = nrow(V.draw[[1]][[1,1]]), ncol = ncol(V.draw[[1]][[1,1]]))
+    
+    for (s in 1:q) {
+      tilde_U[[s,1]] <- matrix(nrow = nrow(U.draw[[1]][[s,1]]), ncol = ncol(U.draw[[1]][[s,1]]))
+      tilde_W[[s,s]] <- matrix(nrow = nrow(W.draw[[1]][[s,s]]), ncol = ncol(W.draw[[1]][[s,s]]))
+      tilde_Vs[[1,s]] <- matrix(nrow = nrow(Vs.draw[[1]][[1,s]]), ncol = ncol(Vs.draw[[1]][[1,s]]))
+      
+      for (ss in 1:q) {
+        if (ss != s) {
+          tilde_W[[s,ss]] <- matrix(0, nrow = nrow(W.draw[[1]][[s,s]]), ncol = ncol(W.draw[[1]][[ss,ss]]))
+        }
+      }
+    }
+    
+    n_beta <- 1 + r + sum(r.vec)
+    tilde_beta[[1,1]] <- matrix(nrow = n_beta, ncol = 1)
+    tilde_beta_joint[[1,1]] <- matrix(nrow = r, ncol = 1)
+    
+    tilde_gamma[[1,1]] <- matrix(nrow = n_beta, ncol = 1)
+    tilde_gamma_joint[[1,1]] <- matrix(nrow = r, ncol = 1)
+    
+    for (s in 1:q) {
+      tilde_beta_indiv[[s,1]] <- matrix(nrow = r.vec[s], ncol = 1)
+      tilde_gamma_indiv[[s,1]] <- matrix(nrow = r.vec[s], ncol = 1)
+    }
+    
+    # -------------------------------------------------------------------------
+    # Storing the current V, U, beta, and gamma
+    # -------------------------------------------------------------------------
+    
+    current_V <- V.draw[[iter]]
+    current_U <- U.draw[[iter]]
+    current_Vs <- Vs.draw[[iter]]
+    current_W <- W.draw[[iter]]
+    
+    if (!is.null(betas)) {
+      current_beta <- betas[[iter]]
+      current_beta_indiv <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Joint effect
+      if (r != 0) {
+        current_beta_joint <- current_beta[[1,1]][2:(r+1),, drop = FALSE] 
+      } else {
+        current_beta_joint <- NULL
+      }
+      
+      # Individual effects
+      current_beta_indiv.temp <- current_beta[[1,1]][(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) {
+            current_beta_indiv[[s, 1]] <- current_beta_indiv.temp[1:r.vec[s],, drop = FALSE] 
+          }
+          if (s != 1) {
+            current_beta_indiv[[s, 1]] <- current_beta_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+      }
+    }
+    
+    if (!is.null(gammas)) {
+      current_gamma <- gammas[[iter]] 
+      current_gamma_indiv <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Joint effect
+      if (r != 0) {
+        current_gamma_joint <- current_gamma[[1,1]][2:(r+1),, drop = FALSE]
+      } else {
+        current_gamma_joint <- NULL
+      }
+      
+      # Individual effects
+      current_gamma_indiv.temp <- current_gamma[[1,1]][(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) {
+            current_gamma_indiv[[s,1]] <- current_gamma_indiv.temp[1:r.vec[s],, drop = FALSE] 
+          }
+          if (s != 1) {
+            current_gamma_indiv[[s,1]] <- current_gamma_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+      }
+    }
+    
+    # -------------------------------------------------------------------------
+    # Finding the optimal rotation
+    # -------------------------------------------------------------------------
+    
+    # Solve the Procrustes problem for the joint structure
+    joint_rotate <- procrustes(pivot_V[[1,1]], current_V[[1,1]])
+    
+    # Save the rotation matrix
+    joint_rotate_mat <- joint_rotate$Q
+    
+    # Save the rotated V
+    current_V_rotate <- current_V
+    current_V_rotate[[1,1]] <- current_V[[1,1]] %*% t(joint_rotate_mat)
+    
+    # Rotate the loadings accordingly
+    current_U_rotate <- current_U
+    
+    for (s in 1:q) {
+      current_U_rotate[[s,1]] <- current_U[[s,1]] %*% t(joint_rotate_mat)
+    }
+    
+    # Follow the same procedure for the individual structure
+    current_Vs_rotate <- current_Vs
+    current_W_rotate <- current_W
+    
+    for (s in 1:q) {
+      # Solve the Procrustes problem for the individual structure
+      indiv_rotate <- procrustes(pivot_Vs[[1,s]], current_Vs[[1,s]])
+      
+      # Save the rotation matrix
+      indiv_rotate_mat <- indiv_rotate$Q
+      
+      # Save the rotated Vs
+      current_Vs_rotate[[1,s]] <- current_Vs[[1,s]] %*% t(indiv_rotate_mat)
+      
+      # Rotate the loadings accordingly
+      current_W_rotate[[s,s]] <- current_W[[s,s]] %*% t(indiv_rotate_mat)
+    }
+    
+    # -------------------------------------------------------------------------
+    # Finding the optimal order
+    # -------------------------------------------------------------------------
+    
+    # Storing the swaps and signs
+    current_swaps_joint <- current_signs_joint <- c()
+    current_swaps_indiv <- current_signs_indiv <- lapply(1:q, function(s) c())
+    
+    # Start with the joint structure
+    
+    for (k in 1:r) {
+      # for each column in the pivot, rearrange the columns in draws to match the order
+      corrs <- apply(current_V_rotate[[1,1]], 2, function(current_col) cor(current_col, pivot_V[[1,1]][,k])) # compute correlation between each 
+      jk <- which.max(abs(corrs)) # storing the index of the highest correlation
+      ak <- sign(corrs[jk]) # storing the sign of that correlation
+      
+      # Setting the kth column of tilde_V to be the ak*current_V[,jk] column. 
+      tilde_V[[1,1]][,k] <- ak*current_V_rotate[[1,1]][,jk]
+      
+      # Rearranging the corresponding column in U:
+      for (s in 1:q) {
+        tilde_U[[s,1]][,k] <- ak*current_U_rotate[[s,1]][,jk]
+      }
+      
+      # Rearranging the corresponding rows in betas:
+      if (!is.null(betas)) {
+        tilde_beta_joint[[1,1]][k,] <- ak*current_beta_joint[jk,]
+      }
+      
+      # Rearranging the corresponding rows in the gammas:
+      if (!is.null(gammas)) {
+        tilde_gamma_joint[[1,1]][k,] <- current_gamma_joint[jk,]
+      }
+      
+      # Recording what swap was made. The first entry would be the column index
+      # of current_V that was moved to the first spot. The second index would be 
+      # the column index of current_V that was moved to the second column, etc. 
+      current_swaps_joint[k] <- jk
+      
+      # Recording the sign change (if any) that was made
+      current_signs_joint[k] <- ak
+      
+      # Removing the already-swapped columns in current_V from the running:
+      current_V_rotate[[1,1]][,jk] <- NA
+    }
+    
+    # Then the individual structures
+    
+    for (s in 1:q) {
+      for (k in 1:r.vec[s]) {
+        # for each column in the pivot, rearrange the columns in draws to match the order
+        corrs <- apply(current_Vs_rotate[[1,s]], 2, function(current_col) cor(current_col, pivot_Vs[[1,s]][,k])) # compute correlation between each 
+        jk <- which.max(abs(corrs)) # storing the index of the highest correlation
+        ak <- sign(corrs[jk]) # storing the sign of that correlation
+        
+        # Setting the kth column of \tilde_Vs to be the ak*current_Vs[,jk] column. 
+        tilde_Vs[[1,s]][,k] <- ak*current_Vs_rotate[[1,s]][,jk]
+        
+        # Rearranging the corresponding column in W:
+        tilde_W[[s,s]][,k] <- ak*current_W_rotate[[s,s]][,jk]
+        
+        # Rearranging the corresponding rows in betas:
+        if (!is.null(betas)) {
+          tilde_beta_indiv[[s,1]][k,] <- ak*current_beta_indiv[[s,1]][jk,]
+        }
+        
+        # Rearranging the corresponding rows in the gammas:
+        if (!is.null(gammas)) {
+          tilde_gamma_indiv[[s,1]][k,] <- current_gamma_indiv[[s,1]][jk,]
+        }
+        
+        # Recording what swap was made. The first entry would be the column index
+        # of current_V that was moved to the first spot. The second index would be 
+        # the column index of current_V that was moved to the second column, etc. 
+        current_swaps_indiv[[s]][k] <- jk
+        
+        # Recording the sign change (if any) that was made
+        current_signs_indiv[[s]][k] <- ak
+        
+        # Removing the already-swapped columns in current_V from the running:
+        current_Vs_rotate[[1,s]][,jk] <- NA
+      }
+    }
+    
+    # Combine the betas 
+    
+    if (!is.null(betas)) {
+      tilde_beta[[1,1]] <- rbind(current_beta[[1,1]][1], tilde_beta_joint[[1,1]], do.call(rbind, tilde_beta_indiv))
+    }
+    
+    # Combine the gammas
+    if (!is.null(gammas)) {
+      tilde_gamma[[1,1]] <- rbind(current_gamma[[1,1]][1], tilde_gamma_joint[[1,1]], do.call(rbind, tilde_gamma_indiv))
+    }
+    
+    # Storing the swapped samples
+    swapped_V.draw[[iter]] <- tilde_V
+    swapped_U.draw[[iter]] <- tilde_U
+    swapped_W.draw[[iter]] <- tilde_W
+    swapped_Vs.draw[[iter]] <- tilde_Vs
+    
+    if (!is.null(betas)) swapped_betas[[iter]] <- tilde_beta
+    
+    if (!is.null(gammas)) swapped_gammas[[iter]] <- tilde_gamma
+    
+    # Storing the swaps made
+    swaps_made[[iter]] <- list(current_swaps_joint = current_swaps_joint, current_swaps_indiv = current_swaps_indiv)
+    
+    # Storing the signs changed
+    signs_changed[[iter]] <- list(current_signs_joint = current_signs_joint, current_signs_indiv = current_signs_indiv)
+  }
+  
+  # Return
+  list(swapped_V.draw = swapped_V.draw, 
+       swapped_U.draw = swapped_U.draw, 
+       swapped_Vs.draw = swapped_Vs.draw, 
+       swapped_W.draw = swapped_W.draw,
+       swapped_betas = swapped_betas,
+       swapped_gammas = swapped_gammas,
+       swaps_made = swaps_made, 
+       signs_changed = signs_changed)
+}
+
+# Creating yet another rotation-sign-permutation algorithm
+factor_switching_permutation_plus_rotation <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, gammas.draw = NULL, r, r.vec, nsample, thinned_iters_burnin, nninit = TRUE, pivot = NULL) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
+  # draws (list): the draws to swap according to the pivot
+  # rank (int): number of columns to iterate through
+  # loadings (list): the corresponding loadings for each draw of the matrix to swap
+  # betas (double vec): list of vectors of the coefficients drawn at each iteration
+  # gammas (int vec): list of vectors of the inclusion indicators drawn at each iteration
+  # r (int) = joint rank
+  # r.vec (c(ints)) = vector of individual ranks
+  # nsample (int) = number of posterior samples
+  # thinned_iters_burnin (c(ints)) = vector of indices for samples after burn-in + thinning if desired
+  # nninit (boolean) = TRUE if initialized at theoretical posterior mode or FALSE if use posterior mean as pivot
+  # pivot (list) = list of V and Vs to use as pivots. If NULL, must provide nninit. 
+  # ---------------------------------------------------------------------------
+  
+  # Load in library for Procrustes algorithms and permutations
+  library(pracma)
+  library(combinat)
+  library(svMisc)
+  
+  # Saving the number of sources
+  q <- length(r.vec)
+  
+  # Returning the swapped matrices
+  swapped_U.draw <- lapply(1:length(U.draw), function(iter) list())
+  swapped_V.draw <- lapply(1:length(V.draw), function(iter) list())
+  swapped_W.draw <- lapply(1:length(W.draw), function(iter) list())
+  swapped_Vs.draw <- lapply(1:length(Vs.draw), function(iter) list())
+  swapped_betas <- lapply(1:length(betas), function(iter) list())
+  swapped_gammas <- lapply(1:length(gammas), function(iter) list())
+  
+  # Returning the swaps made so they can be undone
+  swaps_made <- lapply(1:length(swapped_U.draw), function(iter) list())
+  
+  # Storing the sign changes so they can be undone
+  signs_changed <- lapply(1:length(swapped_U.draw), function(iter) list())
+  
+  # Setting the pivots to the posterior mode (result from BIDIFAC) or posterior mean
+  if (is.null(pivot)) {
+    if (nninit) {
+      pivot_V <- V.draw[[1]]
+      pivot_Vs <- Vs.draw[[1]]
+    }
+    
+    if (!nninit) {
+      V.draw.thinned.burnin <- lapply(V.draw[thinned_iters_burnin], function(iter) iter[[1,1]])
+      pivot_V <- matrix(list(), nrow = 1, ncol = 1)
+      pivot_V[[1,1]] <- Reduce("+", V.draw.thinned.burnin)/length(V.draw.thinned.burnin)
+      
+      Vs.draw.thinned.burnin <- Vs.draw[thinned_iters_burnin]
+      pivot_Vs <- matrix(list(), nrow = 1, ncol = q)
+      
+      for (s in 1:q) {
+        pivot_Vs[[1,s]] <- Reduce("+", lapply(Vs.draw.thinned.burnin, function(iter) iter[[1,s]]))/length(Vs.draw.thinned.burnin)
+      }
+    }
+  }
+  
+  # Setting the pivot to be user-chosen
+  if (!is.null(pivot)) {
+    pivot_V <- pivot[[1]]
+    pivot_Vs <- pivot[[2]]
+  }
+  
+  # Creating a matrix with all possible column permutations
+  perm_V <- do.call(rbind, permn(r))
+  perm_Vs <- lapply(1:q, function(s) do.call(rbind, permn(r.vec[s])))
+  
+  # How many permutations are there?
+  n_perm_V <- factorial(r)
+  n_perm_Vs <- factorial(r.vec)
+  
+  for (iter in 1:length(U.draw)) {
+    progress(iter/(length(U.draw)/100))
+    
+    # -------------------------------------------------------------------------
+    # Storing the current V, U, beta, and gamma
+    # -------------------------------------------------------------------------
+    
+    current_V <- V.draw[[iter]]
+    current_U <- U.draw[[iter]]
+    current_Vs <- Vs.draw[[iter]]
+    current_W <- W.draw[[iter]]
+    
+    if (!is.null(betas.draw)) {
+      current_beta <- betas.draw[[iter]]
+      current_beta_indiv <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Joint effect
+      if (r != 0) {
+        current_beta_joint <- current_beta[[1,1]][2:(r+1),, drop = FALSE] 
+      } else {
+        current_beta_joint <- NULL
+      }
+      
+      # Individual effects
+      current_beta_indiv.temp <- current_beta[[1,1]][(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) {
+            current_beta_indiv[[s, 1]] <- current_beta_indiv.temp[1:r.vec[s],, drop = FALSE] 
+          }
+          if (s != 1) {
+            current_beta_indiv[[s, 1]] <- current_beta_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+      }
+    }
+    
+    if (!is.null(gammas.draw)) {
+      current_gamma <- gammas.draw[[iter]] 
+      current_gamma_indiv <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Joint effect
+      if (r != 0) {
+        current_gamma_joint <- current_gamma[[1,1]][2:(r+1),, drop = FALSE]
+      } else {
+        current_gamma_joint <- NULL
+      }
+      
+      # Individual effects
+      current_gamma_indiv.temp <- current_gamma[[1,1]][(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) {
+            current_gamma_indiv[[s,1]] <- current_gamma_indiv.temp[1:r.vec[s],, drop = FALSE] 
+          }
+          if (s != 1) {
+            current_gamma_indiv[[s,1]] <- current_gamma_indiv.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+          }
+        }
+      }
+    }
+    
+    # -------------------------------------------------------------------------
+    # Finding the optimal rotation for each permutation
+    # -------------------------------------------------------------------------
+    
+    # -------------------------------------------------------------------------
+    # Joint structure
+    # -------------------------------------------------------------------------
+    
+    costs_V <- c()
+    
+    for (ind in 1:n_perm_V) {
+      
+      # Attempt current permutation
+      current_perm <- perm_V[ind,]
+      current_V_perm <- current_V 
+      current_V_perm[[1,1]] <- current_V[[1,1]][,current_perm]
+      
+      # For this permutation, what is the optimal rotation?
+      
+      # Solve the Procrustes problem for the joint structure
+      joint_rotate <- procrustes(pivot_V[[1,1]], current_V_perm[[1,1]])
+      
+      # Save the rotation matrix
+      joint_rotate_mat <- joint_rotate$Q
+      
+      # Save the rotated V
+      current_V_perm_rotate <- current_V_perm
+      current_V_perm_rotate[[1,1]] <- current_V_perm[[1,1]] %*% t(joint_rotate_mat)
+      
+      # Calculate the Frob difference between pivot and current perm/rotate
+      costs_V[ind] <- frob(pivot_V[[1,1]] - current_V_perm_rotate[[1,1]])
+    }
+    
+    # For the smallest cost, permute and rotate V and U accordingly
+    min_ind <- which.min(costs_V)
+    best_perm <- perm_V[min_ind,]
+    current_V_best_perm_rotate <- current_V
+    
+    # Solve the Procrustes problem for the joint structure
+    joint_rotate_best <- procrustes(pivot_V[[1,1]], current_V_best_perm_rotate[[1,1]])
+    
+    # Save the rotation matrix
+    joint_rotate_mat_best <- joint_rotate_best$Q
+    
+    # Save the rotated V
+    current_V_best_perm_rotate[[1,1]] <- current_V[[1,1]][,best_perm]
+    current_V_best_perm_rotate[[1,1]] <- current_V_best_perm_rotate[[1,1]] %*% t(joint_rotate_mat)
+    
+    # Rotate the loadings accordingly
+    current_U_best_perm_rotate <- current_U
+    
+    for (s in 1:q) {
+      current_U_best_perm_rotate[[s,1]] <- current_U_best_perm_rotate[[s,1]][,best_perm]
+      current_U_best_perm_rotate[[s,1]] <- current_U_best_perm_rotate[[s,1]] %*% t(joint_rotate_mat)
+    }
+    
+    # Rearranging the corresponding rows in betas:
+    if (!is.null(betas.draw)) {
+      best_beta_joint <- current_beta_joint
+      best_beta_joint <- current_beta_joint[best_perm,,drop=FALSE]
+    }
+    
+    # Rearranging the corresponding rows in the gammas:
+    if (!is.null(gammas.draw)) {
+      best_gamma_joint <- current_gamma_joint
+      best_gamma_joint <- current_gamma_joint[best_perm,,drop=FALSE]
+    }
+    
+    # -------------------------------------------------------------------------
+    # Individual structure
+    # ------------------------------------------------------------------------
+    
+    # Follow the same procedure for the individual structure
+    costs_Vs <- lapply(1:q, function(s) c())
+    
+    for (s in 1:q) {
+      for (ind in 1:n_perm_Vs[s]) {
+      
+        # Attempt current permutation
+        current_perm <- perm_Vs[[s]][ind,]
+        current_Vs_perm <- current_Vs
+        current_Vs_perm[[1,s]] <- current_Vs[[1,s]][,current_perm]
+        
+        # For this permutation, what is the optimal rotation?
+        
+        # Solve the Procrustes problem for the joint structure
+        indiv_rotate <- procrustes(pivot_Vs[[1,s]], current_Vs_perm[[1,s]])
+        
+        # Save the rotation matrix
+        indiv_rotate_mat <- indiv_rotate$Q
+        
+        # Save the rotated V
+        current_Vs_perm_rotate <- current_Vs_perm
+        current_Vs_perm_rotate[[1,s]] <- current_Vs_perm[[1,1]] %*% t(indiv_rotate_mat)
+        
+        # Calculate the Frob difference between pivot and current perm/rotate
+        costs_Vs[[s]][ind] <- frob(pivot_Vs[[1,s]] - current_Vs_perm_rotate[[1,s]])
+      }
+    }
+    
+    # For the smallest cost, permute and rotate Vs and W accordingly
+    min_ind_Vs <- sapply(costs_Vs, function(costs) which.min(costs))
+    best_perm_Vs <- lapply(1:q, function(s) perm_Vs[[s]][min_ind_Vs[s],])
+    
+    # Initialize the permutated and rotated results
+    current_Vs_best_perm_rotate <- current_Vs
+    current_W_best_perm_rotate <- current_W
+    best_beta_indiv <- current_beta_indiv
+    best_gamma_indiv <- current_gamma_indiv
+    
+    for (s in 1:q) {
+      # Apply the best permutation
+      current_Vs_best_perm_rotate[[1,s]] <- current_Vs[[1,s]][,best_perm_Vs[[s]]]
+      
+      # Obtain the corresponding rotation
+      indiv_rotate <- procrustes(pivot_Vs[[1,s]], current_Vs_best_perm_rotate[[1,s]])
+      
+      # Save the rotation matrix
+      indiv_rotate_mat <- indiv_rotate$Q
+
+      # Rotate the scores
+      current_Vs_best_perm_rotate[[1,s]] <- current_Vs_best_perm_rotate[[1,s]] %*% t(indiv_rotate_mat)
+      
+      # Permute the loadings
+      current_W_best_perm_rotate[[s,s]] <- current_W[[s,s]][,best_perm_Vs[[s]]]
+      
+      # Rotate the loadings
+      current_W_best_perm_rotate[[s,s]] <- current_W_best_perm_rotate[[s,s]] %*% t(indiv_rotate_mat)
+      
+      # Rearranging the corresponding rows in betas:
+      if (!is.null(betas.draw)) {
+        best_beta_indiv[[s,1]] <- current_beta_indiv[[s,1]][best_perm_Vs[[s]],,drop=FALSE]
+      }
+    
+      # Rearranging the corresponding rows in the gammas:
+      if (!is.null(gammas.draw)) {
+        best_gamma_indiv[[s,1]] <- current_gamma_indiv[[s,1]][best_perm_Vs[[s]],,drop=FALSE]
+      }
+    }
+    
+    # -------------------------------------------------------------------------
+    # Combine and save the results
+    # -------------------------------------------------------------------------
+    
+    # Combine the betas 
+    if (!is.null(betas.draw)) {
+      current_best_beta <- current_beta
+      current_best_beta[[1,1]] <- rbind(current_beta[[1,1]][1], best_beta_joint, do.call(rbind, best_beta_indiv))
+    }
+    
+    # Combine the gammas
+    if (!is.null(gammas.draw)) {
+      current_best_gamma <- current_gamma
+      current_best_gamma[[1,1]] <- rbind(current_gamma[[1,1]][1], best_gamma_joint, do.call(rbind, best_gamma_indiv))
+    }
+    
+    # Save in the lists
+    swapped_V.draw[[iter]] <- current_V_best_perm_rotate
+    swapped_U.draw[[iter]] <- current_U_best_perm_rotate
+    swapped_Vs.draw[[iter]] <- current_Vs_best_perm_rotate
+    swapped_W.draw[[iter]] <- current_W_best_perm_rotate
+    
+    if (!is.null(betas.draw)) {
+      swapped_betas[[iter]] <- current_best_beta
+    }
+    
+    if (!is.null(gammas.draw)) {
+      swapped_gammas[[iter]] <- current_best_gamma
+    }
+  }
+  
+  # Return
+  list(swapped_V.draw = swapped_V.draw, 
+       swapped_U.draw = swapped_U.draw, 
+       swapped_Vs.draw = swapped_Vs.draw, 
+       swapped_W.draw = swapped_W.draw,
+       swapped_betas = swapped_betas,
+       swapped_gammas = swapped_gammas)
+}
