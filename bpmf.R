@@ -3305,8 +3305,30 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # The response
     Y <- sim_data$Y
     
+    # Saving the ranks
+    r <- ranks[1]
+    r.vec <- ranks[-1]
+    n_beta <- 1 + r + sum(r.vec)
+    
     # The inclusion indicators
     true.gammas <- sim_data$gamma
+    
+    # Separating the inclusion indicators by joint and individual structure
+    true.joint.gammas <- true.gammas[2:(r+1),,drop=FALSE]
+    true.indiv.gammas.temp <- true.gammas[(2+r):n_beta,,drop=FALSE]
+    
+    # Initializing a list to store the individual gammas for each source
+    true.indiv.gammas <- lapply(1:q, function(iter) list())
+    
+    for (s in 1:q) {
+      if (s == 1) {
+        true.indiv.gammas[[s]] <- true.indiv.gammas.temp[1:r.vec[s],,drop=FALSE]
+      }
+      
+      if (s != 1) {
+        true.indiv.gammas[[s]] <- true.indiv.gammas.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+      }
+    }
     
     # Save the true components of the factorization
     true.V <- sim_data$V
@@ -3404,12 +3426,132 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     ssd.non.ls <- frob(true.gammas - post.non.ls)/length(true.gammas)
     
     # -------------------------------------------------------------------------
+    # Save the joint and individual structures that explain variability in Y in 
+    # the true data
+    # -------------------------------------------------------------------------
+    
+    # Initialize variables to store the structure that explains variability in Y and structure that does not 
+    true.joint.structure.slab <- true.joint.structure.spike <- true.indiv.structure.slab <- true.indiv.structure.spike <- matrix(list(), nrow = q, ncol = 1)
+    
+    # Save the columns that correspond to the slab
+    true_joint_slab_inds <- true.joint.gammas == 1
+    
+    for (s in 1:q) {
+      # Save the joint structure that explains variability
+      true.joint.structure.slab[[s,1]] <- (sim_data$U[[s,1]][,true_joint_slab_inds, drop = FALSE]) %*% t(sim_data$V[[1,1]][,true_joint_slab_inds, drop = FALSE])
+      
+      # Save the joint structure that does not explain variability
+      true.joint.structure.spike[[s,1]] <- (sim_data$U[[s,1]][,!true_joint_slab_inds, drop = FALSE]) %*% t(sim_data$V[[1,1]][,!true_joint_slab_inds, drop = FALSE])
+      
+      # Save the columns for each indivdidual structure that corresponds to the slab
+      true_indiv_slab_inds <- true.indiv.gammas[[s]] == 1
+      
+      # Save the individual structure that explains variability
+      true.indiv.structure.slab[[s,1]] <- (sim_data$W[[s,s]][,true_indiv_slab_inds, drop = FALSE]) %*% t(sim_data$Vs[[1,s]][,true_indiv_slab_inds, drop = FALSE])
+      
+      # Save the individual structure that does not explain variability
+      true.indiv.structure.spike[[s,1]] <- (sim_data$W[[s,s]][,!true_indiv_slab_inds, drop = FALSE]) %*% t(sim_data$Vs[[1,s]][,!true_indiv_slab_inds, drop = FALSE])
+    }
+    
+    # -------------------------------------------------------------------------
+    # Save the joint and individual structures that explain variability in Y 
+    # at each Gibbs sampling iteration
+    # ------------------------------------------------------------------------
+    
+    # Initialize the variables to store the structure that explains variability in Y and structure that does not at each iteration
+    joint.structure.slab <- joint.structure.spike <- indiv.structure.slab <- indiv.structure.spike <- lapply(1:length(thinned_iters_burnin), function(iter) matrix(list(), nrow = q, ncol = 1))
+    
+    # Initialize index to store results
+    ind <- 1
+    
+    # Go through the iterations after burn-in and calculate these structures
+    for (iter in thinned_iters_burnin) {
+      # Save the current Gibbs sampling iteration
+      U.iter <- U.draw[[iter]]
+      V.iter <- V.draw[[iter]]
+      Vs.iter <- Vs.draw[[iter]]
+      W.iter <- W.draw[[iter]]
+      gamma.iter <- gammas.draw[[iter]][[1,1]]
+      
+      # Decompose the gammas into joint and individual
+      indiv.gammas.temp.iter <- gamma.iter[(2+r):n_beta,,drop=FALSE]
+      
+      # Separating the inclusion indicators by joint and individual structure
+      joint.gammas.iter <- gamma.iter[2:(r+1),,drop=FALSE]
+      indiv.gammas.temp <- lapply(1:q, function(iter) list())
+      
+      for (s in 1:q) {
+        if (s == 1) {
+          indiv.gammas.temp[[s]] <- indiv.gammas.temp.iter[1:r.vec[s],,drop=FALSE]
+        }
+        
+        if (s != 1) {
+          indiv.gammas.temp[[s]] <- indiv.gammas.temp.iter[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
+      }
+      
+      # Save the columns in the joint structure that correspond to the slab
+      joint_slab_inds <- joint.gammas.iter == 1
+      
+      # Save the structures that do and don't explain variability in joint and individual structures
+      for (s in 1:q) {
+        # Save the joint structure that explains variability
+        joint.structure.slab[[ind]][[s,1]] <- (U.iter[[s,1]][,joint_slab_inds, drop = FALSE]) %*% t(V.iter[[1,1]][,joint_slab_inds, drop = FALSE])
+        
+        # Save the joint structure that does not explain variability
+        joint.structure.spike[[ind]][[s,1]] <- (U.iter[[s,1]][,!joint_slab_inds, drop = FALSE]) %*% t(V.iter[[1,1]][,!joint_slab_inds, drop = FALSE])
+        
+        # Save the columns for each indivdidual structure that corresponds to the slab
+        indiv_slab_inds <- indiv.gammas.temp[[s]] == 1
+        
+        # Save the individual structure that explains variability
+        indiv.structure.slab[[ind]][[s,1]] <- (W.iter[[s,s]][,indiv_slab_inds, drop = FALSE]) %*% t(Vs.iter[[1,s]][,indiv_slab_inds, drop = FALSE])
+        
+        # Save the individual structure that does not explain variability
+        indiv.structure.spike[[ind]][[s,1]] <- (W.iter[[s,s]][,!indiv_slab_inds, drop = FALSE]) %*% t(Vs.iter[[1,s]][,!indiv_slab_inds, drop = FALSE])
+      }
+      
+      # Update index
+      ind <- ind + 1
+    } 
+    
+    # Calculate the posterior mean
+    joint.structure.slab.mean <- joint.structure.spike.mean <- indiv.structure.slab.mean <- indiv.structure.spike.mean <-  matrix(list(), nrow = q, ncol = 1)
+    
+    for (s in 1:q) {
+      joint.structure.slab.mean[[s,1]] <- Reduce("+", lapply(joint.structure.slab, function(iter) iter[[s,1]]))/length(thinned_iters_burnin)
+      joint.structure.spike.mean[[s,1]] <- Reduce("+", lapply(joint.structure.spike, function(iter) iter[[s,1]]))/length(thinned_iters_burnin)
+      indiv.structure.slab.mean[[s,1]] <- Reduce("+", lapply(indiv.structure.slab, function(iter) iter[[s,1]]))/length(thinned_iters_burnin)
+      indiv.structure.spike.mean[[s,1]] <- Reduce("+", lapply(indiv.structure.spike, function(iter) iter[[s,1]]))/length(thinned_iters_burnin)
+    }
+    
+    # -------------------------------------------------------------------------
+    # Compare the structures that do and don't explain variability 
+    # -------------------------------------------------------------------------
+    
+    joint.slab.mse <- mean(sapply(1:q, function(s) {
+      (frob(true.joint.structure.slab[[s,1]] - joint.structure.slab.mean[[s,1]]))/frob(true.joint.structure.slab[[s,1]])
+    }))
+    
+    joint.spike.mse <- mean(sapply(1:q, function(s) {
+      (frob(true.joint.structure.spike[[s,1]] - joint.structure.spike.mean[[s,1]]))/frob(true.joint.structure.spike[[s,1]])
+    }))
+    
+    indiv.slab.mse <- mean(sapply(1:q, function(s) {
+      (frob(true.indiv.structure.slab[[s,1]] - indiv.structure.slab.mean[[s,1]]))/frob(true.indiv.structure.slab[[s,1]])
+    }))
+    
+    indiv.spike.mse <- mean(sapply(1:q, function(s) {
+      (frob(true.indiv.structure.spike[[s,1]] - indiv.structure.spike.mean[[s,1]]))/frob(true.indiv.structure.spike[[s,1]])
+    }))
+
+    # -------------------------------------------------------------------------
     # Return
     # -------------------------------------------------------------------------
     
-    ssd <- c(ssd.ls, ssd.ls2, ssd.non.ls)
-    names(ssd) <- c("Corrected (1)", "Corrected (2)", "Non-Corrected")
-    ssd
+    ssd_and_mse <- c(ssd.ls, ssd.ls2, ssd.non.ls, joint.slab.mse, joint.spike.mse, indiv.slab.mse, indiv.spike.mse)
+    names(ssd_and_mse) <- c("Corrected (Corr)", "Corrected (E&S)", "Non-Corrected", "Joint Slab MSE", "Joint Spike MSE", "Indiv Slab MSE", "Indiv Spike MSE")
+    ssd_and_mse
   }
   stopCluster(cl)
   
