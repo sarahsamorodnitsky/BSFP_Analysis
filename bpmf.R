@@ -3399,8 +3399,8 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     # -------------------------------------------------------------------------
     
     # Apply algorithm
-    res.ls.rotate <- factor_switching_permutation_plus_rotation(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
-                                                                gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
+    res.ls.rotate <- factor_switching_permutation_plus_rotation(U.draw, V.draw, W.draw, Vs.draw, betas.draw = betas.draw, 
+                                                                gammas.draw = gammas.draw, r = ranks[1], r.vec = ranks[-1],
                                                                 nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
                                                                 nninit = FALSE, pivot = list(true.V, true.Vs))
     
