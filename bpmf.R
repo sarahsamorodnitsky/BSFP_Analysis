@@ -3465,7 +3465,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
       # Save the joint structure that does not explain variability
       true.joint.structure.spike[[s,1]] <- (sim_data$U[[s,1]][,!true_joint_slab_inds, drop = FALSE]) %*% t(sim_data$V[[1,1]][,!true_joint_slab_inds, drop = FALSE])
       
-      # Save the columns for each indivdidual structure that corresponds to the slab
+      # Save the columns for each individual structure that corresponds to the slab
       true_indiv_slab_inds <- true.indiv.gammas[[s]] == 1
       
       # Save the individual structure that explains variability
