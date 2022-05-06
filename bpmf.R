@@ -939,6 +939,1055 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
 
 }
 
+# This version of BPMF is initialized with BIDIFAC+ with Y as a source
+bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
+  # Gibbs sampling algorithm for sampling the underlying structure and the 
+  # regression coefficient vector for a response vector. 
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
+  # 
+  # data = matrix with list entries corresponding to each data source
+  # Y = column vector with outcome or NULL
+  # nninit = should the model be initialized with a nuclear norm penalized objective? if FALSE, provide ranks
+  # model_params = (error_vars, joint_vars, indiv_vars, beta_vars = NULL, response_vars)
+  # ranks = joint and individual ranks (1st entry = joint rank, kth for k>1 is the individual rank for the k-1'st source)
+  # scores = if using structure from another method to fit a linear model, provide joint and individual scores here.
+  #   in this case, ranks should be provided and nninit = FALSE, Y != NULL
+  # nsample = number of Gibbs sampling iterations
+  # progress = should the progress of the sampler be displayed?
+  # starting_values = list of starting values for V, U, W, Vs. If NULL and nninit = TRUE, init with BIDIFAC+,
+  #    if NULL and nninit = FALSE, init from prior. If not NULL, will init with provided starting values unless 
+  #    nninit. 
+  # ---------------------------------------------------------------------------
+  
+  # ---------------------------------------------------------------------------
+  # Extracting the dimensions
+  # ---------------------------------------------------------------------------
+  
+  q <- nrow(data) # Number of sources
+  p.vec <- apply(data, 1, function(source) nrow(source[[1]])) # Number of features per source
+  p <- sum(p.vec) # Total number of features
+  n <- ncol(data[[1,1]]) # Number of subjects
+  
+  # ---------------------------------------------------------------------------
+  # Extracting the model parameters
+  # ---------------------------------------------------------------------------
+  
+  error_vars <- model_params$error_vars # Error variances
+  sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
+  sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
+  beta_vars <- model_params$beta_vars # Variances on betas
+  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
+  
+  # ---------------------------------------------------------------------------
+  # Check for missingness in data
+  # ---------------------------------------------------------------------------
+  
+  # Check for missingness
+  missingness_in_data <- any(sapply(data[,1], function(source) any(is.na(source))))
+  
+  # Which entries are missing?
+  missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
+  
+  # If there is missingness, initialize the missing values with 0s
+  for (s in 1:q) {
+    data[[s,1]][missing_obs[[s]]] <- 0
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Is there a response vector?
+  # ---------------------------------------------------------------------------
+  
+  response_given <- !is.null(Y[[1,1]]) 
+  
+  # If so, what kind of response is it?
+  if (response_given) {
+    Y <- matrix(unlist(Y))
+    
+    response_type <- if (all(unique(Y) %in% c(0, 1, NA))) "binary" else "continuous"
+    
+    # If there is a response, is there missingness in the outcome?
+    missingness_in_response <- any(is.na(Y))
+    
+    # Which entries are missing?
+    missing_obs_Y <- which(is.na(Y))
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Obtaining the ranks 
+  # ---------------------------------------------------------------------------
+  
+  # Initializing with BIDIFAC+
+  if (nninit) {
+    
+    # Initialize with BIDIFAC if there is no response
+    if (!response_given) {
+      rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
+      
+      # Print when finished
+      print("Posterior mode obtained: joint and individual ranks determined.")
+      
+      # Saving the results
+      sigma.mat <- rank_init$sigma.mat
+      C <- rank_init$C
+      r <- rankMatrix(C[[1,1]])[[1]] # Joint rank
+      I <- rank_init$I
+      r.vec <- sapply(1:q, function(s) rankMatrix(I[[s,1]])) # Individual ranks
+      
+      # Scaling the data
+      for (s in 1:q) {
+        data[[s,1]] <- data[[s,1]]/sigma.mat[s,]
+      }
+    }
+    
+    # Initialize with BIDIFAC+ if response is given
+    if (response_given) {
+      
+      # Combine the data and response together and append
+      data_combined <- matrix(list(), nrow = (q+1), ncol = 1)
+      
+      for (s in 1:q) {
+        data_combined[[s,1]] <- data[[s,1]]
+      }
+      
+      data_combined[[q+1,1]] <- t(Y[[1,1]])
+      data_combined <- do.call(rbind, data_combined)
+      
+      # Initialize the indices of observations in each source (including response)
+      p.ind <- lapply(1:q, function(s) {
+        if (s == 1) {
+          1:p.vec[s]
+        } else {
+          (p.vec[s-1] + 1):cumsum(p.vec)[s]
+        }
+      })
+      p.ind[[q+1]] <- cumsum(p.vec)[q] + 1 # For the response
+      
+      # Save number of samples per source
+      n.ind <- list(n)
+      
+      # Save the indices for features for each identified structure
+      p.ind.list <- list(c(unlist(p.ind))) # Joint structure
+      
+      for (s in 1:q) {
+        p.ind.list[[s+1]] <- c(p.ind[[s]], p.ind[[q+1]])
+      }
+      
+      # Save the indices for samples in each identified structure
+      n.ind.list <- lapply(1:(q+1), function(s) c(1:n))
+      
+      # Run BIDIFAC+
+      rank_init <- bidifac.plus.given(data_combined, p.ind = p.ind, n.ind = n.ind,
+                                      p.ind.list = p.ind.list, n.ind.list = n.ind.list)
+      
+      # Print when finished
+      print("Posterior mode obtained: joint and individual ranks determined.")
+      
+      # Obtain the structures and their ranks
+      S <- rank_init$S
+      
+      # Joint rank
+      r <- Matrix::rankMatrix(S[[1]])[[1]]
+      
+      # Pairwise-shared ranks of each source with Y
+      r.vec <- sapply(2:(q+1), function(s) Matrix::rankMatrix(S[[s]])[[1]])
+    }
+    
+  }
+  
+  if (!nninit) {
+    r <- ranks[1]
+    r.vec <- ranks[-1]
+    sigma.mat <- matrix(nrow = q, 1)
+    for (s in 1:q) {
+      sigma.mat[s,1] <- 1
+    }
+  }
+  
+  r_total <- n_beta <- r + sum(r.vec)
+  n_beta <- 1 + r_total
+  
+  # If a response is given, set up the variance matrix for the prior of the betas using the ranks
+  if (response_given) {
+    Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
+    beta_vars <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+    diag(Sigma_beta) <- beta_vars
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Storing the posterior samples
+  # ---------------------------------------------------------------------------
+  
+  V.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+  U.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  Vs.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = q))
+  W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
+  
+  if (!response_given) {
+    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+  }
+  
+  if (!missingness_in_data) {
+    Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  }
+  
+  if (!sparsity) {
+    gamma.draw <- p.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+  }
+  
+  if (response_given) {
+    beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    
+    Z.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    
+    tau2.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    
+    Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    
+    if (sparsity) {
+      gamma.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+      p.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+    }
+  }
+  
+  if (missingness_in_data) {
+    Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Initialize V, U, V, W
+  # ---------------------------------------------------------------------------
+  
+  # If initializing with nuclear norm, set initialize values to posterior mode
+  if (nninit) {
+    
+    if (!response_given) {
+      V0 <- matrix(list(), nrow = 1, ncol = 1)
+      if (r > 0) {
+        svd.joint <- svd(rank_init$C[[1,1]])
+        V0[[1,1]] <- (svd.joint$v[,1:r, drop = FALSE]) %*% diag(svd.joint$d[1:r], nrow = r)
+      } 
+      if (r == 0) {
+        V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
+      }
+      
+      U0 <- matrix(list(), nrow = q, ncol = 1)
+      Vs0 <- matrix(list(), nrow = 1, ncol = q)
+      W0 <- matrix(list(), nrow = q, ncol = q)
+      
+      for (s in 1:q) {
+        
+        # Initialize U
+        if (r > 0) {
+          U0[[s,1]] <- svd(rank_init$C[[s,1]])$u[,1:r, drop = FALSE]
+        } 
+        if (r == 0) {
+          U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        }
+        
+        # Initialize W and V
+        if (r.vec[s] > 0) {
+          svd.indiv.s <- svd(rank_init$I[[s,1]])
+          Vs0[[1,s]] <- (svd.indiv.s$v[,1:r.vec[s], drop = FALSE]) %*% diag(svd.indiv.s$d[1:r.vec[s]], nrow = r.vec[s])
+          W0[[s,s]] <- svd.indiv.s$u[,1:r.vec[s], drop = FALSE]
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
+            }
+          }
+        } 
+        if (r.vec[s] == 0) {
+          Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
+          W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
+            }
+          }
+        }
+        
+      }
+    }
+    
+    if (response_given) {
+      V0 <- matrix(list(), nrow = 1, ncol = 1)
+      if (r > 0) {
+        svd.joint <- svd(S[[1]])
+        V0[[1,1]] <- (svd.joint$v[,1:r, drop = FALSE]) %*% diag(svd.joint$d[1:r], nrow = r)
+      } 
+      if (r == 0) {
+        V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
+      }
+      
+      U0 <- matrix(list(), nrow = q, ncol = 1)
+      Vs0 <- matrix(list(), nrow = 1, ncol = q)
+      W0 <- matrix(list(), nrow = q, ncol = q)
+      
+      for (s in 1:q) {
+        
+        # Initialize U
+        if (r > 0) {
+          U0[[s,1]] <- svd(S[[1]])$u[,1:r, drop = FALSE]
+        } 
+        if (r == 0) {
+          U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        }
+        
+        # Initialize W and V
+        if (r.vec[s] > 0) {
+          svd.indiv.s <- svd(S[[s+1]])
+          Vs0[[1,s]] <- (svd.indiv.s$v[,1:r.vec[s], drop = FALSE]) %*% diag(svd.indiv.s$d[1:r.vec[s]], nrow = r.vec[s])
+          W0[[s,s]] <- svd.indiv.s$u[,1:r.vec[s], drop = FALSE]
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
+            }
+          }
+        } 
+        if (r.vec[s] == 0) {
+          Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
+          W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
+            }
+          }
+        }
+      }
+    }
+
+  }
+  
+  # If ranks provided, initialize with prior or use given starting values
+  if (!nninit) {
+    
+    # If no starting values were provided, initialize from priors
+    if (is.null(starting_values)) {
+      V0 <- matrix(list(), nrow = 1, ncol = 1)
+      if (r > 0) {
+        V0[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
+      } 
+      if (r == 0) {
+        V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
+      }
+      
+      U0 <- matrix(list(), nrow = q, ncol = 1)
+      Vs0 <- matrix(list(), nrow = 1, ncol = q)
+      W0 <- matrix(list(), nrow = q, ncol = q)
+      
+      for (s in 1:q) {
+        
+        # Initialize U
+        if (r > 0) {
+          U0[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
+        } 
+        if (r == 0) {
+          U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        }
+        
+        # Initialize W and V
+        if (r.vec[s] > 0) {
+          Vs0[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
+          W0[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r.vec[s])
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
+            }
+          }
+        } 
+        if (r.vec[s] == 0) {
+          Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
+          W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W0[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
+            }
+          }
+        }
+        
+      }
+    }
+    
+    # If starting values were provided, use them as initial values
+    if (!is.null(starting_values)) {
+      V0 <- starting_values$V
+      U0 <- starting_values$U
+      W0 <- starting_values$W
+      Vs0 <- starting_values$Vs
+    }
+    
+  }
+  
+  if (response_given) {
+    # Combining the scores together
+    V0.star <- matrix(list(), nrow = 1, ncol = 1)
+    if (r > 0) V0.star[[1,1]] <- V0[[1,1]] else V0.star[[1,1]] <- matrix(nrow = n, ncol = r)
+    
+    Vs0.star <- Vs0
+    for (s in 1:q) {
+      if (r.vec[s] > 0) Vs0.star[[1,s]] <- Vs0[[1,s]] else Vs0.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
+    }
+    
+    VStar0 <- cbind(1, do.call(cbind, V0.star), do.call(cbind, Vs0.star))
+    
+    beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
+    Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+    tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
+    
+    if (sparsity) {
+      p0 <- 0.5
+      gamma0 <- matrix(rbinom(n_beta, size = 1, prob = p0), ncol = 1)
+    }
+  }
+  
+  # If there is missingness in the data, generate starting values for the missing entries
+  if (missingness_in_data) {
+    Xm0 <- matrix(list(), ncol = 1, nrow = q)
+    for (s in 1:q) {
+      Xm0[[s,1]] <- rep(0, length(missing_obs[s]))
+    }
+  }
+  
+  # If there is missingness in Y, generate starting values for the missing entries
+  if (response_given) {
+    if (missingness_in_response) {
+      if (response_type == "continuous") {
+        # Generate starting values for the missing data
+        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,, drop = FALSE]
+      }
+      
+      if (response_type == "binary") {
+        # Generate starting values for the missing data
+        Ym0 <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,, drop = FALSE]
+      }
+    }
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Storing the initial values 
+  # ---------------------------------------------------------------------------
+  
+  V.draw[[1]] <- V0
+  U.draw[[1]] <- U0
+  Vs.draw[[1]] <- Vs0
+  W.draw[[1]] <- W0
+  
+  if (response_given) {
+    beta.draw[[1]][[1,1]] <- beta0
+    Z.draw[[1]][[1,1]] <- Z0
+    tau2.draw[[1]][[1,1]] <- tau20
+    
+    if (missingness_in_response) {
+      Ym.draw[[1]][[1,1]] <- Ym0
+    }
+    
+    if (sparsity) {
+      gamma.draw[[1]][[1,1]] <- gamma0
+      p.draw[[1]][[1,1]] <- p0
+    }
+  }
+  
+  if (missingness_in_data) {
+    Xm.draw[[1]] <- Xm0
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Computing the inverses that don't change from iteration to iteration
+  # ---------------------------------------------------------------------------
+  
+  if (!response_given) {
+    # Error variance for X. 
+    SigmaVInv <- diag(rep(1/error_vars, p.vec))
+  }
+  
+  if (response_given) {
+    if (response_type == "binary") {
+      # For V - Combined precisions between data and Z
+      SigmaVInv <- diag(c(rep(1/error_vars, p.vec), 1))
+      
+      # For Vs
+      SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
+      
+      for (s in 1:q) {
+        SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), 1))
+      }
+    } 
+    
+    # For beta - Combined precisions between intercept and all betas
+    SigmaBetaInv <- solve(Sigma_beta)
+  }
+  
+  # ---------------------------------------------------------------------------
+  # If structure from another method is given, save the scores as VStar
+  # ---------------------------------------------------------------------------
+  
+  if (!is.null(scores)) {
+    VStar <- cbind(1, scores)
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Start Gibbs sampling!
+  # ---------------------------------------------------------------------------
+  
+  for (iter in 1:(nsample-1)) {
+    if (progress) svMisc::progress(iter/((nsample-1)/100))
+    
+    # ---------------------------------------------------------------------------
+    # Storing the current values of the parameters
+    # ---------------------------------------------------------------------------
+    
+    V.iter <- V.draw[[iter]]
+    U.iter <- U.draw[[iter]]
+    Vs.iter <- Vs.draw[[iter]]
+    W.iter <- W.draw[[iter]]
+    
+    if (response_given) {
+      # The current values of the betas
+      beta.iter <- beta.draw[[iter]][[1,1]] 
+      
+      # Creating a matrix of the joint and individual effects
+      beta_indiv.iter <- matrix(list(), nrow = q, ncol = 1)
+      
+      # Breaking beta down into the intercept,
+      beta_intercept.iter <- beta.iter[1,, drop = FALSE]
+      
+      # Joint effect
+      if (r != 0) beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE] else beta_joint.iter <- matrix(0)
+      
+      # Individual effects
+      if (sum(r.vec) > 0) beta_indiv.iter.temp <- beta.iter[(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is no individual effect
+        if (r.vec[s] == 0) beta_indiv.iter[[s, 1]] <- matrix(0)
+        
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE] 
+          if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
+      }
+      
+      if (response_type == "binary") {
+        Z.iter <- Z.draw[[iter]][[1,1]]
+      }
+      
+      if (response_type == "continuous") {
+        tau2.iter <- tau2.draw[[iter]][[1,1]]
+      }
+      
+      if (missingness_in_response) {
+        # Save the current imputations for the missing values
+        Ym.iter <- Ym.draw[[iter]][[1,1]]
+        
+        # Creating the completed outcome vector
+        Y_complete <- Y
+        
+        # Filling in the missing entries for R1 and R2. 
+        Y_complete[missing_obs_Y,] <- Ym.iter
+      }
+      
+      if (!missingness_in_response) {
+        Y_complete <- Y
+      }
+      
+      if (sparsity) {
+        gamma.iter <- gamma.draw[[iter]][[1,1]]
+        p.iter <- p.draw[[iter]][[1,1]]
+      }
+    }
+    
+    if (missingness_in_data) {
+      # Creating the completed matrices. 
+      X_complete <- data
+      
+      # Fill in the completed matrices with the imputed values
+      for (s in 1:q) {
+        X_complete[[s,1]][missing_obs[[s]]] <- Xm.draw[[iter]][[s,1]]
+      }
+    }
+    
+    if (!missingness_in_data) {
+      X_complete <- data
+    }
+    
+    # -------------------------------------------------------------------------
+    # Computing the inverse that changes with tau2
+    # -------------------------------------------------------------------------
+    
+    if (response_given) {
+      if (response_type == "continuous") {
+        # For V - Combined error variances between X1, X2, and Y
+        SigmaVInv <- diag(c(rep(1/error_vars, p.vec), 1/tau2.iter[[1,1]]))
+        
+        # For Vs
+        SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
+        
+        for (s in 1:q) {
+          SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), 1/tau2.iter[[1,1]]))
+        }
+      }
+    }
+    
+    # If estimating the underlying structure
+    if (is.null(scores)) {
+      # -------------------------------------------------------------------------
+      # Posterior sample for V
+      # -------------------------------------------------------------------------
+      
+      if (r > 0) {
+        if (!response_given) {
+          # Concatenating Ui's together
+          U.iter.combined <- do.call(rbind, U.iter)
+          tU_Sigma <- crossprod(U.iter.combined, SigmaVInv)
+          
+          # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
+          tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
+          
+          # The combined centered Xis with the latent response vector
+          X.iter <- do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t))
+          Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
+          
+          V.draw[[iter+1]][[1,1]] <- t(matrix(sapply(1:n, function(i) {
+            bv <-  tU_Sigma %*% X.iter[,i]
+            
+            Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+            Vi
+          }), nrow = r))
+        }
+        
+        if (response_given) {
+          # Concatenating Ui's together
+          U.iter.combined <- rbind(do.call(rbind, U.iter), t(beta_joint.iter))
+          
+          # Computing the crossprod: t(U.iter) %*% solve(Sigma) %*% U.iter
+          tU_Sigma <- crossprod(U.iter.combined, SigmaVInv) 
+          tU_Sigma_U <- crossprod(t(tU_Sigma), U.iter.combined)
+          
+          Bv <- solve(tU_Sigma_U + (1/sigma2_joint) * diag(r))
+          
+          if (response_type == "binary") {
+            # The combined centered Xis with the latent response vector
+            X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+                            t(Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
+          }
+          
+          if (response_type == "continuous") {
+            # The combined centered Xis with the latent response vector
+            X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
+                            t(Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
+          }
+          
+          V.draw[[iter+1]][[1,1]] <- t(matrix(sapply(1:n, function(i) {
+            bv <- tU_Sigma %*% X.iter[,i]
+            
+            Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+            Vi
+          }), nrow = r))
+        }
+        
+      }
+      
+      if (r == 0) {
+        V.draw[[iter+1]][[1,1]] <- matrix(0, nrow = n, ncol = 1)
+      }
+      
+      # Updating the value of V
+      V.iter <- V.draw[[iter+1]]
+      
+      # -------------------------------------------------------------------------
+      # Posterior sample for Us
+      # -------------------------------------------------------------------------
+      
+      if (r > 0) {
+        for (s in 1:q) {
+          Xs.iter <- X_complete[[s,1]] - W.iter[[s,s]] %*% t(Vs.iter[[1,s]])
+          Bu <- solve((1/error_vars[s]) * t(V.iter[[1,1]]) %*% V.iter[[1,1]] + (1/sigma2_joint) * diag(r))
+          U.draw[[iter+1]][[s,1]] <- t(matrix(sapply(1:p.vec[s], function(j) {
+            bu <- (1/error_vars[s]) * t(V.iter[[1,1]]) %*% Xs.iter[j, ]
+            
+            U1j <- mvrnorm(1, mu = Bu %*% bu, Sigma = Bu)
+            U1j
+          }), nrow = r))
+        }
+      }
+      
+      if (r == 0) {
+        for (s in 1:q) {
+          U.draw[[iter+1]][[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        }
+      }
+      
+      U.iter <- U.draw[[iter+1]]
+      
+      # -------------------------------------------------------------------------
+      # Posterior sample for Vs, s=1,...,q
+      # -------------------------------------------------------------------------
+      
+      if (!response_given) {
+        for (s in 1:q) {
+          if (r.vec[s] > 0) {
+            Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
+            Bvs <- solve((1/error_vars[s]) * t(W.iter[[s,s]]) %*% W.iter[[s,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
+            
+            Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
+              bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
+              
+              Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+              Vsi
+            }), nrow = r.vec[s]))
+          }
+          
+          if (r.vec[s] == 0) {
+            Vs.draw[[iter+1]][[1,s]] <- matrix(0, nrow = n, ncol = 1)
+          }
+        }
+      }
+      
+      if (response_given) {
+        for (s in 1:q) {
+          if (r.vec[s] > 0) {
+            # Combined Ws and beta
+            W.iter.combined <- rbind(W.iter[[s,s]], t(beta_indiv.iter[[s,1]]))
+            
+            tW_Sigma <- crossprod(W.iter.combined, SigmaVsInv[[s,s]])
+            tW_Sigma_W <- crossprod(t(tW_Sigma), W.iter.combined)
+            
+            Bvs <- solve(tW_Sigma_W + (1/indiv_vars[s]) * diag(r.vec[s]))
+            
+            if (response_type == "binary") {
+              # Combined centered Xs and Z
+              Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
+                               t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
+                                   do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
+            }
+            
+            if (response_type == "continuous") {
+              # Combined centered Xs and Y
+              Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
+                               t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
+                                   do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
+            }
+            
+            Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
+              bvs <- tW_Sigma %*% Xs.iter[, i]
+              
+              Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+              Vsi
+            }), nrow = r.vec[s]))
+          }
+          
+          if (r.vec[s] == 0) {
+            Vs.draw[[iter+1]][[1,s]] <- matrix(0, nrow = n, ncol = 1)
+          }
+        }
+      }
+      
+      # Update the current value of V
+      Vs.iter <- Vs.draw[[iter+1]]
+      
+      # Combine current values of V and V.
+      V.iter.star.joint <- V.iter
+      if (r == 0) {
+        V.iter.star.joint[[1,1]] <- matrix(nrow = n, ncol = r)
+      } 
+      
+      Vs.iter.star <- Vs.iter
+      for (s in 1:q) {
+        if (r.vec[s] == 0) {
+          Vs.iter.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
+        } 
+      }
+      
+      VStar.iter <- cbind(1, do.call(cbind, V.iter.star.joint), do.call(cbind, Vs.iter.star))
+      
+      # -------------------------------------------------------------------------
+      # Posterior sample for W
+      # -------------------------------------------------------------------------
+      
+      for (s in 1:q) {
+        if (r.vec[s] > 0) {
+          Xs.iter <- X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]])
+          Bws <- solve((1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Vs.iter[[1,s]] + (1/indiv_vars[s]) * diag(r.vec[s]))
+          
+          W.draw[[iter+1]][[s,s]] <- t(matrix(sapply(1:p.vec[s], function(j) {
+            bws <- (1/error_vars[s]) * t(Vs.iter[[1,s]]) %*% Xs.iter[j,] 
+            
+            Wsj <- mvrnorm(1, mu = Bws %*% bws, Sigma = Bws)
+            Wsj
+          }), nrow = r.vec[s]))
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W.draw[[iter+1]][[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W.draw[[iter+1]][[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
+            }
+          }
+        }
+        
+        if (r.vec[s] == 0) {
+          W.draw[[iter+1]][[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+          
+          for (ss in 1:q) {
+            if (ss != s) {
+              if (r.vec[ss] > 0) {
+                W.draw[[iter+1]][[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+              }
+              
+              if (r.vec[ss] == 0) {
+                W.draw[[iter+1]][[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+              }
+            }
+          }
+        }
+      }
+      
+      # Update the current value of W
+      W.iter <- W.draw[[iter+1]]
+      
+    }
+    
+    # If structure from another method is provided
+    if (!is.null(scores)) {
+      VStar.iter <- VStar
+    }
+    
+    # -------------------------------------------------------------------------
+    # Posterior sample for beta
+    # -------------------------------------------------------------------------
+    
+    if (response_given) {
+      
+      if (sparsity) {
+        # Change the precision for the intercept
+        diag(SigmaBetaInv)[1] <- 1/beta_vars[1]
+        
+        # Change the precision of those betas under the slab, excluding the intercept
+        diag(SigmaBetaInv)[-1][gamma.iter[-1] == 1] <- 1/(beta_vars[-1][gamma.iter[-1] == 1])
+        
+        # Change the precision of those betas under the spike
+        diag(SigmaBetaInv)[-1][gamma.iter[-1] == 0] <- 1000 # Can change this precision
+      }
+      
+      if (response_type == "binary") {
+        Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+        bbeta <- t(VStar.iter) %*% Z.iter
+      }
+      
+      if (response_type == "continuous") {
+        Bbeta <- solve((1/tau2.iter[[1,1]]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+        bbeta <- (1/tau2.iter[[1,1]]) * t(VStar.iter) %*% Y_complete
+      }
+      
+      beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
+      
+      # Update the current value of beta
+      beta.iter <- beta.draw[[iter+1]][[1,1]]
+      
+      # Creating a matrix of the joint and individual effects
+      beta_indiv.iter <- matrix(list(), ncol = 1, nrow = q)
+      
+      # Breaking beta down into the intercept
+      beta_intercept.iter <- beta.iter[1,, drop = FALSE]
+      
+      # Joint effect
+      if (r != 0) beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE] else beta_joint.iter <- matrix(0)
+      
+      # Individual effects
+      if (sum(r.vec) > 0) beta_indiv.iter.temp <- beta.iter[(r+2):n_beta,, drop = FALSE]
+      
+      for (s in 1:q) {
+        # If there is no individual effect
+        if (r.vec[s] == 0) beta_indiv.iter[[s, 1]] <- matrix(0)
+        
+        # If there is an individual effect
+        if (r.vec[s] != 0) {
+          if (s == 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[1:r.vec[s],, drop = FALSE] 
+          if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
+        }
+      }
+    }
+    
+    # -------------------------------------------------------------------------
+    # Posterior sample for spike-and-slab indicators and probabilities
+    # -------------------------------------------------------------------------
+    
+    if (response_given & sparsity) {
+      # Calculate the likelihood for beta under the spike and slab
+      like_spike <- dnorm(beta.iter, mean = 0, sd = sqrt(1/1000), log = TRUE)
+      like_slab <- dnorm(beta.iter, mean = 0, sd = sqrt(beta_vars), log = TRUE)
+      
+      # Calculating the probability that each gamma equals 1
+      prob = sapply(1:n_beta, function(rs) {
+        x = log(p.iter) + like_slab[rs,]
+        y = log(1 - p.iter) + like_spike[rs,]
+        exp(x - logSum(c(x,y)))
+      })
+      prob[1] <- 1 # Always include the intercept
+      
+      # Generating the gammas
+      gamma.draw[[iter+1]][[1,1]] <- matrix(rbinom(n_beta, size = 1, prob = prob), ncol = 1)
+      
+      # Saving the current value of gamma
+      gamma.iter <- gamma.draw[[iter+1]][[1,1]]
+      
+      # Generating the prior probabilities (excluding the intercept, hence n_beta - 1 and sum(gamma[-1]))
+      p.draw[[iter+1]][[1,1]] <- rbeta(1, 1 + sum(gamma.iter[-1,]), 1 + (n_beta-1) - sum(gamma.iter[-1,]))
+    }
+    
+    # -------------------------------------------------------------------------
+    # Posterior sample for tau2
+    # -------------------------------------------------------------------------
+    
+    if (response_given) {
+      if (response_type == "continuous") {
+        tau2.draw[[iter+1]][[1,1]] <- matrix(1/rgamma(1, shape = shape + (n/2), rate = rate + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2)))
+        
+        # Update the current value of tau2
+        tau2.iter <- tau2.draw[[iter+1]][[1,1]]
+      }
+    }
+    
+    # -------------------------------------------------------------------------
+    # Posterior sample for latent continuous response Z
+    # -------------------------------------------------------------------------
+    
+    if (response_given) {
+      if (response_type == "binary") {
+        Z.draw[[iter+1]][[1,1]] <- matrix(sapply(1:n, function(i) {
+          if (Y_complete[i,] == 1) {
+            rtruncnorm(1, a = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
+          } else {
+            rtruncnorm(1, b = 0, mean = (VStar.iter %*% beta.iter)[i,], sd = 1)
+          }
+        }), ncol = 1)
+      }
+    }
+    
+    # -------------------------------------------------------------------------
+    # Impute missing data
+    # -------------------------------------------------------------------------
+    
+    if (response_given) {
+      if (missingness_in_response) {
+        if (response_type == "continuous") {
+          Ym.draw[[iter+1]][[1,1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(tau2.iter[[1,1]])), ncol = 1)[missing_obs_Y,, drop = FALSE]
+        }
+        
+        if (response_type == "binary") {
+          Ym.draw[[iter+1]][[1,1]] <- matrix(rbinom(n, size = 1, prob = pnorm(VStar.iter %*% beta.iter)), ncol = 1)[missing_obs_Y,, drop = FALSE]
+        }
+      }
+    }
+    
+    if (missingness_in_data) {
+      for (s in 1:q) {
+        Es <-  matrix(rnorm(p.vec[s]*n, 0, sqrt(error_vars[s])), nrow = p.vec[s], ncol = n)
+        Xm.draw[[iter+1]][[s,1]] <- matrix((U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]) + Es)[missing_obs[[s]]])
+      }
+    }
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Calculating the joint and individual structure, scaled to the data
+  # ---------------------------------------------------------------------------
+  
+  # Storing the joint structure at each Gibbs sampling iteration
+  Joint.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  
+  # Storing the individual structure at each Gibbs sampling iteration
+  Indiv.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  
+  if (is.null(scores)) {
+    for (iter in 1:nsample) {
+      for (s in 1:q) {
+        # Calculating the joint structure and scaling by sigma.mat
+        Joint.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+        
+        # Calculating the individual structure and scaling by sigma.mat
+        Indiv.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+      }
+    }
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Calculating the posterior mean
+  # ---------------------------------------------------------------------------
+  
+  # Storing the posterior mean for the joint and individual structure
+  Joint.mean <- matrix(list(), nrow = q, ncol = 1)
+  Indiv.mean <- matrix(list(), nrow = q, ncol = 1)
+  
+  if (is.null(scores)) {
+    for (s in 1:q) {
+      Joint.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Joint.draw[[iter]][[s,1]]))/length(Joint.draw)
+      Indiv.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Indiv.draw[[iter]][[s,1]]))/length(Indiv.draw)
+    }
+  }
+  
+  # Return
+  list(data = data, # Returning the scaled version of the data
+       Y = Y, # Return the response vector
+       sigma.mat = sigma.mat, # Scaling factors
+       Joint.draw = Joint.draw, Indiv.draw = Indiv.draw, # Underlying structure
+       Joint.mean = Joint.mean, Indiv.mean = Indiv.mean, # Posterior mean of structures
+       V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
+       Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
+       scores = scores, # Scores if provided by another method 
+       ranks = c(r, r.vec), # Ranks
+       tau2.draw = tau2.draw, beta.draw = beta.draw, # Regression parameters
+       gamma.draw = gamma.draw, p.draw = p.draw) # Sparsity parameters
+  
+}
+
 bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, center = FALSE, nninit, ranks, 
                      response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE) {
   
@@ -1427,6 +2476,57 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
   return(list(X=data, S=S00.mat,
               G=G00.mat, R=R00.mat, C=C00.mat, I=I00.mat,
               sigma.mat=sigma.mat, n.vec=nvec,m.vec=mvec))
+}
+
+bidifac.plus.given <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, S = list(), pen=c(), given.inits = FALSE,max.iter=500,conv.thresh=0.001){
+  library(RSpectra)
+  
+  n.source <- length(p.ind)
+  n.type <- length(n.ind)
+  max.comb=length(p.ind.list)
+  lambda=1
+  if(given.inits==FALSE){
+    for(i in 1:max.comb){
+      S[[i]]=array(rep(0,prod(dim(X0))),dim=dim(X0))
+      pen[i]=0}
+  }
+  obj.vec <- c(sum(X0^2))
+  max.comb=length(p.ind.list)
+  X0.resid = X0-Reduce('+',S)
+  obj.prev <- sum(X0.resid^2)+2*sum(pen)
+  for(jj in 1:max.iter){
+    print(jj)
+    for(k in 1:max.comb){
+      print(paste('*',k))
+      X0.temp <- X0.resid+S[[k]]
+      cur.p.ind <- p.ind.list[[k]] 
+      cur.n.ind <- n.ind.list[[k]] 
+      a <- svd(X0.temp[cur.p.ind,cur.n.ind],nu=0,nv=0)$d
+      nc <- sum(a>(lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind)))))
+      if(nc>0){
+        SVD <- svd(X0.temp[cur.p.ind,cur.n.ind], nu=nc,nv=nc)
+        s.vals <- pmax(SVD$d[1:nc]-lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind))),0)
+        Diag <- diag(s.vals,nrow=nc,ncol=nc)
+        Est <- SVD$u%*%Diag%*%t(SVD$v)
+        S[[k]] <- array(rep(0,prod(dim(X0))),dim=dim(X0))
+        S[[k]][cur.p.ind,cur.n.ind] <- Est
+        X0.resid[cur.p.ind,cur.n.ind] <- X0.temp[cur.p.ind,cur.n.ind]-Est
+        X0.resid = X0-Reduce('+',S)
+        pen[k] <- lambda*(sqrt(length(cur.n.ind))+sqrt(length(cur.p.ind)))*(sum(s.vals))
+        obj.vec <- c(obj.vec,sum(X0.resid^2)+2*sum(pen))
+      }
+    }
+    obj.cur <- sum(X0.resid^2)+2*sum(pen)
+    if(abs(obj.cur-obj.prev)<conv.thresh) break
+    obj.prev <- sum(X0.resid^2)+2*sum(pen)
+  }
+  
+  Sums <- array(dim=c(max.comb,n.source,n.type))
+  for(kk in 1:max.comb){for(j in 1:n.source){ for(i in 1:n.type){
+    Sums[kk,j,i] = sum(S[[kk]][p.ind[[j]],n.ind[[i]]]^2)
+  }}}
+  
+  return(list(S=S,Sums=Sums,obj.vec=obj.vec))
 }
 
 # -----------------------------------------------------------------------------
@@ -6478,4 +7578,271 @@ factor_switching_permutation_plus_rotation <- function(U.draw, V.draw, W.draw, V
        swapped_W.draw = swapped_W.draw,
        swapped_betas = swapped_betas,
        swapped_gammas = swapped_gammas)
+}
+
+# Creating a function that prepares the results from my method to apply the Poworoznek et al. (2021) approach
+match_align_multi <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, r, r.vec, burnin) {
+  
+  # ---------------------------------------------------------------------------
+  # Wrapper function to reformat the results from BPMF to apply the Poworoznek 
+  # method to undo factor switching
+  #
+  # Arguments:
+  # 
+  # U.draw, V.draw, W.draw, Vs.draw: lists of loadings and scores to combine
+  # betas.draw: list of beta coefficients if the model was fit with a response 
+  # r (int): rank of the joint structure
+  # r.vec (vec): ranks of the individual structure
+  # burnin (int): how many samples to remove from the start
+  # ---------------------------------------------------------------------------
+  
+  # Load in the package with the Poworoznek method
+  library(infinitefactor)
+  
+  # Saving the number of sources
+  q <- length(r.vec)
+  
+  # Save the number of posterior draws 
+  nsample <- length(U.draw)
+  
+  # Save the number of features per source
+  p.vec <- sapply(1:q, function(s) nrow(U.draw[[1]][[s,1]]))
+  
+  # Check if a response was used in the model
+  response_given <- !is.null(betas.draw)
+  
+  # Save the indices for the different sources
+  p.ind <- lapply(1:q, function(s) {
+    if (s == 1) {
+      c(1:p.vec[s])
+    } else {
+      c((cumsum(p.vec)[s-1]+1):cumsum(p.vec)[s])
+    }
+  })
+  
+  # ---------------------------------------------------------------------------
+  # Preparing the loadings and scores
+  # ---------------------------------------------------------------------------
+  
+  # Separate the betas into joint betas and individual betas if a response was given
+  if (response_given) {
+    # How many betas?
+    n_beta <- r + sum(r.vec) + 1
+    
+    # Joint betas 
+    joint.betas.draw <- lapply(1:nsample, function(iter) betas.draw[[iter]][[1,1]][2:(r+1),,drop=FALSE])
+    
+    # Individual betas
+    indiv.betas.draw.temp <- lapply(1:nsample, function(iter) betas.draw[[iter]][[1,1]][(r+2):(n_beta),,drop=FALSE])
+    indiv.betas.draw <- lapply(1:q, function(s) lapply(1:nsample, function(iter) {
+      if (s == 1) {
+        indiv.betas.draw.temp[[iter]][1:r.vec[s],,drop=FALSE]
+      } else {
+        indiv.betas.draw.temp[[iter]][(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),,drop=FALSE]
+      }
+    }))
+  }
+  
+  # Combining the loadings and scores into a list of one matrix
+  
+  # If a response was NOT given
+  if (!response_given) {
+    # Joint structure
+    joint.loadings <- lapply(burnin:nsample, function(iter) do.call(rbind, U.draw[[iter]]))
+    
+    # Individual structure
+    indiv.loadings <- lapply(1:q, function(s) lapply(burnin:nsample, function(iter) W.draw[[iter]][[s,s]]))
+  } 
+  
+  # If a response was given
+  if (response_given) {
+    # Joint structure
+    joint.loadings <- lapply(burnin:nsample, function(iter) rbind(do.call(rbind, U.draw[[iter]]), t(joint.betas.draw[[iter]])))
+    
+    # Individual structure
+    indiv.loadings <- lapply(1:q, function(s) lapply(burnin:nsample, function(iter) rbind(W.draw[[iter]][[s,s]], t(indiv.betas.draw[[s]][[iter]]))))
+  }
+  
+  joint.scores <- lapply(burnin:nsample, function(iter) V.draw[[iter]][[1,1]])
+  indiv.scores <- lapply(1:q, function(s) lapply(burnin:nsample, function(iter) Vs.draw[[iter]][[1,s]]))
+  
+  # ---------------------------------------------------------------------------
+  # Running the factor switching method
+  # ---------------------------------------------------------------------------
+  
+  # Joint structure -- 
+  
+  if (r > 1) {
+    # Applying the Varimax rotation
+    joint.results.varimax <- jointRot(joint.loadings, joint.scores)
+    
+    # Applying the signed permutations
+    joint.pivot <- joint.results.varimax$lambda[[1]]
+    joint.loadings.final <- lapply(1:burnin, function(iter) msf(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))
+    joint.perms.signs <- lapply(1:burnin, function(iter) msfOUT(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))                              
+    
+    # Applying the permutation and sign switching to the scores
+    joint.scores.final <- lapply(1:burnin, function(iter) {
+      # Permuting the columns
+      scores.unsigned <- joint.results.varimax$eta[[iter]][, abs(c(joint.perms.signs[[iter]]))]
+      
+      # Changing the signs
+      scores.signed <- scores.unsigned %*% diag(c(sign(joint.perms.signs[[iter]])))
+      
+      # Returning
+      scores.signed
+    })
+  }
+  
+  # Individual structure -- 
+  
+  indiv.results.varimax <- lapply(1:q, function(s) list())
+  
+  for (s in 1:q) {
+    # Applying the Varimax rotation
+    if (r.vec[s] > 1) {
+      indiv.results.varimax.s <- jointRot(indiv.loadings[[s]], indiv.scores[[s]])
+      
+      # Applying the signed-permutation algorithm
+      indiv.pivot <- indiv.results.varimax.s$lambda[[1]]
+      indiv.loadings.final <- lapply(1:burnin, function(iter) msf(indiv.results.varimax.s$lambda[[iter]], pivot = indiv.pivot))
+      indiv.perms.signs <- lapply(1:burnin, function(iter) msfOUT(indiv.results.varimax.s$lambda[[iter]], pivot = indiv.pivot))                          
+      
+      # Applying the permutation and sign switching to the scores
+      indiv.scores.final <- lapply(1:burnin, function(iter) {
+        # Permuting the columns
+        scores.unsigned <- indiv.results.varimax.s$eta[[iter]][, abs(c(indiv.perms.signs[[iter]]))]
+        
+        # Changing the signs
+        scores.signed <- scores.unsigned %*% diag(c(sign(indiv.perms.signs[[iter]])))
+        
+        # Returning
+        scores.signed
+      })
+      
+      # Save
+      indiv.results.varimax[[s]] <- list(indiv.loadings.final = indiv.loadings.final, 
+                                         indiv.scores.final = indiv.scores.final)
+    }
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Reorganize the results back into joint and individual loadings and scores
+  # ---------------------------------------------------------------------------
+  
+  # Joint --
+  
+  if (r > 1) {
+    if (!response_given) {
+      beta.joint.draw <- NULL
+      
+      U.draw.new <- lapply(1:burnin, function(iter) {
+        loadings.new <- matrix(list(), nrow = q, ncol = 1)
+        
+        for (s in 1:q) {
+          loadings.new[[s,1]] <- joint.loadings.final[[iter]][p.ind[[s]],,drop=FALSE]
+        }
+        
+        loadings.new
+      })
+    }
+    
+    if (response_given) {
+      U.draw.new <- lapply(1:burnin, function(iter) {
+        loadings.new <- matrix(list(), nrow = q, ncol = 1)
+        
+        for (s in 1:q) {
+          loadings.new[[s,1]] <- joint.loadings.final[[iter]][p.ind[[s]],,drop=FALSE]
+        }
+        
+        loadings.new
+      })
+      
+      beta.joint.draw <- lapply(1:burnin, function(iter) {
+        t(joint.loadings.final[[iter]][cumsum(p.vec)[q]+1,,drop=FALSE])
+      })
+    }
+    
+    V.draw.new <- lapply(1:burnin, function(iter) {
+      scores.new <- matrix(list(), nrow = 1, ncol = 1)
+      scores.new[[1,1]] <- joint.scores.final[[iter]]
+      scores.new
+    })
+  }
+  
+  if (r <= 1) {
+    U.draw.new <- U.draw
+    V.draw.new <- V.draw
+  }
+  
+  # Individual -- 
+  
+  if (!response_given) {
+    beta.indiv.draw <- NULL
+    
+    W.draw.new <- lapply(1:burnin, function(iter) {
+      loadings.new <- matrix(list(), nrow = q, ncol = 1)
+      
+      for (s in 1:q) {
+        if (r.vec[s] > 1) {
+          loadings.new[[s,1]] <- indiv.results.varimax[[s]]$indiv.loadings.final[[iter]]
+        }
+        
+        if (r.vec[s] <= 1) {
+          loadings.new[[s,1]] <- W.draw[[iter]][[s,s]]
+        }
+      }
+      
+      loadings.new
+    })
+  }
+  
+  if (response_given) {
+    W.draw.new <- lapply(1:burnin, function(iter) {
+      loadings.new <- matrix(list(), nrow = q, ncol = 1)
+      
+      for (s in 1:q) {
+        if (r.vec[s] > 1) {
+          loadings.new[[s,1]] <- indiv.loadings.final[[s]][[iter]][1:p.vec[s],,drop=FALSE]
+        }
+        
+        if (r.vec[s] <= 1) {
+          loadings.new[[s,1]] <- W.draw[[iter]][[s,s]]
+        }
+      }
+      
+      loadings.new
+    })
+    
+    beta.indiv.draw <- lapply(1:q, function(s) lapply(1:burnin, function(iter) {
+      t(indiv.loadings.final[[s]][[iter]][p.vec[s]+1,,drop=FALSE])
+    }))
+  }
+  
+  Vs.draw.new <- lapply(1:burnin, function(iter) {
+    scores.new <- matrix(list(), nrow = 1, ncol = q)
+    
+    for (s in 1:q) {
+      if (r.vec[s] > 1) {
+        scores.new[[1,s]] <- indiv.results.varimax[[s]]$indiv.scores.final[[iter]]
+      }
+      
+      if (r.vec[s] <= 1) {
+        scores.new[[1,s]] <- Vs.draw[[iter]][[1,s]]
+      }
+    }
+  
+    scores.new
+  })
+  
+  # ---------------------------------------------------------------------------
+  # Return
+  # ---------------------------------------------------------------------------
+  
+  list(U.draw = U.draw.new, 
+       V.draw = V.draw.new,
+       W.draw = W.draw.new,
+       Vs.draw = Vs.draw.new,
+       beta.joint.draw = beta.joint.draw,
+       beta.indiv.draw = beta.indiv.draw)
 }
