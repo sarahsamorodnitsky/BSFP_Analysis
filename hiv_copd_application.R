@@ -155,7 +155,7 @@ save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(re
 # -------------------------------------
 
 # Assessing convergence for both model fits
-load(paste0(results_wd, "training_data_fit.rda"))
+load(paste0(results_wd, "training_data_fit.rda"), verbose = TRUE)
 
 fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
   # Calculate the log-joint density at each thinned iterations
