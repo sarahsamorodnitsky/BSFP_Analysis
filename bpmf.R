@@ -1051,7 +1051,7 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
         data_combined[[s,1]] <- data[[s,1]]
       }
       
-      data_combined[[q+1,1]] <- t(Y[[1,1]])
+      data_combined[[q+1,1]] <- t(Y)
       data_combined <- do.call(rbind, data_combined)
       
       # Initialize the indices of observations in each source (including response)
@@ -1092,6 +1092,9 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
       
       # Pairwise-shared ranks of each source with Y
       r.vec <- sapply(2:(q+1), function(s) Matrix::rankMatrix(S[[s]])[[1]])
+      
+      # Return the standardizing matrix
+      sigma.mat <- NULL
     }
     
   }
@@ -1106,12 +1109,12 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
   }
   
   r_total <- n_beta <- r + sum(r.vec)
-  n_beta <- 1 + r_total
+  n_beta <- r_total
   
   # If a response is given, set up the variance matrix for the prior of the betas using the ranks
   if (response_given) {
     Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
-    beta_vars <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+    beta_vars <- rep(beta_vars, c(r, r.vec))
     diag(Sigma_beta) <- beta_vars
   }
   
@@ -1224,35 +1227,41 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
       }
     }
     
+    # Initialize V and beta joint
     if (response_given) {
       V0 <- matrix(list(), nrow = 1, ncol = 1)
       if (r > 0) {
         svd.joint <- svd(S[[1]])
         V0[[1,1]] <- (svd.joint$v[,1:r, drop = FALSE]) %*% diag(svd.joint$d[1:r], nrow = r)
+        beta_joint0 <- t(svd(S[[1]])$u[p.ind[[q+1]],1:r, drop = FALSE])
       } 
       if (r == 0) {
         V0[[1,1]] <- matrix(0, nrow = n, ncol = 1)
+        beta_joint0 <- matrix(0, nrow = r, ncol = 1)
       }
       
       U0 <- matrix(list(), nrow = q, ncol = 1)
       Vs0 <- matrix(list(), nrow = 1, ncol = q)
       W0 <- matrix(list(), nrow = q, ncol = q)
+      beta_indiv <- matrix(list(), nrow = q, ncol = 1)
       
       for (s in 1:q) {
         
-        # Initialize U
+        # Initialize U 
         if (r > 0) {
-          U0[[s,1]] <- svd(S[[1]])$u[,1:r, drop = FALSE]
+          U0[[s,1]] <- svd(S[[1]])$u[p.ind[[s]],1:r, drop = FALSE]
         } 
         if (r == 0) {
           U0[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
         }
         
-        # Initialize W and V
+        # Initialize W and V and beta indiv
         if (r.vec[s] > 0) {
           svd.indiv.s <- svd(S[[s+1]])
           Vs0[[1,s]] <- (svd.indiv.s$v[,1:r.vec[s], drop = FALSE]) %*% diag(svd.indiv.s$d[1:r.vec[s]], nrow = r.vec[s])
-          W0[[s,s]] <- svd.indiv.s$u[,1:r.vec[s], drop = FALSE]
+          W0[[s,s]] <- svd.indiv.s$u[p.ind[[s]],1:r.vec[s], drop = FALSE]
+          
+          beta_indiv[[s,1]] <- t(svd.indiv.s$u[p.ind[[q+1]],1:r.vec[s], drop = FALSE])
           
           for (ss in 1:q) {
             if (ss != s) {
@@ -1269,6 +1278,7 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
         if (r.vec[s] == 0) {
           Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
           W0[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+          beta_indiv[[s,1]] <- matrix(0, nrow = r.vec[s], ncol = 1)
           
           for (ss in 1:q) {
             if (ss != s) {
@@ -1282,7 +1292,24 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
             }
           }
         }
+        
       }
+      
+      # Initialize the coefficients
+      beta0 <- rbind(beta_joint0, do.call(rbind, beta_indiv))
+      
+      # Combining the scores together
+      V0.star <- matrix(list(), nrow = 1, ncol = 1)
+      if (r > 0) V0.star[[1,1]] <- V0[[1,1]] else V0.star[[1,1]] <- matrix(nrow = n, ncol = r)
+      
+      Vs0.star <- Vs0
+      for (s in 1:q) {
+        if (r.vec[s] > 0) Vs0.star[[1,s]] <- Vs0[[1,s]] else Vs0.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
+      }
+      
+      VStar0 <- cbind(do.call(cbind, V0.star), do.call(cbind, Vs0.star))
+      Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+      tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
     }
 
   }
@@ -1359,9 +1386,8 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
       Vs0 <- starting_values$Vs
     }
     
-  }
-  
-  if (response_given) {
+    # Initialize the regression parameters
+    
     # Combining the scores together
     V0.star <- matrix(list(), nrow = 1, ncol = 1)
     if (r > 0) V0.star[[1,1]] <- V0[[1,1]] else V0.star[[1,1]] <- matrix(nrow = n, ncol = r)
@@ -1377,22 +1403,15 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
     tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
     
+  }
+  
+  # If incorporating sparsity or imputing missingness in Y
+  if (response_given) {
     if (sparsity) {
       p0 <- 0.5
       gamma0 <- matrix(rbinom(n_beta, size = 1, prob = p0), ncol = 1)
     }
-  }
-  
-  # If there is missingness in the data, generate starting values for the missing entries
-  if (missingness_in_data) {
-    Xm0 <- matrix(list(), ncol = 1, nrow = q)
-    for (s in 1:q) {
-      Xm0[[s,1]] <- rep(0, length(missing_obs[s]))
-    }
-  }
-  
-  # If there is missingness in Y, generate starting values for the missing entries
-  if (response_given) {
+    
     if (missingness_in_response) {
       if (response_type == "continuous") {
         # Generate starting values for the missing data
@@ -1403,6 +1422,14 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
         # Generate starting values for the missing data
         Ym0 <- matrix(rbinom(n, size = 1, prob = pnorm(VStar0 %*% beta0)))[missing_obs_Y,, drop = FALSE]
       }
+    }
+  }
+  
+  # If there is missingness in the data, generate starting values for the missing entries
+  if (missingness_in_data) {
+    Xm0 <- matrix(list(), ncol = 1, nrow = q)
+    for (s in 1:q) {
+      Xm0[[s,1]] <- rep(0, length(missing_obs[s]))
     }
   }
   
@@ -1465,7 +1492,7 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
   # ---------------------------------------------------------------------------
   
   if (!is.null(scores)) {
-    VStar <- cbind(1, scores)
+    VStar <- scores
   }
   
   # ---------------------------------------------------------------------------
@@ -1491,14 +1518,11 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
       # Creating a matrix of the joint and individual effects
       beta_indiv.iter <- matrix(list(), nrow = q, ncol = 1)
       
-      # Breaking beta down into the intercept,
-      beta_intercept.iter <- beta.iter[1,, drop = FALSE]
-      
       # Joint effect
-      if (r != 0) beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE] else beta_joint.iter <- matrix(0)
+      if (r != 0) beta_joint.iter <- beta.iter[1:r,, drop = FALSE] else beta_joint.iter <- matrix(0)
       
       # Individual effects
-      if (sum(r.vec) > 0) beta_indiv.iter.temp <- beta.iter[(r+2):n_beta,, drop = FALSE]
+      if (sum(r.vec) > 0) beta_indiv.iter.temp <- beta.iter[(r+1):n_beta,, drop = FALSE]
       
       for (s in 1:q) {
         # If there is no individual effect
@@ -1612,13 +1636,13 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
           if (response_type == "binary") {
             # The combined centered Xis with the latent response vector
             X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                            t(Z.iter - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
+                            t(Z.iter - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
           }
           
           if (response_type == "continuous") {
             # The combined centered Xis with the latent response vector
             X.iter <- rbind(do.call(rbind, X_complete) - data.rearrange(W.iter)$out %*% do.call(rbind, lapply(Vs.iter, t)),
-                            t(Y_complete - c(beta_intercept.iter) - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
+                            t(Y_complete - do.call(cbind, Vs.iter) %*% do.call(rbind, beta_indiv.iter)))
           }
           
           V.draw[[iter+1]][[1,1]] <- t(matrix(sapply(1:n, function(i) {
@@ -1701,14 +1725,14 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
             if (response_type == "binary") {
               # Combined centered Xs and Z
               Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
-                               t(Z.iter - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
+                               t(Z.iter - V.iter[[1,1]] %*% beta_joint.iter - 
                                    do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
             }
             
             if (response_type == "continuous") {
               # Combined centered Xs and Y
               Xs.iter <- rbind(X_complete[[s,1]] - U.iter[[s,1]] %*% t(V.iter[[1,1]]),
-                               t(Y_complete - c(beta_intercept.iter) - V.iter[[1,1]] %*% beta_joint.iter - 
+                               t(Y_complete - V.iter[[1,1]] %*% beta_joint.iter - 
                                    do.call(cbind, Vs.iter[1, !(1:q %in% s)]) %*% do.call(rbind, beta_indiv.iter[!(1:q %in% s), 1])))
             }
             
@@ -1742,7 +1766,7 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
         } 
       }
       
-      VStar.iter <- cbind(1, do.call(cbind, V.iter.star.joint), do.call(cbind, Vs.iter.star))
+      VStar.iter <- cbind(do.call(cbind, V.iter.star.joint), do.call(cbind, Vs.iter.star))
       
       # -------------------------------------------------------------------------
       # Posterior sample for W
@@ -1839,10 +1863,10 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
       beta_intercept.iter <- beta.iter[1,, drop = FALSE]
       
       # Joint effect
-      if (r != 0) beta_joint.iter <- beta.iter[2:(r+1),, drop = FALSE] else beta_joint.iter <- matrix(0)
+      if (r != 0) beta_joint.iter <- beta.iter[1:r,, drop = FALSE] else beta_joint.iter <- matrix(0)
       
       # Individual effects
-      if (sum(r.vec) > 0) beta_indiv.iter.temp <- beta.iter[(r+2):n_beta,, drop = FALSE]
+      if (sum(r.vec) > 0) beta_indiv.iter.temp <- beta.iter[(r+1):n_beta,, drop = FALSE]
       
       for (s in 1:q) {
         # If there is no individual effect
