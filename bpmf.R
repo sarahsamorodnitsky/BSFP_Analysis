@@ -7870,3 +7870,270 @@ match_align_multi <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL
        beta.joint.draw = beta.joint.draw,
        beta.indiv.draw = beta.indiv.draw)
 }
+
+# Creating a second version of the above function that handles no intercept
+match_align_multi_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, r, r.vec, burnin) {
+  
+  # ---------------------------------------------------------------------------
+  # Wrapper function to reformat the results from BPMF to apply the Poworoznek 
+  # method to undo factor switching
+  #
+  # Arguments:
+  # 
+  # U.draw, V.draw, W.draw, Vs.draw: lists of loadings and scores to combine
+  # betas.draw: list of beta coefficients if the model was fit with a response 
+  # r (int): rank of the joint structure
+  # r.vec (vec): ranks of the individual structure
+  # burnin (int): how many samples to remove from the start
+  # ---------------------------------------------------------------------------
+  
+  # Load in the package with the Poworoznek method
+  library(infinitefactor)
+  
+  # Saving the number of sources
+  q <- length(r.vec)
+  
+  # Save the number of posterior draws 
+  nsample <- length(U.draw)
+  
+  # Save the number of features per source
+  p.vec <- sapply(1:q, function(s) nrow(U.draw[[1]][[s,1]]))
+  
+  # Check if a response was used in the model
+  response_given <- !is.null(betas.draw)
+  
+  # Save the indices for the different sources
+  p.ind <- lapply(1:q, function(s) {
+    if (s == 1) {
+      c(1:p.vec[s])
+    } else {
+      c((cumsum(p.vec)[s-1]+1):cumsum(p.vec)[s])
+    }
+  })
+  
+  # ---------------------------------------------------------------------------
+  # Preparing the loadings and scores
+  # ---------------------------------------------------------------------------
+  
+  # Separate the betas into joint betas and individual betas if a response was given
+  if (response_given) {
+    # How many betas?
+    n_beta <- r + sum(r.vec) 
+    
+    # Joint betas 
+    joint.betas.draw <- lapply(1:nsample, function(iter) betas.draw[[iter]][[1,1]][1:r,,drop=FALSE])
+    
+    # Individual betas
+    indiv.betas.draw.temp <- lapply(1:nsample, function(iter) betas.draw[[iter]][[1,1]][(r+1):(n_beta),,drop=FALSE])
+    indiv.betas.draw <- lapply(1:q, function(s) lapply(1:nsample, function(iter) {
+      if (s == 1) {
+        indiv.betas.draw.temp[[iter]][1:r.vec[s],,drop=FALSE]
+      } else {
+        indiv.betas.draw.temp[[iter]][(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),,drop=FALSE]
+      }
+    }))
+  }
+  
+  # Combining the loadings and scores into a list of one matrix
+  
+  # If a response was NOT given
+  if (!response_given) {
+    # Joint structure
+    joint.loadings <- lapply(burnin:nsample, function(iter) do.call(rbind, U.draw[[iter]]))
+    
+    # Individual structure
+    indiv.loadings <- lapply(1:q, function(s) lapply(burnin:nsample, function(iter) W.draw[[iter]][[s,s]]))
+  } 
+  
+  # If a response was given
+  if (response_given) {
+    # Joint structure
+    joint.loadings <- lapply(burnin:nsample, function(iter) rbind(do.call(rbind, U.draw[[iter]]), t(joint.betas.draw[[iter]])))
+    
+    # Individual structure
+    indiv.loadings <- lapply(1:q, function(s) lapply(burnin:nsample, function(iter) rbind(W.draw[[iter]][[s,s]], t(indiv.betas.draw[[s]][[iter]]))))
+  }
+  
+  joint.scores <- lapply(burnin:nsample, function(iter) V.draw[[iter]][[1,1]])
+  indiv.scores <- lapply(1:q, function(s) lapply(burnin:nsample, function(iter) Vs.draw[[iter]][[1,s]]))
+  
+  # ---------------------------------------------------------------------------
+  # Running the factor switching method
+  # ---------------------------------------------------------------------------
+  
+  # Joint structure -- 
+  
+  if (r > 1) {
+    # Applying the Varimax rotation
+    joint.results.varimax <- jointRot(joint.loadings, joint.scores)
+    
+    # Applying the signed permutations
+    joint.pivot <- joint.results.varimax$lambda[[1]]
+    joint.loadings.final <- lapply(1:burnin, function(iter) msf(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))
+    joint.perms.signs <- lapply(1:burnin, function(iter) msfOUT(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))                              
+    
+    # Applying the permutation and sign switching to the scores
+    joint.scores.final <- lapply(1:burnin, function(iter) {
+      # Permuting the columns
+      scores.unsigned <- joint.results.varimax$eta[[iter]][, abs(c(joint.perms.signs[[iter]]))]
+      
+      # Changing the signs
+      scores.signed <- scores.unsigned %*% diag(c(sign(joint.perms.signs[[iter]])))
+      
+      # Returning
+      scores.signed
+    })
+  }
+  
+  # Individual structure -- 
+  
+  indiv.results.varimax <- lapply(1:q, function(s) list())
+  
+  for (s in 1:q) {
+    # Applying the Varimax rotation
+    if (r.vec[s] > 1) {
+      indiv.results.varimax.s <- jointRot(indiv.loadings[[s]], indiv.scores[[s]])
+      
+      # Applying the signed-permutation algorithm
+      indiv.pivot <- indiv.results.varimax.s$lambda[[1]]
+      indiv.loadings.final <- lapply(1:burnin, function(iter) msf(indiv.results.varimax.s$lambda[[iter]], pivot = indiv.pivot))
+      indiv.perms.signs <- lapply(1:burnin, function(iter) msfOUT(indiv.results.varimax.s$lambda[[iter]], pivot = indiv.pivot))                          
+      
+      # Applying the permutation and sign switching to the scores
+      indiv.scores.final <- lapply(1:burnin, function(iter) {
+        # Permuting the columns
+        scores.unsigned <- indiv.results.varimax.s$eta[[iter]][, abs(c(indiv.perms.signs[[iter]]))]
+        
+        # Changing the signs
+        scores.signed <- scores.unsigned %*% diag(c(sign(indiv.perms.signs[[iter]])))
+        
+        # Returning
+        scores.signed
+      })
+      
+      # Save
+      indiv.results.varimax[[s]] <- list(indiv.loadings.final = indiv.loadings.final, 
+                                         indiv.scores.final = indiv.scores.final)
+    }
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Reorganize the results back into joint and individual loadings and scores
+  # ---------------------------------------------------------------------------
+  
+  # Joint --
+  
+  if (r > 1) {
+    if (!response_given) {
+      beta.joint.draw <- NULL
+      
+      U.draw.new <- lapply(1:burnin, function(iter) {
+        loadings.new <- matrix(list(), nrow = q, ncol = 1)
+        
+        for (s in 1:q) {
+          loadings.new[[s,1]] <- joint.loadings.final[[iter]][p.ind[[s]],,drop=FALSE]
+        }
+        
+        loadings.new
+      })
+    }
+    
+    if (response_given) {
+      U.draw.new <- lapply(1:burnin, function(iter) {
+        loadings.new <- matrix(list(), nrow = q, ncol = 1)
+        
+        for (s in 1:q) {
+          loadings.new[[s,1]] <- joint.loadings.final[[iter]][p.ind[[s]],,drop=FALSE]
+        }
+        
+        loadings.new
+      })
+      
+      beta.joint.draw <- lapply(1:burnin, function(iter) {
+        t(joint.loadings.final[[iter]][cumsum(p.vec)[q]+1,,drop=FALSE])
+      })
+    }
+    
+    V.draw.new <- lapply(1:burnin, function(iter) {
+      scores.new <- matrix(list(), nrow = 1, ncol = 1)
+      scores.new[[1,1]] <- joint.scores.final[[iter]]
+      scores.new
+    })
+  }
+  
+  if (r <= 1) {
+    U.draw.new <- U.draw
+    V.draw.new <- V.draw
+  }
+  
+  # Individual -- 
+  
+  if (!response_given) {
+    beta.indiv.draw <- NULL
+    
+    W.draw.new <- lapply(1:burnin, function(iter) {
+      loadings.new <- matrix(list(), nrow = q, ncol = 1)
+      
+      for (s in 1:q) {
+        if (r.vec[s] > 1) {
+          loadings.new[[s,1]] <- indiv.results.varimax[[s]]$indiv.loadings.final[[iter]]
+        }
+        
+        if (r.vec[s] <= 1) {
+          loadings.new[[s,1]] <- W.draw[[iter]][[s,s]]
+        }
+      }
+      
+      loadings.new
+    })
+  }
+  
+  if (response_given) {
+    W.draw.new <- lapply(1:burnin, function(iter) {
+      loadings.new <- matrix(list(), nrow = q, ncol = 1)
+      
+      for (s in 1:q) {
+        if (r.vec[s] > 1) {
+          loadings.new[[s,1]] <- indiv.results.varimax[[s]]$indiv.loadings.final[[iter]][1:p.vec[s],,drop=FALSE]
+        }
+        
+        if (r.vec[s] <= 1) {
+          loadings.new[[s,1]] <- W.draw[[iter]][[s,s]]
+        }
+      }
+      
+      loadings.new
+    })
+    
+    beta.indiv.draw <- lapply(1:q, function(s) lapply(1:burnin, function(iter) {
+      t(indiv.results.varimax[[s]]$indiv.loadings.final[[iter]][p.vec[s]+1,,drop=FALSE])
+    }))
+  }
+  
+  Vs.draw.new <- lapply(1:burnin, function(iter) {
+    scores.new <- matrix(list(), nrow = 1, ncol = q)
+    
+    for (s in 1:q) {
+      if (r.vec[s] > 1) {
+        scores.new[[1,s]] <- indiv.results.varimax[[s]]$indiv.scores.final[[iter]]
+      }
+      
+      if (r.vec[s] <= 1) {
+        scores.new[[1,s]] <- Vs.draw[[iter]][[1,s]]
+      }
+    }
+    
+    scores.new
+  })
+  
+  # ---------------------------------------------------------------------------
+  # Return
+  # ---------------------------------------------------------------------------
+  
+  list(U.draw = U.draw.new, 
+       V.draw = V.draw.new,
+       W.draw = W.draw.new,
+       Vs.draw = Vs.draw.new,
+       beta.joint.draw = beta.joint.draw,
+       beta.indiv.draw = beta.indiv.draw)
+}
