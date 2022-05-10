@@ -1038,23 +1038,29 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   }
   
   # ---------------------------------------------------------------------------
-  # Calculating the joint and individual structure, scaled to the data
+  # Calculating the joint and individual/pairwise-shared structure, scaled to 
+  # the original data. 
   # ---------------------------------------------------------------------------
   
-  # Storing the joint structure at each Gibbs sampling iteration
-  Joint.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  # Storing the joint and individual/pairwise-shared structure at each Gibbs sampling iteration
+  J.draw <- A.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   
-  # Storing the individual structure at each Gibbs sampling iteration
-  Indiv.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  # Storing the structure for Y at each Gibbs sampling iteration
+  EY.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   
   if (is.null(scores)) {
     for (iter in 1:nsample) {
       for (s in 1:q) {
         # Calculating the joint structure and scaling by sigma.mat
-        Joint.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+        J.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
         
         # Calculating the individual structure and scaling by sigma.mat
-        Indiv.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+        A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,s]])) * sigma.mat[s,1]
+      }
+      
+      # Calculate the structure for Y
+      if (response_given) {
+        EY.draw[[iter]][[1,1]] <- cbind(V.draw[[iter]][[1,1]], do.call(cbind, Vs.draw[[iter]])) %*% beta.draw[[iter]][[1,1]] * sigma.mat[q+1,1]
       }
     }
   }
@@ -1066,12 +1072,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   list(scaled_data = scaled_data, # Returning the scaled version of the data
        scaled_Y = scaled_Y, # Return the scaled version of the response vector
        sigma.mat = sigma.mat, # Scaling factors
-       Joint.draw = Joint.draw, Indiv.draw = Indiv.draw, # Underlying structure
+       Joint.draw = Joint.draw, Indiv.draw = Indiv.draw, EY.draw = EY.draw, # Underlying structure
        V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
        scores = scores, # Scores if provided by another method 
        ranks = c(r, r.vec), # Ranks
-       tau2.draw = tau2.draw, beta.draw = beta.draw, # Regression parameters
+       beta.draw = beta.draw, # Regression parameters
   )
   
 }
