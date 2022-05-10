@@ -940,9 +940,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
 }
 
 # This version of BPMF is initialized with BIDIFAC+ with Y as a source
-bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
+bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE, starting_values = NULL) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
-  # regression coefficient vector for a response vector. 
+  # regression coefficient vector for a response vector, Y, if given
   
   # ---------------------------------------------------------------------------
   # Arguments: 
@@ -951,7 +951,7 @@ bpmf_V2 <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores =
   # Y = column vector with outcome or NULL
   # nninit = should the model be initialized with a nuclear norm penalized objective? if FALSE, provide ranks
   # model_params = (error_vars, joint_vars, indiv_vars, beta_vars = NULL, response_vars)
-  # ranks = joint and individual ranks (1st entry = joint rank, kth for k>1 is the individual rank for the k-1'st source)
+  # ranks = vec of specific ranks if not nninit. (1st entry = joint rank, kth for k>1 is the individual rank for the k-1'st source)
   # scores = if using structure from another method to fit a linear model, provide joint and individual scores here.
   #   in this case, ranks should be provided and nninit = FALSE, Y != NULL
   # nsample = number of Gibbs sampling iterations
