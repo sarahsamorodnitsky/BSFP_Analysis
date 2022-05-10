@@ -8064,6 +8064,7 @@ match_align_multi_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = N
   if (r <= 1) {
     U.draw.new <- U.draw
     V.draw.new <- V.draw
+    beta.joint.draw <- joint.betas.draw
   }
   
   # Individual -- 
@@ -8106,7 +8107,15 @@ match_align_multi_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = N
     })
     
     beta.indiv.draw <- lapply(1:q, function(s) lapply(1:burnin, function(iter) {
-      t(indiv.results.varimax[[s]]$indiv.loadings.final[[iter]][p.vec[s]+1,,drop=FALSE])
+      if (r.vec[s] > 1) {
+        betas.indiv.new <-  t(indiv.results.varimax[[s]]$indiv.loadings.final[[iter]][p.vec[s]+1,,drop=FALSE])
+      }
+      
+      if (r.vec[s] <= 1) {
+        betas.indiv.new <-  indiv.betas.draw[[s]][[iter]]
+      }
+      
+      betas.indiv.new
     }))
   }
   
