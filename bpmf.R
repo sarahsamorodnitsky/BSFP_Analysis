@@ -53,7 +53,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
   sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
   beta_vars <- model_params$beta_vars # Variances on betas
-  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response (only needed if scores are provided by another method)
+  # response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response (only needed if scores are provided by another method)
   
   # ---------------------------------------------------------------------------
   # Check for missingness in data
@@ -275,8 +275,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   if (response_given) {
     beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     
-    tau2.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    
     Z.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     
     Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
@@ -406,9 +404,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     # Initialize the latent variable for a binary outcome
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
     
-    # Initialize the continuous response variance
-    tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
-    
   }
   
   # If ranks provided, initialize with prior or use given starting values
@@ -509,7 +504,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     VStar0 <- cbind(do.call(cbind, V0.star), do.call(cbind, Vs0.star))
     beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
-    tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
     
   }
   
@@ -517,19 +511,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   if (response_given) {
     if (missingness_in_response) {
       if (response_type == "continuous") {
-        
-        # If estimating the scores
-        if (is.null(scores)) {
-          # Generate starting values for the missing data
-          Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(error_var[3])))[missing_obs_Y,, drop = FALSE]
-        }
-        
-        # If scores were provided by another method
-        if (!is.null(scores)) {
-          # Generate starting values for the missing data
-          Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(tau20)))[missing_obs_Y,, drop = FALSE]
-        }
-
+        # Generate starting values for the missing data
+        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(error_var[3])))[missing_obs_Y,, drop = FALSE]
       }
       
       if (response_type == "binary") {
@@ -559,7 +542,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   if (response_given) {
     beta.draw[[1]][[1,1]] <- beta0
     Z.draw[[1]][[1,1]] <- Z0
-    tau2.draw[[1]][[1,1]] <- tau20
     
     if (missingness_in_response) {
       Ym.draw[[1]][[1,1]] <- Ym0
@@ -594,16 +576,14 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     } 
     
     if (response_type == "continuous") {
-      if (is.null(scores)) {
-        # For V - Combined error variances between X1, X2, and Y
-        SigmaVInv <- diag(c(rep(1/error_vars, c(p.vec,1))))
-        
-        # For Vs
-        SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
-        
-        for (s in 1:q) {
-          SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), error_vars[3]))
-        }
+      # For V - Combined error variances between X1, X2, and Y
+      SigmaVInv <- diag(c(rep(1/error_vars, c(p.vec,1))))
+      
+      # For Vs
+      SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
+      
+      for (s in 1:q) {
+        SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), error_vars[3]))
       }
     }
     
@@ -669,11 +649,6 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         Z.iter <- Z.draw[[iter]][[1,1]]
       }
       
-      # If a continuous outcome and scores are given
-      if (response_type == "continuous" & !is.null(scores)) {
-        tau2.iter <- tau2.draw[[iter]][[1,1]]
-      }
-      
       # If there is missingness, fill in missing values with latest imputed values
       if (missingness_in_response) {
         # Save the current imputations for the missing values
@@ -711,19 +686,19 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     # Computing the inverse that changes with tau2
     # -------------------------------------------------------------------------
     
-    if (response_given) {
-      if (response_type == "continuous" & !is.null(scores)) {
-        # For V - Combined error variances between X1, X2, and Y
-        SigmaVInv <- diag(c(rep(1/error_vars, p.vec), 1/tau2.iter[[1,1]]))
-
-        # For Vs
-        SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
-
-        for (s in 1:q) {
-          SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), 1/tau2.iter[[1,1]]))
-        }
-      }
-    }
+    # if (response_given) {
+    #   if (response_type == "continuous") {
+    #     # For V - Combined error variances between X1, X2, and Y
+    #     SigmaVInv <- diag(c(rep(1/error_vars, p.vec), 1/tau2.iter[[1,1]]))
+    # 
+    #     # For Vs
+    #     SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
+    # 
+    #     for (s in 1:q) {
+    #       SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), 1/tau2.iter[[1,1]]))
+    #     }
+    #   }
+    # }
     
     # If estimating the underlying structure
     if (is.null(scores)) {
@@ -1007,14 +982,14 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     # Posterior sample for tau2
     # -------------------------------------------------------------------------
     
-    if (response_given) {
-      if (response_type == "continuous" & !is.null(scores)) {
-        tau2.draw[[iter+1]][[1,1]] <- matrix(1/rgamma(1, shape = shape + (n/2), rate = rate + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2)))
-
-        # Update the current value of tau2
-        tau2.iter <- tau2.draw[[iter+1]][[1,1]]
-      }
-    }
+    # if (response_given & !is.null(scores)) {
+    #   if (response_type == "continuous") {
+    #     tau2.draw[[iter+1]][[1,1]] <- matrix(1/rgamma(1, shape = shape + (n/2), rate = rate + 0.5 * sum((Y_complete - VStar.iter %*% beta.iter)^2)))
+    # 
+    #     # Update the current value of tau2
+    #     tau2.iter <- tau2.draw[[iter+1]][[1,1]]
+    #   }
+    # }
     
     # -------------------------------------------------------------------------
     # Posterior sample for latent continuous response Z
@@ -1091,12 +1066,12 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   list(scaled_data = scaled_data, # Returning the scaled version of the data
        scaled_Y = scaled_Y, # Return the scaled version of the response vector
        sigma.mat = sigma.mat, # Scaling factors
-       Joint.draw = Joint.draw, Indiv.draw = Indiv.draw, EY.draw = EY.draw, # Underlying structure
+       J.draw = J.draw, A.draw = A.draw, EY.draw = EY.draw, # Underlying structure
        V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
        scores = scores, # Scores if provided by another method 
        ranks = c(r, r.vec), # Ranks
-       beta.draw = beta.draw, tau2.draw = tau2.draw # Regression parameters
+       beta.draw = beta.draw # Regression parameters
   )
   
 }
@@ -2130,7 +2105,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data = observed_data, Y = Y_observed, nninit = nninit, model_params = model_params, ranks = ranks, scores = NULL, nsample, progress = TRUE, starting_values = NULL)
+    res <- bpmf(data = observed_data, Y = Y_observed, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, nsample, progress = TRUE, starting_values = NULL)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -2141,7 +2116,6 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     Vs.draw <- res$Vs.draw
     beta.draw <- res$beta.draw
     Z.draw <- res$Z.draw
-    tau2.draw <- res$tau2.draw
     Xm.draw <- res$Xm.draw
     Ym.draw <- res$Ym.draw
     
@@ -2156,7 +2130,6 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     Vs.burnin <- Vs.draw[burnin:nsample]
     beta.burnin <- beta.draw[burnin:nsample]
     Z.burnin <- Z.draw[burnin:nsample]
-    tau2.burnin <- tau2.draw[burnin:nsample]
     Xm.burnin <- Xm.draw[burnin:nsample]
     Ym.burnin <- Ym.draw[burnin:nsample]
     
@@ -2199,7 +2172,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
             if (r.vec[s] == 0) Vs.burnin.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
           }
           
-          VStar.iter <- cbind(1, do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
+          VStar.iter <- cbind(do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
           mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
           mat
         })
@@ -2217,7 +2190,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
             if (r.vec[s] == 0) Vs.burnin.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
           }
           
-          VStar.iter <- cbind(1, do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
+          VStar.iter <- cbind(do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
           
           mat[[1,1]] <- pnorm(VStar.iter %*% beta.burnin[[res]][[1,1]])
           mat
@@ -2233,7 +2206,6 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     draws <- list(joint.structure.burnin = joint.structure.burnin,
                   indiv.structure.burnin = indiv.structure.burnin,
                   EY = EY.burnin,
-                  tau2 = tau2.burnin,
                   Xm = Xm.burnin,
                   Ym = Ym.burnin)
     
@@ -2249,7 +2221,6 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     truth <- list(joint.structure = joint.structure,
                   indiv.structure = indiv.structure,
                   EY = EY,
-                  tau2 = tau2,
                   Xm = Xm,
                   Ym = Ym)
     
@@ -3130,13 +3101,13 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
         }
         
         if (param == 3) {
-          if (!results_available[6]) { # If there is NO missing data
+          if (!results_available[5]) { # If there is NO missing data
             mse_s_observed <- mse(truth[[param]][[s,1]], current_draws)
             mse_s_missing <- NULL
             mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
           }
           
-          if (results_available[6]) { # If there IS missing data
+          if (results_available[5]) { # If there IS missing data
             # For the entries in the structure that ARE observed -- 
             obs_inds <- 1:length(truth[[param]][[s,1]])
             
@@ -3242,13 +3213,13 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
       }
       
       # For tau2, return the number of simulation replications 
-      if (param == 4) {
-        counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
-        counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
-      }
+      # if (param == 4) {
+      #   counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
+      #   counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
+      # }
       
       # For Xm, count how many times in X. each entry WAS missing
-      if (param == 5) {
+      if (param == 4) {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
         for (s in 1:q) {
@@ -3263,7 +3234,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
       }
       
       # For Ym, count how many times in y each entry WAS missing
-      if (param == 6) {
+      if (param == 5) {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         obs_inds <- 1:n
         counts[[param]][[1,1]] <- rep(0, length(obs_inds))
@@ -3536,24 +3507,24 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       }
       
       # For tau2
-      if (param == 4) {
-        # Calculate the average
-        avg_coverage <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[1]]))/(denominator[[param]][[1,1]])
-        
-        # Calculate the average MSE
-        avg_mse <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[2]]))/nsim
-        
-        # Calculate the average CI width
-        avg_ci_width <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[3]]))/(denominator[[param]][[1,1]])
-        
-        # Save the results
-        results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage),
-                                         avg_mse = mean(avg_mse),
-                                         avg_ci_width = mean(avg_ci_width))
-      }
+      # if (param == 4) {
+      #   # Calculate the average
+      #   avg_coverage <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[1]]))/(denominator[[param]][[1,1]])
+      #   
+      #   # Calculate the average MSE
+      #   avg_mse <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[2]]))/nsim
+      #   
+      #   # Calculate the average CI width
+      #   avg_ci_width <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[3]]))/(denominator[[param]][[1,1]])
+      #   
+      #   # Save the results
+      #   results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage),
+      #                                    avg_mse = mean(avg_mse),
+      #                                    avg_ci_width = mean(avg_ci_width))
+      # }
       
       # For Xm
-      if (param == 5) {
+      if (param == 4) {
         for (s in 1:q) {
           # Save the indices for missing observations in X.
           missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs[[s,1]])
@@ -3578,7 +3549,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       }
         
       # For Ym
-      if (param == 6) {
+      if (param == 5) {
         missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs_Y[[1,1]])
         results_compiled <- compile_missing_results(param_by_sim_iter, s = 1, dims = c(n, 1), nsim, missing_obs_inds, type = "observed_data")
         
