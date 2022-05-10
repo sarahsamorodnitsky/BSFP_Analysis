@@ -2597,7 +2597,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   # -------------------------------------------------------------------------
   
   q <- length(p.vec)
-  n_beta <- 1 + sum(ranks)
+  n_beta <- sum(ranks)
   r <- ranks[1]
   r.vec <- ranks[-1]
   
@@ -2702,7 +2702,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   if (!is.null(response)) {
     
     Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
-    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+    diag(Sigma_beta) <- rep(beta_vars, c(r, r.vec))
     
     if (!sparsity) {
       # Generate betas
@@ -2768,7 +2768,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
       if (r.vec[s] == 0) Vs.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
     }
     
-    VStar <- cbind(1, do.call(cbind, V.star.joint), do.call(cbind, Vs.star))
+    VStar <- cbind(do.call(cbind, V.star.joint), do.call(cbind, Vs.star))
     
     if (response == "binary") {
       Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
