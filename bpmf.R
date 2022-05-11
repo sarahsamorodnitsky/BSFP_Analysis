@@ -1055,7 +1055,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         J.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
         
         # Calculating the individual structure and scaling by sigma.mat
-        A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,s]])) * sigma.mat[s,1]
+        A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,s]] %*% t(Vs.draw[[iter]][[1,s]])) * sigma.mat[s,1]
       }
       
       # Calculate the structure for Y
@@ -7598,7 +7598,7 @@ factor_switching_permutation_plus_rotation <- function(U.draw, V.draw, W.draw, V
 }
 
 # Creating a function that prepares the results from my method to apply the Poworoznek et al. (2021) approach
-match_align_multi <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, r, r.vec, burnin) {
+match_align_multi_old <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, r, r.vec, burnin) {
   
   # ---------------------------------------------------------------------------
   # Wrapper function to reformat the results from BPMF to apply the Poworoznek 
@@ -7865,7 +7865,7 @@ match_align_multi <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL
 }
 
 # Creating a second version of the above function that handles no intercept
-match_align_multi_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, r, r.vec, burnin) {
+match_align_multi <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = NULL, r, r.vec, burnin) {
   
   # ---------------------------------------------------------------------------
   # Wrapper function to reformat the results from BPMF to apply the Poworoznek 
@@ -7904,6 +7904,22 @@ match_align_multi_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = N
     }
   })
   
+  # Setting up rank indices
+  r.ind <- lapply(1:(q+1), function(s) list())
+  r.ind[[1]] <- 1:r # Indices for joint factors
+  
+  for (s in 1:q) {
+    
+    if (s == 1) {
+      r.ind[[s+1]] <- r + (1:r.vec[s])
+    }
+    
+    if (s > 1) {
+      r.ind[[s+1]] <- r + cumsum(r.vec[s-1]) + (1:r.vec[s])
+    }
+    
+  }
+  
   # ---------------------------------------------------------------------------
   # Preparing the loadings and scores
   # ---------------------------------------------------------------------------
@@ -7914,16 +7930,11 @@ match_align_multi_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = N
     n_beta <- r + sum(r.vec) 
     
     # Joint betas 
-    joint.betas.draw <- lapply(1:nsample, function(iter) betas.draw[[iter]][[1,1]][1:r,,drop=FALSE])
+    joint.betas.draw <- lapply(1:nsample, function(iter) betas.draw[[iter]][[1,1]][r.ind[[1]],,drop=FALSE])
     
     # Individual betas
-    indiv.betas.draw.temp <- lapply(1:nsample, function(iter) betas.draw[[iter]][[1,1]][(r+1):(n_beta),,drop=FALSE])
     indiv.betas.draw <- lapply(1:q, function(s) lapply(1:nsample, function(iter) {
-      if (s == 1) {
-        indiv.betas.draw.temp[[iter]][1:r.vec[s],,drop=FALSE]
-      } else {
-        indiv.betas.draw.temp[[iter]][(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),,drop=FALSE]
-      }
+      betas.draw[[iter]][[1,1]][r.ind[[s+1]],,drop=FALSE]
     }))
   }
   
@@ -7961,7 +7972,7 @@ match_align_multi_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = N
     joint.results.varimax <- jointRot(joint.loadings, joint.scores)
     
     # Applying the signed permutations
-    joint.pivot <- joint.results.varimax$lambda[[1]]
+    joint.pivot <- joint.results.varimax$lambda[[1]] # Save the BIDIFAC+ solution
     joint.loadings.final <- lapply(1:burnin, function(iter) msf(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))
     joint.perms.signs <- lapply(1:burnin, function(iter) msfOUT(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))                              
     
@@ -7988,7 +7999,7 @@ match_align_multi_V2 <- function(U.draw, V.draw, W.draw, Vs.draw, betas.draw = N
       indiv.results.varimax.s <- jointRot(indiv.loadings[[s]], indiv.scores[[s]])
       
       # Applying the signed-permutation algorithm
-      indiv.pivot <- indiv.results.varimax.s$lambda[[1]]
+      indiv.pivot <- indiv.results.varimax.s$lambda[[1]] # Save the BIDIFAC+ solution
       indiv.loadings.final <- lapply(1:burnin, function(iter) msf(indiv.results.varimax.s$lambda[[iter]], pivot = indiv.pivot))
       indiv.perms.signs <- lapply(1:burnin, function(iter) msfOUT(indiv.results.varimax.s$lambda[[iter]], pivot = indiv.pivot))                          
       
