@@ -87,6 +87,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     
     # Which entries are missing?
     missing_obs_Y <- which(is.na(Y))
+    
+    # If there are missing entries, initialize them with 0s
+    Y[missing_obs_Y,] <- 0
   }
   
   # ---------------------------------------------------------------------------
@@ -1079,7 +1082,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   
 }
 
-# This version initializes with BIDIFAC without y as a source
+# This version initializes with BIDIFAC WITHOUT y as a source
 bpmf_old <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
