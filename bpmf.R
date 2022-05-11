@@ -230,7 +230,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   r_total <- n_beta <- r + sum(r.vec)
   n_beta <- r_total
   
-  # If a response is given, set up the variance matrix for the prior of the betas using the ranks and set up rank indices for betas
+  # If a response is given, set up the variance matrix for the prior of the betas using the ranks and 
+  # set up rank indices for betas
   if (response_given) {
     
     # Setting up prior covariance matrix
@@ -501,9 +502,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       } 
     }
     
-    VStar0 <- cbind(do.call(cbind, V0.star), do.call(cbind, Vs0.star))
-    beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
-    Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+    if (response_given) {
+      VStar0 <- cbind(do.call(cbind, V0.star), do.call(cbind, Vs0.star))
+      beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
+      Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+    }
     
   }
   
@@ -512,7 +515,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     if (missingness_in_response) {
       if (response_type == "continuous") {
         # Generate starting values for the missing data
-        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(error_var[3])))[missing_obs_Y,, drop = FALSE]
+        Ym0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = sqrt(error_vars[q+1])))[missing_obs_Y,, drop = FALSE]
       }
       
       if (response_type == "binary") {
@@ -583,7 +586,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
       
       for (s in 1:q) {
-        SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), error_vars[3]))
+        SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), error_vars[q+1]))
       }
     }
     
@@ -945,8 +948,8 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       }
       
       if (response_type == "continuous") {
-        Bbeta <- solve((1/error_vars[3]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-        bbeta <- (1/error_vars[3]) * t(VStar.iter) %*% Y_complete
+        Bbeta <- solve((1/error_vars[q+1]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+        bbeta <- (1/error_vars[q+1]) * t(VStar.iter) %*% Y_complete
       }
       
       beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
@@ -1014,7 +1017,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     if (response_given) {
       if (missingness_in_response) {
         if (response_type == "continuous") {
-          Ym.draw[[iter+1]][[1,1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(error_vars[3])), ncol = 1)[missing_obs_Y,, drop = FALSE]
+          Ym.draw[[iter+1]][[1,1]] <- matrix(rnorm(n, mean = VStar.iter %*% beta.iter, sd = sqrt(error_vars[q+1])), ncol = 1)[missing_obs_Y,, drop = FALSE]
         }
         
         if (response_type == "binary") {
@@ -2033,7 +2036,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # Generating the data
     # -------------------------------------------------------------------------
   
-    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity)
+    sim_data <- bpmf_data(p.vec = p.vec, n = n, ranks = ranks, true_params = true_params, s2nX = NULL, s2nY = NULL, response = response, missingness = missingness, entrywise = entrywise, prop_missing = prop_missing, sparsity = sparsity)
     
     # Saving the data
     true_data <- sim_data$data
@@ -2770,7 +2773,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
     if (response == "continuous") {
       Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
       EY[[1,1]] <- VStar %*% beta[[1,1]]
-      error_y <- matrix(rnorm(n, mean = 0, sd = sqrt(error_vars[3])), ncol = 1)
+      error_y <- matrix(rnorm(n, mean = 0, sd = sqrt(error_vars[q+1])), ncol = 1)
       
       # -------------------------------------------------------------------------
       # Standardizing the variance of the signal in the response
@@ -3403,9 +3406,9 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
               avg_ci_width_observed_source <- results_compiled_observed[[3]]/(denominator[[param]][[s,1]])
               
               # Save the results
-              results_for_param[[s,1]] <- list(observed = list(avg_coverage = mean(avg_coverage_observed_source),
+              results_for_param[[s,1]] <- list(observed = list(avg_coverage = mean(avg_coverage_observed_source[!is.nan(avg_coverage_observed_source)]),
                                                           avg_mse = mean(avg_mse_observed_source),
-                                                          avg_ci_width = mean(avg_ci_width_observed_source)),
+                                                          avg_ci_width = mean(avg_ci_width_observed_source[!is.nan(avg_ci_width_observed_source)])),
                                                missing = list(avg_coverage = mean(avg_coverage_missing_source[!is.nan(avg_coverage_missing_source)]),
                                                               avg_mse = mean(avg_mse_missing_source),
                                                               avg_ci_width = mean(avg_ci_width_missing_source[!is.nan(avg_ci_width_missing_source)])))
