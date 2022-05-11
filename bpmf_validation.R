@@ -142,8 +142,9 @@ save(no_response_no_missing, response_continuous, response_binary,
      response_continuous_missing0.3, response_continuous_missing0.5, response_continuous_missing0.7,
      missing0.3, missing0.5, missing0.7, continuous_response_sparsity, binary_response_sparsity, 
      response_binary_missing0.3, response_binary_missing0.5, response_binary_missing0.7,
-     columnwise_missing0.3, columnwise_missing0.5,
-     file = "~/BayesianPMFWithGit/validation_results/validation_sim_162022.rda")
+     columnwise_missing0.3, columnwise_missing0.5, response_continuous_missing0.1,
+     response_continuous_missing0.3,
+     file = "~/BayesianPMFWithGit/validation_results/validation_sim_5112022.rda")
 
 # -----------------------------------------------------------------------------
 # Creating the results table
