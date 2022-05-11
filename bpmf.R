@@ -23,7 +23,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   # Arguments: 
   # 
   # data = matrix with list entries corresponding to each data source. assumed to be row-centered
-  # Y = column vector with outcome or NULL
+  # Y = column vector with outcome or NULL. assumed to be centered
   # nninit = should the model be initialized with a nuclear norm penalized objective? if FALSE, provide ranks
   # model_params = (error_vars, joint_vars, indiv_vars, beta_vars = NULL, response_vars)
   # ranks = vec of specific ranks if not nninit. (1st entry = joint rank, kth for k>1 is the individual rank for the k-1'st source)
