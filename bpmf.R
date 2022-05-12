@@ -434,9 +434,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     
     # Initialize the latent variable for a binary outcome
     if (response_given) {
-      if (response_type == "binary") {
-        Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
-      }
+      Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
     } 
     
   }
@@ -4178,12 +4176,30 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     }
     
     if (mod == "BIDIFAC+") {
+      # Scale the data to have error variance 1
+      scaled_true_data <- true_data
+      sigma.mat <- matrix(nrow = q+1, ncol = 1)
+      
+      # Iterate through the sources and estimate the error variance
+      for (s in 1:q) {
+        
+        # Save the estimated error variance
+        sigma.mat[s,] <- sigma.rmt(true_data[[s,1]])
+        
+        # Scale the data
+        scaled_true_data[[s,1]] <- true_data[[s,1]]/sigma.mat[s,]
+      }
+      
       # Setting the test response to NA
       Y_NA_for_test <- Y
       Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
       
+      # Scaling the response
+      sigma.mat[q+1,] <- sigma.rmt(Y_NA_for_test[[1,1]][1:n,,drop=FALSE]) 
+      Y_NA_for_test[[1,1]] <- Y_NA_for_test[[1,1]]/sigma.mat[q+1,]
+      
       # Combine the data into one matrix
-      true_data_y_combined <- rbind(do.call(rbind, true_data), t(Y_NA_for_test[[1,1]]))
+      true_data_y_combined <- rbind(do.call(rbind, scaled_true_data), t(Y_NA_for_test[[1,1]]))
       
       # Set the indices of the structures to be estimated
       p.ind.list <- list(c(unlist(p.ind))) # Joint structure
