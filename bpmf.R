@@ -3891,7 +3891,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   library(foreach)
   
   # The model options
-  models <- c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
+  models <- c("sJIVE", "BIDIFAC", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
@@ -4088,6 +4088,46 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Do not compute results for coverage
       coverage_EY_train <- coverage_EY_test <- NA
+    }
+    
+    if (mod == "BIDIFAC") {
+      # Run model
+      mod.out <- BIDIFAC(true_data, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
+      
+      # Saving the column structure (the joint structure)
+      mod.joint <- lapply(1:q, function(s) {
+        mod.out$C[[s,1]]
+      })
+      
+      # Saving the individual structure 
+      mod.individual <- lapply(1:q, function(s) {
+        mod.out$I[[s,1]]
+      })
+      
+      # Saving the joint rank
+      joint.rank <- rankMatrix(mod.out$C[[1,1]])[1]
+      
+      # Saving the individual ranks
+      indiv.rank <- sapply(mod.out$I, function(s) {
+        rankMatrix(s)[1]
+      }) 
+      
+      # Obtaining the joint scores
+      if (joint.rank != 0)  {
+        svd.joint <- svd(mod.joint[[1]])
+        joint.scores <- (svd.joint$v[,1:joint.rank,drop=FALSE]) %*% diag(svd.joint$d[1:joint.rank], nrow = joint.rank)
+      }
+      if (joint.rank == 0) {
+        joint.scores <- NULL
+      }
+      
+      # Obtaining the individual scores
+      indiv.scores <- lapply(1:q, function(s) {
+        if (indiv.rank[s] != 0) {
+          svd.source <- svd(mod.individual[[s]])
+          (svd.source$v[,1:indiv.rank[s]]) %*% diag(svd.source$d[1:indiv.rank[s]], nrow = indiv.rank[s])
+        }
+      })
     }
     
     if (mod == "BIDIFAC+") {
