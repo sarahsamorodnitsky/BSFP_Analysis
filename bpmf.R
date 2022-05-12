@@ -92,6 +92,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     Y[missing_obs_Y,] <- 0
   }
   
+  if (!response_given) {
+    response_type <- missing_obs_Y <- NULL
+    missingness_in_response <- FALSE
+  }
+  
   # ---------------------------------------------------------------------------
   # Scaling the data to have error variance 1
   # ---------------------------------------------------------------------------
@@ -157,7 +162,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     data_combined <- matrix(list(), nrow = (q+1), ncol = 1)
     
     for (s in 1:q) {
+      # Append the scaled data
       data_combined[[s,1]] <- scaled_data[[s,1]]
+      
+      # Add back in missing data if any
+      data_combined[[s,1]][missing_obs[[1]]] <- NA
     }
     
     # Initialize the indices of observations in each source (including response)
@@ -189,6 +198,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       # Append the response to the sources
       data_combined[[q+1,1]] <- t(Y)
       
+      # Add back in any missingness if exists
+      data_combined[[q+1,1]][missing_obs_Y] <- NA
+      
       # Add the response indices to p.ind
       p.ind[[q+1]] <- cumsum(p.vec)[q] + 1 # For the response
       
@@ -207,9 +219,24 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     # Save the indices for samples in each identified structure
     n.ind.list <- lapply(1:(q+1), function(s) c(1:n))
     
-    # Run BIDIFAC+
-    rank_init <- bidifac.plus.given(data_combined, p.ind = p.ind, n.ind = n.ind,
-                                    p.ind.list = p.ind.list, n.ind.list = n.ind.list)
+    # Run BIDIFAC+ --
+    
+    # If there is no missing data
+    if (!missingness_in_data & !missingness_in_response) {
+      rank_init <- bidifac.plus.given(data_combined, p.ind = p.ind, n.ind = n.ind,
+                                      p.ind.list = p.ind.list, n.ind.list = n.ind.list)
+    }
+    
+    # If there is missing data
+    if (missingness_in_data | missingness_in_response) {
+      # Save the indices of the missing values
+      all.miss <- which(is.na(data_combined))
+      
+      # Initialize
+      rank_init <- bidifac.plus.impute(data_combined, p.ind = p.ind, n.ind = n.ind,
+                                      p.ind.list = p.ind.list, n.ind.list = n.ind.list,
+                                      all.miss = all.miss)
+    }
     
     # Print when finished
     print("Posterior mode obtained, ranks determined.")
