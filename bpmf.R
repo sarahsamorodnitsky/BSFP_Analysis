@@ -2549,6 +2549,62 @@ bidifac.plus.given <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, S = list(),
   return(list(S=S,Sums=Sums,obj.vec=obj.vec))
 }
 
+bidifac.plus.impute <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, all.miss, S = list(), pen=c(), given.inits = FALSE,max.iter=500,conv.thresh=0.001,temp.iter=2){
+  X0[all.miss]=0  
+  S <- list()
+  pen <- c()
+  temp.fac <- svd(X0,nu=0,nv=0)$d[1]/(sum(sqrt(dim(X0))))-1
+  n.source=length(p.ind)
+  n.type=length(n.ind)
+  max.comb=length(p.ind.list)
+  for(i in 1:max.comb){
+    S[[i]]=array(rep(0,prod(dim(X0))),dim=dim(X0))
+    pen[i]=0}
+  obj.vec <- c(sum(X0^2))
+  X0.resid = X0-Reduce('+',S)
+  obj.prev <- sum(X0.resid^2)+2*sum(pen)
+  for(jj in 1:max.iter){
+    print(jj)
+    if(jj < temp.iter){
+      lambda <- 1+(temp.iter-1-jj)/temp.iter*temp.fac
+    }
+    #for(k in 1:max.comb){
+    for(k in c(1:max.comb)){
+      #     print(paste('*',k))
+      X0.temp <- X0.resid+S[[k]]
+      cur.p.ind <- p.ind.list[[k]] 
+      cur.n.ind <- n.ind.list[[k]] 
+      a <- svd(X0.temp[cur.p.ind,cur.n.ind],nu=0,nv=0)$d
+      nc <- sum(a>(lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind)))))
+      if(nc>0){
+        SVD <- svd(X0.temp[cur.p.ind,cur.n.ind], nu=nc,nv=nc)
+        s.vals <- pmax(SVD$d[1:nc]-lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind))),0)
+        Diag <- diag(s.vals,nrow=nc,ncol=nc)
+        Est <- SVD$u%*%Diag%*%t(SVD$v)
+        S[[k]] <- array(rep(0,prod(dim(X0))),dim=dim(X0))
+        S[[k]][cur.p.ind,cur.n.ind] <- Est
+        X0.resid[cur.p.ind,cur.n.ind] <- X0.temp[cur.p.ind,cur.n.ind]-Est
+        X0.resid = X0-Reduce('+',S)
+        pen[k] <- lambda*(sqrt(length(cur.n.ind))+sqrt(length(cur.p.ind)))*(sum(s.vals))
+        obj.vec <- c(obj.vec,sum(X0.resid^2)+2*sum(pen))
+      }
+    }
+    Sig=Reduce('+',S)
+    X0[all.miss]=Sig[all.miss]
+    X0.resid = X0-Reduce('+',S)
+    obj.cur <- sum(X0.resid^2)+2*sum(pen)
+    if(abs(obj.cur-obj.prev)<conv.thresh) break
+    obj.prev <- sum(X0.resid^2)+2*sum(pen)
+  }
+  
+  Sums <- array(dim=c(max.comb,n.source,n.type))
+  for(kk in 1:max.comb){for(j in 1:n.source){ for(i in 1:n.type){
+    Sums[kk,j,i] = sum(S[[kk]][p.ind[[j]],n.ind[[i]]]^2)
+  }}}
+  
+  return(list(S=S,Sums=Sums,obj.vec=obj.vec,Sig=Sig))
+}
+
 # -----------------------------------------------------------------------------
 # Helper functions for validation simulations
 # -----------------------------------------------------------------------------
@@ -3878,11 +3934,23 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     # The response parameters
     beta <- sim_data$beta
-    tau2 <- sim_data$tau2
     EY <- sim_data$EY
     
     # Save a burn-in
     burnin <- nsample/2
+    
+    # Set the indices of the sources
+    p.ind <- lapply(1:q, function(s) {
+      if (s == 1) {
+        1:p.vec[s]
+      } else {
+        (p.vec[s-1] + 1):cumsum(p.vec)[s]
+      }
+    })
+    p.ind[[q+1]] <- cumsum(p.vec)[q] + 1 # For the response
+    
+    # Set the indices of the samples
+    n.ind <- list(n)
     
     # -------------------------------------------------------------------------
     # Split the data into a training and test set
@@ -3929,46 +3997,52 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     EY_test[[1,1]] <- EY[[1,1]][(n+1):(2*n),, drop = FALSE]
     
     # -------------------------------------------------------------------------
-    # Center and scale X and y to have variance 1
+    # Center X and y to have mean 0
     # -------------------------------------------------------------------------
     
-    # for (s in 1:q) {
-    #   # Center and scale the observed training data (transpose to scale the cols (features) than transpose back)
-    #   training_data[[s,1]] <- t(scale(t(training_data[[s,1]]), center = TRUE, scale = TRUE))
-    #   training_data_list[[s]] <- t(scale(t(training_data_list[[s]]), center = TRUE, scale = TRUE))
-    #   
-    #   # Save the means and variances
-    #   row_means_train <- attr(training_data[[s,1]], "scaled:center")
-    #   row_sd_train <- attr(training_data[[s,1]], "scaled:scale")
-    #   
-    #   # Subtract each column by the same mean and divide by the same sd above
-    #   joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_means_train)
-    #   joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_sd_train, FUN = "/")
-    #   
-    #   indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_means_train)
-    #   indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_sd_train, FUN = "/")
-    #   
-    #   # Center and scale the observed test data
-    #   test_data[[s,1]] <- t(scale(t(test_data[[s,1]]), center = TRUE, scale = TRUE))
-    #   test_data_list[[s]] <- t(scale(t(test_data_list[[s]]), center = TRUE, scale = TRUE))
-    #   
-    #   # Save the means and variances
-    #   row_means_test <- attr(test_data[[s,1]], "scaled:center")
-    #   row_sd_test <- attr(test_data[[s,1]], "scaled:scale")
-    #   
-    #   # Subtract each column by the same mean and divide by the same sd above
-    #   joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_means_test)
-    #   joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_sd_test, FUN = "/")
-    #   
-    #   indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_means_test)
-    #   indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_sd_test, FUN = "/")
-    # }
-    # 
-    # Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = TRUE)
-    # EY_train[[1,1]] <- (EY_train[[1,1]] - attr(Y_train[[1,1]], "scaled:center"))/attr(Y_train[[1,1]], "scaled:scale")
-    # 
-    # Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = TRUE)
-    # EY_test[[1,1]] <- (EY_test[[1,1]] - attr(Y_test[[1,1]], "scaled:center"))/attr(Y_test[[1,1]], "scaled:scale")
+    for (s in 1:q) {
+      # Center the full true data (transpose to scale the cols (features) than transpose back)
+      true_data[[s,1]] <- t(scale(t(true_data[[s,1]]), center = TRUE, scale = FALSE))
+      true_data_list[[s]] <- t(scale(t(true_data_list[[s]]), center = TRUE, scale = FALSE))
+      
+      # Save the means
+      row_means_true <- attr(true_data[[s,1]], "scaled:center")
+      
+      # Subtract the row means from the structure
+      joint.structure[[s,1]] <- sweep(joint.structure[[s,1]], 1, row_means_true)
+      indiv.structure[[s,1]] <- sweep(indiv.structure[[s,1]], 1, row_means_true)
+      
+      # Center the observed training data 
+      training_data[[s,1]] <- t(scale(t(training_data[[s,1]]), center = TRUE, scale = FALSE))
+      training_data_list[[s]] <- t(scale(t(training_data_list[[s]]), center = TRUE, scale = FALSE))
+
+      # Save the means 
+      row_means_train <- attr(training_data[[s,1]], "scaled:center")
+
+      # Subtract each row by the same mean
+      joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_means_train)
+      indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_means_train)
+
+      # Center the observed test data
+      test_data[[s,1]] <- t(scale(t(test_data[[s,1]]), center = TRUE, scale = FALSE))
+      test_data_list[[s]] <- t(scale(t(test_data_list[[s]]), center = TRUE, scale = FALSE))
+
+      # Save the means and variances
+      row_means_test <- attr(test_data[[s,1]], "scaled:center")
+
+      # Subtract each column by the same mean and divide by the same sd above
+      joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_means_test)
+      indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_means_test)
+    }
+
+    Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = FALSE)
+    EY_train[[1,1]] <- (EY_train[[1,1]] - attr(Y_train[[1,1]], "scaled:center"))
+
+    Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = FALSE)
+    EY_test[[1,1]] <- (EY_test[[1,1]] - attr(Y_test[[1,1]], "scaled:center"))
+    
+    Y[[1,1]] <- scale(Y[[1,1]], center = TRUE, scale = FALSE)
+    EY[[1,1]] <- (EY[[1,1]] - attr(Y[[1,1]], "scaled:center"))
     
     # -------------------------------------------------------------------------
     # Fit each model on generated data to obtain estimate of underlying structure
@@ -4017,25 +4091,44 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     }
     
     if (mod == "BIDIFAC+") {
+      # Setting the test response to NA
+      Y_NA_for_test <- Y
+      Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
+      
+      # Combine the data into one matrix
+      true_data_y_combined <- rbind(do.call(rbind, true_data), t(Y_NA_for_test[[1,1]]))
+      
+      # Set the indices of the structures to be estimated
+      p.ind.list <- list(c(unlist(p.ind))) # Joint structure
+      
+      for (s in 1:q) {
+        p.ind.list[[s+1]] <- c(p.ind[[s]], p.ind[[q+1]])
+      }
+      
+      # Save the indices for samples in each identified structure
+      n.ind.list <- lapply(1:(q+1), function(s) c(1:(2*n)))
+      
       # Run model
-      mod.out <- BIDIFAC(true_data, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
+      mod.out <- bidifac.plus.impute(X0 = true_data_y_combined, p.ind = p.ind, n.ind = n.ind,
+                                     p.ind.list = p.ind.list, n.ind.list = n.ind.list,
+                                     all.miss = which(is.na(true_data_y_combined)))
       
       # Saving the column structure (the joint structure)
-      mod.joint <- lapply(1:q, function(source) {
-        mod.out$C[[source,1]]
+      mod.joint <- lapply(1:q, function(s) {
+        mod.out$S[[1]][p.ind[[s]],]
       })
       
-      # Saving the individual structure 
-      mod.individual <- lapply(1:q, function(source) {
-        mod.out$I[[source,1]]
+      # Saving the shared structure with y
+      mod.individual <- lapply(1:q, function(s) {
+        mod.out$S[[s+1]][p.ind[[s]],]
       })
       
       # Saving the joint rank
-      joint.rank <- rankMatrix(mod.out$C[[1,1]])[1]
+      joint.rank <- rankMatrix(mod.out$S[[1]])[1]
       
-      # Saving the individual ranks
-      indiv.rank <- sapply(mod.out$I, function(source) {
-        rankMatrix(source)[1]
+      # Saving the shared rank structure with y
+      indiv.rank <- sapply(1:q, function(s) {
+        rankMatrix(mod.out$S[[q+1]])[1]
       }) 
       
       # Obtaining the joint scores
@@ -4048,10 +4141,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       }
       
       # Obtaining the individual scores
-      indiv.scores <- lapply(1:q, function(source) {
-        if (indiv.rank[source] != 0) {
-          svd.source <- svd(mod.individual[[source]])
-          (svd.source$v[,1:indiv.rank[source]]) %*% diag(svd.source$d[1:indiv.rank[source]], nrow = indiv.rank[source])
+      indiv.scores <- lapply(1:q, function(s) {
+        if (indiv.rank[s] != 0) {
+          svd.source <- svd(mod.individual[[s]])
+          (svd.source$v[,1:indiv.rank[s]]) %*% diag(svd.source$d[1:indiv.rank[s]], nrow = indiv.rank[s])
         }
       })
     }
@@ -4149,16 +4242,16 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
-        lapply(1:q, function(source) {
-          (mod.out$U.draw[[iter]][[source,1]] %*% t(mod.out$V.draw[[iter]][[1]])) * mod.out$sigma.mat[source,]
+        lapply(1:q, function(s) {
+          mod.out$J.draw[[iter]][[s,1]]
         })
       })
       
       # Taking the posterior mean
-      mod.joint <- lapply(1:q, function(source) {
+      mod.joint <- lapply(1:q, function(s) {
         # Save the joint structure at each iteration for source
         joint.source <- lapply((burnin+1):nsample, function(iter) {
-          mod.joint.iter[[iter]][[source]]
+          mod.joint.iter[[iter]][[s]]
         })
         # Take the mean
         Reduce("+", joint.source)/length(joint.source)
@@ -4166,16 +4259,16 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Saving the individual structure
       mod.individual.iter <- lapply(1:nsample, function(iter) {
-        lapply(1:q, function(source) {
-          (mod.out$W.draw[[iter]][[source,source]] %*% t(mod.out$Vs.draw[[iter]][[1,source]])) * mod.out$sigma.mat[source,]
+        lapply(1:q, function(s) {
+          mod.out$A.draw[[iter]][[s,1]]
         })
       })
       
       # Taking the posterior mean
-      mod.individual <- lapply(1:q, function(source) {
+      mod.individual <- lapply(1:q, function(s) {
         # Save the joint structure at each iteration for source
         indiv.source <- lapply((burnin+1):nsample, function(iter) {
-          mod.individual.iter[[iter]][[source]]
+          mod.individual.iter[[iter]][[s]]
         })
         # Take the mean
         Reduce("+", indiv.source)/length(indiv.source)
