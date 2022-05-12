@@ -4190,13 +4190,16 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
         scaled_true_data[[s,1]] <- true_data[[s,1]]/sigma.mat[s,]
       }
       
-      # Setting the test response to NA
+      # Setting the test response to 0 while estimating the error variance
       Y_NA_for_test <- Y
-      Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
+      Y_NA_for_test[[1,1]][(n+1):(2*n),] <- 0
       
       # Scaling the response
-      sigma.mat[q+1,] <- sigma.rmt(Y_NA_for_test[[1,1]][1:n,,drop=FALSE]) 
+      sigma.mat[q+1,] <- sigma.rmt(Y_NA_for_test[[1,1]]) 
       Y_NA_for_test[[1,1]] <- Y_NA_for_test[[1,1]]/sigma.mat[q+1,]
+      
+      # Now set the test Y to missing
+      Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
       
       # Combine the data into one matrix
       true_data_y_combined <- rbind(do.call(rbind, scaled_true_data), t(Y_NA_for_test[[1,1]]))
@@ -4216,7 +4219,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
                                      p.ind.list = p.ind.list, n.ind.list = n.ind.list,
                                      all.miss = which(is.na(true_data_y_combined)))
       
-      # Saving the column structure (the joint structure)
+      # Saving the joint structure
       mod.joint <- lapply(1:q, function(s) {
         mod.out$S[[1]][p.ind[[s]],]
       })
@@ -4234,8 +4237,9 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
         rankMatrix(mod.out$S[[q+1]])[1]
       }) 
       
-      # Obtaining the joint scores
+      # Obtaining the joint scores and predicted E(Y) from joint
       if (joint.rank != 0)  {
+        # Obtaining the joint scores
         svd.joint <- svd(mod.joint[[1]])
         joint.scores <- (svd.joint$v[,1:joint.rank,drop=FALSE]) %*% diag(svd.joint$d[1:joint.rank], nrow = joint.rank)
       }
@@ -4250,6 +4254,17 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
           (svd.source$v[,1:indiv.rank[s]]) %*% diag(svd.source$d[1:indiv.rank[s]], nrow = indiv.rank[s])
         }
       })
+      
+      # Saving the E(Y) from the joint structure
+      joint.EY <- t(mod.out$S[[1]][p.ind[[q+1]],,drop=FALSE])
+      indiv.EY <- lapply(1:q, function(s) {
+        t(mod.out$S[[s+1]][p.ind[[q+1]],,drop=FALSE])
+      })
+    
+      Y.fit <- joint.EY + Reduce("+", indiv.EY)
+      
+      # Do not compute results for coverage
+      coverage_EY_train <- coverage_EY_test <- NA
     }
     
     if (mod == "JIVE") {
@@ -4416,7 +4431,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # As applicable, use structure in Bayesian linear model
     # -------------------------------------------------------------------------
     
-    if (mod %in% c("BIDIFAC+", "JIVE", "MOFA")) {
+    if (mod %in% c("BIDIFAC", "JIVE", "MOFA")) {
       # Subset the scores to just the training data
       all.scores.train <- all.scores[1:n,,drop=FALSE]
       
