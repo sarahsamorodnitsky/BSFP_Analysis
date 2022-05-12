@@ -18,24 +18,28 @@ q <- 2
 ranks <- c(1,1,1)
 
 # Number of predictors for each source
-p.vec = c(100, 100)
+p.vec = c(25, 25)
 
 # Sample size 
 n = 100
 
 # Parameters for data generation
-true_params <- list(error_vars = c(1,1), # Error variance for each source
+true_params <- list(error_vars = c(1,1,1), # Error variance for each source
                     joint_var = 1, # Variance for joint structure
                     indiv_vars = c(1,1), # Variance for each individual structure
-                    beta_vars = c(10, 1, rep(1, q)), # Variance of intercept effect and each joint effect 
-                    response_vars = c(shape = 1, rate = 1)) # Hyperparameters for variance of response (if continuous)
+                    beta_vars = c(1, rep(1, q)) # Variance of joint and individual effects
+                    )
 
 # Setting the model variances
-model_params <- list(error_vars = c(1,1), # Error variance for each source
-                     joint_var = 1/(sqrt(n) + sqrt(sum(p.vec))), # Variance for joint structure
-                     indiv_vars = c(1/(sqrt(n) + sqrt(p.vec[1])), 1/(sqrt(n) + sqrt(p.vec[2]))), # Variance for each individual structure
-                     beta_vars = c(10, 1, rep(1, q)), # Variance of intercept effect and each joint effect 
-                     response_vars = c(shape = 1, rate = 1)) # Hyperparameters for variance of response (if continuous)
+joint_var <- 1/(sqrt(n) + sqrt(sum(p.vec) + 1)) # Number of samples and number of features across all sources and Y
+indiv_vars <- sapply(1:q, function(s) 1/(sqrt(n) + sqrt(p.vec[s] + 1))) # Number of samples and number of features in each source plus Y
+
+# Setting the model variances
+model_params <- list(error_vars = c(1,1,1), # Error variance for each source
+                     joint_var = joint_var, # Variance for joint structure
+                     indiv_vars = indiv_vars, # Variance for each individual structure
+                     beta_vars = c(joint_var, indiv_vars) # Variance of intercept effect and each joint effect 
+                     )   
 
 # Parameters for the simulation
 nsample <- 2000
