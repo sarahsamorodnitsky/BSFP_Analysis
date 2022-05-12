@@ -169,7 +169,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       data_combined[[s,1]][missing_obs[[1]]] <- NA
     }
     
-    # Initialize the indices of observations in each source (including response)
+    # Initialize the indices of observations in each source 
     p.ind <- lapply(1:q, function(s) {
       if (s == 1) {
         1:p.vec[s]
@@ -433,7 +433,11 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     VStar0 <- cbind(do.call(cbind, V0.star), do.call(cbind, Vs0.star))
     
     # Initialize the latent variable for a binary outcome
-    Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+    if (response_given) {
+      if (response_type == "binary") {
+        Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+      }
+    } 
     
   }
   
@@ -557,9 +561,25 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   
   # If there is missingness in the data, generate starting values for the missing entries
   if (missingness_in_data) {
-    Xm0 <- matrix(list(), ncol = 1, nrow = q)
-    for (s in 1:q) {
-      Xm0[[s,1]] <- rep(0, length(missing_obs[s]))
+    
+    # If not initializing with posterior mode, initialize missing data with 0s
+    if (!nninit) {
+      Xm0 <- matrix(list(), ncol = 1, nrow = q)
+      for (s in 1:q) {
+        Xm0[[s,1]] <- rep(0, length(missing_obs[[s]]))
+      }
+    }
+    
+    # If initializing with posterior mode, initialize missing data with BIDIFAC+
+    if (nninit) {
+      Xm0 <- matrix(list(), ncol = 1, nrow = q)
+      for (s in 1:q) {
+        # Generate random noise
+        Es0 <- rnorm(length(missing_obs[[s]]), mean = 0, sd = sqrt(error_vars[s]))
+        
+        # Save the imputed values
+        Xm0[[s,1]] <- (U0[[s,1]] %*% t(V0[[1,1]]) + W0[[s,s]] %*% t(Vs0[[1,s]]))[missing_obs[[s]]] + Es0
+      }
     }
   }
   
