@@ -196,7 +196,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     if (response_given) {
       
       # Append the response to the sources
-      data_combined[[q+1,1]] <- t(Y)
+      data_combined[[q+1,1]] <- t(scaled_Y)
       
       # Add back in any missingness if exists
       data_combined[[q+1,1]][missing_obs_Y] <- NA
@@ -706,7 +706,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         Ym.iter <- Ym.draw[[iter]][[1,1]]
         
         # Creating the completed outcome vector
-        Y_complete <- Y_scaled
+        Y_complete <- scaled_Y
         
         # Filling in the missing entries for R1 and R2. 
         Y_complete[missing_obs_Y,] <- Ym.iter
@@ -714,7 +714,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       # If there is no missingness in the response, store in Y_complete
       if (!missingness_in_response) {
-        Y_complete <- Y_scaled
+        Y_complete <- scaled_Y
       }
       
     }
