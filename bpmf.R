@@ -2322,7 +2322,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
 }
 
 # -----------------------------------------------------------------------------
-# Helper functions for initializing with BIDIFAC
+# BIDIFAC Functions
 # -----------------------------------------------------------------------------
 
 frob <- function(X){ sum(X^2,na.rm=T) }
@@ -2651,7 +2651,7 @@ bidifac.plus.impute <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, all.miss, 
 }
 
 # -----------------------------------------------------------------------------
-# Helper functions for validation simulations
+# Validation simulation functions
 # -----------------------------------------------------------------------------
 
 logSum <- function(l){
@@ -3874,7 +3874,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
 }
 
 # -----------------------------------------------------------------------------
-# Helper functions for model simulations
+# Model comparison simulations
 # -----------------------------------------------------------------------------
 
 # Calculate the predicted Y
