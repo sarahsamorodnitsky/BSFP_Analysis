@@ -706,7 +706,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         Ym.iter <- Ym.draw[[iter]][[1,1]]
         
         # Creating the completed outcome vector
-        Y_complete <- Y
+        Y_complete <- Y_scaled
         
         # Filling in the missing entries for R1 and R2. 
         Y_complete[missing_obs_Y,] <- Ym.iter
@@ -714,7 +714,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       # If there is no missingness in the response, store in Y_complete
       if (!missingness_in_response) {
-        Y_complete <- Y
+        Y_complete <- Y_scaled
       }
       
     }
@@ -4465,9 +4465,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     if (mod == "BPMF") {
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
       Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
-        VStar.iter <- cbind(1, all.scores[,-1])
-        beta.iter <- mod.out$beta.draw[[iter]][[1,1]]
-        VStar.iter %*% beta.iter
+        mod.out$EY.draw[[iter]][[1,1]]
       })
       
       Y.fit <- Reduce("+", Y.fit.iter)/length(Y.fit.iter)
