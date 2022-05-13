@@ -18,7 +18,7 @@ q <- 2
 ranks <- c(1,1,1)
 
 # Number of predictors for each source
-p.vec = c(25, 25)
+p.vec = c(100, 100)
 
 # Sample size 
 n = 100
