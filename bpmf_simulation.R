@@ -78,10 +78,6 @@ for (s2nX in s2nX.list) {
 end <- Sys.time()
 end-start
 
-# Sparse condition
-sJIVE.res[[ind]] <- model_comparison(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                 s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = nsim, nsample = nsample, n_clust = 10)
-
 # Check that all conditions ran
 all_s2n <- c()
 combos <- c()
@@ -103,20 +99,48 @@ names(all_s2n) <- combos
 # BIDIFAC+
 # -----------------------------------------------------------------------------
 
+BIDIFAC.plus.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    BIDIFAC.plus.res[[ind]] <- model_comparison(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                                                s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
+# Check that all conditions ran
+all_s2n <- c()
+combos <- c()
+all_files <- list.files("~/BayesianPMF/03Simulations/BIDIFAC+")
+al_files_split <- strsplit(all_files, split = "_")
+ind <- 1
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    # Select all the files corresponding to current s2nX and s2nY 
+    files_for_s2nX_s2nY <- all_files[sapply(al_files_split, function(file) (file[5] == s2nX) & (file[7] == paste0(s2nY, ".rda")))]
+    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
+    combos[ind] <- paste(s2nX, "&", s2nY)
+    ind <- ind + 1
+  }
+}
+names(all_s2n) <- combos
+
+# -----------------------------------------------------------------------------
+# BIDIFAC
+# -----------------------------------------------------------------------------
+
 BIDIFAC.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
-    BIDIFAC.res[[ind]] <- model_comparison(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+    BIDIFAC.res[[ind]] <- model_comparison(mod = "BIDIFAC", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                                           s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
   }
 }
-
-# Sparse condition
-BIDIFAC.res[[ind]] <- model_comparison(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                 s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = nsim, nsample = nsample, n_clust = 10)
 
 # Check that all conditions ran
 all_s2n <- c()
@@ -150,10 +174,6 @@ for (s2nX in s2nX.list) {
   }
 }
 
-# Sparse condition
-JIVE.res[[ind]] <- model_comparison(mod = "JIVE", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = nsim, nsample = nsample, n_clust = 10)
-
 # Check that all conditions ran
 all_s2n <- c()
 combos <- c()
@@ -186,10 +206,6 @@ for (s2nX in s2nX.list) {
   }
 }
 
-# Sparse condition
-MOFA.res[[ind]] <- model_comparison(mod = "MOFA", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = nsim, nsample = nsample, n_clust = 10)
-
 # -----------------------------------------------------------------------------
 # BPMF
 # -----------------------------------------------------------------------------
@@ -204,10 +220,6 @@ for (s2nX in s2nX.list) {
     ind <- ind + 1
   }
 }
-
-# Sparse condition
-BPMF.res[[ind]] <- model_comparison(mod = "BPMF", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                                s2nX = NULL, s2nY = NULL, sparsity = TRUE, nsim = nsim, nsample = nsample, n_clust = 10)
 
 # Check that all conditions ran
 all_s2n <- c()
