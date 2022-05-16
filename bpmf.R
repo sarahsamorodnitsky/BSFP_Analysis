@@ -258,7 +258,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   }
   
   r_total <- n_beta <- r + sum(r.vec)
-  n_beta <- r_total
+  
+  # Warning if the rank is 0
+  warning("Rank of decomposition is 0. No structure will be generated.")
   
   # If a response is given, set up the variance matrix for the prior of the betas using the ranks and 
   # set up rank indices for betas
@@ -532,8 +534,18 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     
     if (response_given) {
       VStar0 <- cbind(do.call(cbind, V0.star), do.call(cbind, Vs0.star))
-      beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
+      
+      if (n_beta != 0) {
+        beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
+      }
+      
+      if (n_beta == 0) {
+        beta0 <- matrix(nrow = 0, ncol = 1)
+      }
+      
+      # If beta0 is empty, this is generated from a N(0,1)
       Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
+  
     }
     
   }
