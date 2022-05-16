@@ -145,7 +145,7 @@ for (s2nX in s2nX.list) {
 # Check that all conditions ran
 all_s2n <- c()
 combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/BIDIFAC+")
+all_files <- list.files("~/BayesianPMF/03Simulations/BIDIFAC")
 al_files_split <- strsplit(all_files, split = "_")
 ind <- 1
 for (s2nX in s2nX.list) {
@@ -249,17 +249,15 @@ simulation_results <- data.frame(s2nX = numeric(),
                                  Metric = character(),
                                  BPMF = numeric(),
                                  `BIDIFAC+` = numeric(),
-                                 JIVE = numeric(),
                                  check.names = FALSE)
 
 # Iterate through the s2ns and append to the table
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Current results
-    res <- create_simulation_table(mod.list = c("BPMF", "BIDIFAC+", "JIVE"),
+    res <- create_simulation_table(mod.list = c("BPMF", "BIDIFAC+"),
                                    path.list = list(BPMF = "~/BayesianPMF/03Simulations/BPMF/",
-                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/",
-                                                    JIVE = "~/BayesianPMF/03Simulations/JIVE/"),
+                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/"),
                                    s2nX = s2nX, 
                                    s2nY = s2nY)
     # Save
