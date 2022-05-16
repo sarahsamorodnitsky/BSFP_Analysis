@@ -46,8 +46,8 @@ nsample <- 2000
 nsim <- 100
 
 # Signal-to-noise ratios to consider
-# s2nX.list <- s2nY.list <- c(0.99/0.01, 0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75, 0.1/0.9, 0.01/0.99)
-s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
+s2nX.list <- s2nY.list <- c(0.99/0.01, 0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75, 0.1/0.9, 0.01/0.99)
+# s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
 
 
 # -----------------------------------------------------------------------------
@@ -249,15 +249,17 @@ simulation_results <- data.frame(s2nX = numeric(),
                                  Metric = character(),
                                  BPMF = numeric(),
                                  `BIDIFAC+` = numeric(),
+                                 BIDIFAC = numeric(),
                                  check.names = FALSE)
 
 # Iterate through the s2ns and append to the table
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Current results
-    res <- create_simulation_table(mod.list = c("BPMF", "BIDIFAC+"),
+    res <- create_simulation_table(mod.list = c("BPMF", "BIDIFAC+", "BIDIFAC"),
                                    path.list = list(BPMF = "~/BayesianPMF/03Simulations/BPMF/",
-                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/"),
+                                                    `BIDIFAC+` = "~/BayesianPMF/03Simulations/BIDIFAC+/",
+                                                    BIDIFAC = "~/BayesianPMF/03Simulations/BIDIFAC/"),
                                    s2nX = s2nX, 
                                    s2nY = s2nY)
     # Save
