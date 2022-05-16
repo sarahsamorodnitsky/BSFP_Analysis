@@ -296,7 +296,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
   
   if (!response_given) {
-    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- VStar.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   }
   
   if (!missingness_in_data) {
@@ -304,11 +304,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   }
   
   if (response_given) {
-    beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    
-    Z.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    
-    Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    beta.draw <- Z.draw <- Ym.draw <- VStar.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
   }
   
   if (missingness_in_data) {
@@ -400,7 +396,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
         
         # Save beta_indiv if response is given
         if (response_given) {
-          beta_indiv[[s,1]] <- matrix(0, nrow = r.vec[s], ncol = 1)
+          beta_indiv0[[s,1]] <- matrix(0, nrow = r.vec[s], ncol = 1)
         }
         
         # Fill in off-diagonal W with 0s
@@ -593,6 +589,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
   if (response_given) {
     beta.draw[[1]][[1,1]] <- beta0
     Z.draw[[1]][[1,1]] <- Z0
+    VStar.draw[[1]][[1,1]] <- VStar0
     
     if (missingness_in_response) {
       Ym.draw[[1]][[1,1]] <- Ym0
@@ -639,7 +636,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     }
     
     # For beta - Combined precisions between intercept and all betas
-    SigmaBetaInv <- solve(Sigma_beta)
+    if (n_beta != 0) {
+      SigmaBetaInv <- solve(Sigma_beta)
+    }
   }
   
   # ---------------------------------------------------------------------------
@@ -928,6 +927,9 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       VStar.iter <- cbind(do.call(cbind, V.iter.star.joint), do.call(cbind, Vs.iter.star))
       
+      # Save the current VStar
+      VStar.draw[[iter+1]][[1,1]] <- VStar.iter
+      
       # -------------------------------------------------------------------------
       # Posterior sample for W
       # -------------------------------------------------------------------------
@@ -990,17 +992,26 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     
     if (response_given) {
       
-      if (response_type == "binary") {
-        Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-        bbeta <- t(VStar.iter) %*% Z.iter
+      # If the rank of the whole factorization is > 0
+      if (n_beta != 0) {
+        
+        if (response_type == "binary") {
+          Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+          bbeta <- t(VStar.iter) %*% Z.iter
+        }
+        
+        if (response_type == "continuous") {
+          Bbeta <- solve((1/error_vars[q+1]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
+          bbeta <- (1/error_vars[q+1]) * t(VStar.iter) %*% Y_complete
+        }
+        
+        beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       }
       
-      if (response_type == "continuous") {
-        Bbeta <- solve((1/error_vars[q+1]) * t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
-        bbeta <- (1/error_vars[q+1]) * t(VStar.iter) %*% Y_complete
+      # If the rank of the factorization is 0
+      if (n_beta == 0) {
+        beta.draw[[iter+1]][[1,1]] <- matrix(nrow = 0, ncol = 1)
       }
-      
-      beta.draw[[iter+1]][[1,1]] <- matrix(mvrnorm(1, mu = Bbeta %*% bbeta, Sigma = Bbeta), ncol = 1)
       
       # Update the current value of beta
       beta.iter <- beta.draw[[iter+1]][[1,1]]
@@ -1105,7 +1116,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
       
       # Calculate the structure for Y
       if (response_given) {
-        EY.draw[[iter]][[1,1]] <- cbind(V.draw[[iter]][[1,1]], do.call(cbind, Vs.draw[[iter]])) %*% beta.draw[[iter]][[1,1]] * sigma.mat[q+1,1]
+        EY.draw[[iter]][[1,1]] <- VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]] * sigma.mat[q+1,1]
       }
     }
   }
@@ -1119,6 +1130,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
        sigma.mat = sigma.mat, # Scaling factors
        J.draw = J.draw, A.draw = A.draw, EY.draw = EY.draw, # Underlying structure
        V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
+       VStar.draw = VStar.draw, # Components that predict Y
        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
        scores = scores, # Scores if provided by another method 
        ranks = c(r, r.vec), # Ranks
@@ -3944,7 +3956,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
-             "sJIVE", "sJIVE.converge", "sJIVE.predict", "sJIVE.ranks")
+             "bidifac.plus.impute", "bidifac.plus.given")
   packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
