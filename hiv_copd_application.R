@@ -32,7 +32,7 @@ load(paste0(data_wd, "HIV_COPD_SomaScan_Normalized_Clean.rda"))
 lavage_processed_no_info <- lavage_processed[, -c(1:2)] # removing meta
 bioc_meta_data <- lavage_processed[, 1:2] # saving meta elsewhere
 lavage_processed_no_info_log_scale <- t(apply(lavage_processed_no_info, 1, function(row) {
-  scale(log(row + 1), center = TRUE, scale = TRUE)
+  scale(log(row + 1), center = TRUE, scale = FALSE)
 })) # scaling the rows
 rownames(lavage_processed_no_info_log_scale) <- bioc_meta_data$Metabolite
 colnames(lavage_processed_no_info_log_scale) <- colnames(lavage_processed_no_info)
@@ -43,7 +43,7 @@ soma_meta_data <- somascan_normalized_clean[, 1:29] # saving meta elsewhere
 soma_pids <- somascan_normalized_clean$PID
 somascan_normalized_clean_no_info_transpose <- t(somascan_normalized_clean_no_info)
 somascan_normalized_clean_no_info_transpose_scale <- t(apply(somascan_normalized_clean_no_info_transpose, 1, function(row) {
-  scale(log(row + 1), center = TRUE, scale = TRUE)
+  scale(log(row + 1), center = TRUE, scale = FALSE)
 })) # scaling the rows
 colnames(somascan_normalized_clean_no_info_transpose_scale) <- soma_pids
 
