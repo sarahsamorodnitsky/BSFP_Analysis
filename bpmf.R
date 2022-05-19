@@ -1155,7 +1155,7 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
 }
 
 # This version initializes with BIDIFAC WITHOUT y as a source
-bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
+bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
   
@@ -1281,7 +1281,7 @@ bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL
   W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
   
   if (!response_given) {
-    beta.draw <- Z.draw <- Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+    beta.draw <- Z.draw <- Ym.draw <- VStar.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   }
   
   if (!missingness_in_data) {
@@ -1293,13 +1293,7 @@ bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL
   }
   
   if (response_given) {
-    beta.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    
-    Z.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    
-    .draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    
-    Ym.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
+    beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- VStar.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
     
     if (sparsity) {
       gamma.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
@@ -1467,7 +1461,7 @@ bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL
     
     beta0 <- matrix(mvrnorm(1, mu = c(rep(0, n_beta)), Sigma = Sigma_beta))
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
-    0 <- matrix(1/rgamma(1, shape = shape, rate = rate))
+    tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
     
     if (sparsity) {
       p0 <- 0.5
@@ -1511,6 +1505,7 @@ bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL
     beta.draw[[1]][[1,1]] <- beta0
     Z.draw[[1]][[1,1]] <- Z0
     tau2.draw[[1]][[1,1]] <- tau20
+    VStar.draw[[1]][[1,1]] <- VStar0
 
     if (missingness_in_response) {
       Ym.draw[[1]][[1,1]] <- Ym0
@@ -1836,6 +1831,9 @@ bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL
       
       VStar.iter <- cbind(1, do.call(cbind, V.iter.star.joint), do.call(cbind, Vs.iter.star))
       
+      # Save the current VStar
+      VStar.draw[[iter+1]][[1,1]] <- VStar.iter
+      
       # -------------------------------------------------------------------------
       # Posterior sample for W
       # -------------------------------------------------------------------------
@@ -2032,36 +2030,26 @@ bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL
   # Calculating the joint and individual structure, scaled to the data
   # ---------------------------------------------------------------------------
   
-  # Storing the joint structure at each Gibbs sampling iteration
-  Joint.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  # Storing the structures at each Gibbs sampling iteration
+  J.draw <- A.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   
-  # Storing the individual structure at each Gibbs sampling iteration
-  Indiv.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  # Calculating the structure for Y at each Gibbs sampling iteration
+  EY.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   
   if (is.null(scores)) {
     for (iter in 1:nsample) {
       for (s in 1:q) {
         # Calculating the joint structure and scaling by sigma.mat
-        Joint.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+        J.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
         
         # Calculating the individual structure and scaling by sigma.mat
-        Indiv.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+        A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
       }
-    }
-  }
-  
-  # ---------------------------------------------------------------------------
-  # Calculating the posterior mean
-  # ---------------------------------------------------------------------------
-  
-  # Storing the posterior mean for the joint and individual structure
-  Joint.mean <- matrix(list(), nrow = q, ncol = 1)
-  Indiv.mean <- matrix(list(), nrow = q, ncol = 1)
-  
-  if (is.null(scores)) {
-    for (s in 1:q) {
-      Joint.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Joint.draw[[iter]][[s,1]]))/length(Joint.draw)
-      Indiv.mean[[s,1]] <- Reduce("+", lapply(1:nsample, function(iter) Indiv.draw[[iter]][[s,1]]))/length(Indiv.draw)
+      
+      # Calculate the structure for Y
+      if (response_given) {
+        EY.draw[[iter]][[1,1]] <- VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]]
+      }
     }
   }
   
@@ -2069,9 +2057,9 @@ bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL
   list(data = data, # Returning the scaled version of the data
         Y = Y, # Return the response vector
         sigma.mat = sigma.mat, # Scaling factors
-        Joint.draw = Joint.draw, Indiv.draw = Indiv.draw, # Underlying structure
-        Joint.mean = Joint.mean, Indiv.mean = Indiv.mean, # Posterior mean of structures
+        J.draw = J.draw, A.draw = A.draw, EY.draw = EY.draw, # Underlying structure
         V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
+        VStar.draw = VStar.draw, # Components that predict Y,
         Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
         scores = scores, # Scores if provided by another method 
         ranks = c(r, r.vec), # Ranks
@@ -3962,9 +3950,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   library(doParallel)
   library(foreach)
   library(sup.r.jive)
+  library(natural)
   
   # The model options
-  models <- c("sJIVE", "BIDIFAC", "BIDIFAC+", "JIVE", "MOFA", "BPMF", "BPMF_old")
+  models <- c("sJIVE", "BIDIFAC", "BIDIFAC+", "JIVE", "MOFA", "BPMF_Full_Mode", "BPMF_Data_Mode")
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
@@ -3972,7 +3961,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
     if (mod == "test") {
@@ -4113,7 +4102,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
 
     Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = FALSE)
     EY_test[[1,1]] <- (EY_test[[1,1]] - attr(Y_test[[1,1]], "scaled:center"))
-    
+
     Y[[1,1]] <- scale(Y[[1,1]], center = TRUE, scale = FALSE)
     EY[[1,1]] <- (EY[[1,1]] - attr(Y[[1,1]], "scaled:center"))
     
@@ -4378,13 +4367,13 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       })
     }
     
-    if (mod == "BPMF") {
+    if (mod == "BPMF_Full_Mode") {
       # Setting the test response to NA
       Y_NA_for_test <- Y
       Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
       
       # Running BPMF
-      mod.out <- bpmf(true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
+      mod.out <- bpmf_full_mode(true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
       
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
@@ -4446,13 +4435,13 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       })
     }
     
-    if (mod == "BPMF_old") {
+    if (mod == "BPMF_Data_Mode") {
       # Setting the test response to NA
       Y_NA_for_test <- Y
       Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
       
       # Running BPMF
-      mod.out <- bpmf_old(true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
+      mod.out <- bpmf_data_mode(data = true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
       
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
