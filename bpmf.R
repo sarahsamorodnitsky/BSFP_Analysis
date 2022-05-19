@@ -8,6 +8,7 @@ library(foreach)
 library(Matrix)
 library(MASS)
 library(truncnorm)
+library(natural)
 # library(MCMCpack)
 
 # -----------------------------------------------------------------------------
@@ -15,7 +16,7 @@ library(truncnorm)
 # -----------------------------------------------------------------------------
 
 # This version of BPMF is initialized with BIDIFAC+ with Y as a source
-bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE, starting_values = NULL) {
+bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE, starting_values = NULL) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector, Y, if given
   
@@ -130,8 +131,10 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
     # If a response vector is given, scale Y
     if (response_given) {
       
-      # Save the estimated error variance
-      sigma.mat[s+1,] <- sigma.rmt(Y)
+      # Save the estimated error variance using the natural lasso
+      data_combined <- do.call(rbind, scaled_data)
+      nl_cv <- nlasso_cv(x = t(data_combined), y = Y)
+      sigma.mat[s+1,] <- nl_cv$sig_obj
       
       # Scale the response
       scaled_Y <- Y/sigma.mat[s+1,]
@@ -1152,7 +1155,7 @@ bpmf <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NU
 }
 
 # This version initializes with BIDIFAC WITHOUT y as a source
-bpmf_old <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
+bpmf_mode_of_data <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
   
@@ -3961,7 +3964,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   library(sup.r.jive)
   
   # The model options
-  models <- c("sJIVE", "BIDIFAC", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
+  models <- c("sJIVE", "BIDIFAC", "BIDIFAC+", "JIVE", "MOFA", "BPMF", "BPMF_old")
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
@@ -4382,6 +4385,74 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Running BPMF
       mod.out <- bpmf(true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
+      
+      # Saving the joint structure
+      mod.joint.iter <- lapply(1:nsample, function(iter) {
+        lapply(1:q, function(s) {
+          mod.out$J.draw[[iter]][[s,1]]
+        })
+      })
+      
+      # Taking the posterior mean
+      mod.joint <- lapply(1:q, function(s) {
+        # Save the joint structure at each iteration for source
+        joint.source <- lapply((burnin+1):nsample, function(iter) {
+          mod.joint.iter[[iter]][[s]]
+        })
+        # Take the mean
+        Reduce("+", joint.source)/length(joint.source)
+      })
+      
+      # Saving the individual structure
+      mod.individual.iter <- lapply(1:nsample, function(iter) {
+        lapply(1:q, function(s) {
+          mod.out$A.draw[[iter]][[s,1]]
+        })
+      })
+      
+      # Taking the posterior mean
+      mod.individual <- lapply(1:q, function(s) {
+        # Save the joint structure at each iteration for source
+        indiv.source <- lapply((burnin+1):nsample, function(iter) {
+          mod.individual.iter[[iter]][[s]]
+        })
+        # Take the mean
+        Reduce("+", indiv.source)/length(indiv.source)
+      })
+      
+      # Saving the joint rank
+      joint.rank <- mod.out$ranks[1]
+      
+      # Saving the individual ranks
+      indiv.rank <- mod.out$ranks[-1]
+      
+      # Saving the joint scores
+      if (joint.rank != 0) {
+        joint.scores <- Reduce("+", lapply((burnin+1):nsample, function(iter) {
+          mod.out$V.draw[[iter]][[1,1]]
+        }))/(nsample-burnin)
+      }
+      if (joint.rank == 0) {
+        joint.scores <- NULL
+      }
+      
+      # Saving the individual scores
+      indiv.scores <- lapply(1:q, function(source) {
+        if (indiv.rank[source] != 0) {
+          indiv.scores <- Reduce("+", lapply((burnin+1):nsample, function(iter) {
+            mod.out$Vs.draw[[iter]][[1,source]]
+          }))/(nsample-burnin)
+        }
+      })
+    }
+    
+    if (mod == "BPMF_old") {
+      # Setting the test response to NA
+      Y_NA_for_test <- Y
+      Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
+      
+      # Running BPMF
+      mod.out <- bpmf_old(true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
       
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
