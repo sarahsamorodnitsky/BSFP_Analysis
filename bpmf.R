@@ -2709,7 +2709,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   # -------------------------------------------------------------------------
   
   q <- length(p.vec)
-  n_beta <- sum(ranks)
+  n_beta <- 1 + sum(ranks)
   r <- ranks[1]
   r.vec <- ranks[-1]
   
@@ -2813,7 +2813,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   if (!is.null(response)) {
     
     Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
-    diag(Sigma_beta) <- rep(beta_vars, c(r, r.vec))
+    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
     
     if (!sparsity) {
       # Generate betas
@@ -2879,7 +2879,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
       if (r.vec[s] == 0) Vs.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
     }
     
-    VStar <- cbind(do.call(cbind, V.star.joint), do.call(cbind, Vs.star))
+    VStar <- cbind(1, do.call(cbind, V.star.joint), do.call(cbind, Vs.star))
     
     if (response == "binary") {
       Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
@@ -4001,6 +4001,9 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # Save a burn-in
     burnin <- nsample/2
     
+    # Save the error variance estimates as NULL
+    sigma.mat <- NULL
+    
     # Set the indices of the sources
     p.ind <- lapply(1:q, function(s) {
       if (s == 1) {
@@ -4373,7 +4376,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
       
       # Running BPMF
-      mod.out <- bpmf_full_mode(true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
+      mod.out <- bpmf_full_mode(data = true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
       
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
@@ -4433,6 +4436,9 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
           }))/(nsample-burnin)
         }
       })
+      
+      # Save the error standard deviation estimates
+      sigma.mat <- mod.out$sigma.mat
     }
     
     if (mod == "BPMF_Data_Mode") {
@@ -4546,7 +4552,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       }))
     }
     
-    if (mod == "BPMF") {
+    if (mod == "BPMF_Full_Mode" | mod == "BPMF_Data_Mode") {
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
       Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
         mod.out$EY.draw[[iter]][[1,1]]
@@ -4643,17 +4649,17 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # -------------------------------------------------------------------------
     
     # Comparing the predicted Y to the training and test Y
-    mse_y_train <- frob(Y.fit[1:n,] - Y_train[[1,1]])/frob(Y_train[[1,1]])
-    mse_y_test <- frob(Y.fit[(n+1):(2*n),] - Y_test[[1,1]])/frob(Y_test[[1,1]])
+    mse_EY_train <- frob(Y.fit[1:n,] - EY_train[[1,1]])/frob(EY_train[[1,1]])
+    mse_EY_test <- frob(Y.fit[(n+1):(2*n),] - Y_test[[1,1]])/frob(EY_test[[1,1]])
     
     # Save 
     save(joint.recovery.structure.train, joint.recovery.structure.test,
          indiv.recovery.structure.train, indiv.recovery.structure.test,
-         mse_y_train, mse_y_test, coverage_EY_train, coverage_EY_test, mod.ranks, 
+         mse_EY_train, mse_EY_test, coverage_EY_train, coverage_EY_test, mod.ranks, sigma.mat,
          file = paste0("~/BayesianPMF/03Simulations/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda"))
     
-    res <- c(joint.recovery.structure.train, joint.recovery.structure.test, indiv.recovery.structure.train, indiv.recovery.structure.test, mse_y_train, mse_y_test, coverage_EY_train, coverage_EY_test, mod.ranks)
-    names(res) <- c("joint mse (train)", "joint mse (test)", "indiv mse (train)", "indiv mse (test)", "y mse (train)", "y mse (test)", "coverage y (train)", "coverage y (test)", "joint rank", paste("indiv rank", 1:q))
+    res <- c(joint.recovery.structure.train, joint.recovery.structure.test, indiv.recovery.structure.train, indiv.recovery.structure.test, mse_EY_train, mse_EY_test, coverage_EY_train, coverage_EY_test, mod.ranks)
+    names(res) <- c("joint mse (train)", "joint mse (test)", "indiv mse (train)", "indiv mse (test)", "E(Y) mse (train)", "E(Y) mse (test)", "coverage y (train)", "coverage y (test)", "joint rank", paste("indiv rank", 1:q))
     
     res
   }
