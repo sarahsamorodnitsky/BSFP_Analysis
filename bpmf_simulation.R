@@ -16,6 +16,7 @@ q <- 2
 
 # Joint and individual ranks (ranks[1] = joint, ranks[2:r_total] = individual)
 ranks <- c(1,1,1)
+names(ranks) <- c("joint", paste("indiv", 1:q))
 
 # Number of predictors for each source
 p.vec = c(100, 100)
@@ -29,17 +30,6 @@ true_params <- list(error_vars = c(1,1,1), # Error variance for each source
                     indiv_vars = c(1,1), # Variance for each individual structure
                     beta_vars = c(1, rep(1, q)) # Variance of joint and individual effects
                     )
-
-# Setting the model variances
-joint_var <- 1/(sqrt(n) + sqrt(sum(p.vec) + 1)) # Number of samples and number of features across all sources and Y
-indiv_vars <- sapply(1:q, function(s) 1/(sqrt(n) + sqrt(p.vec[s] + 1))) # Number of samples and number of features in each source plus Y
-
-# Setting the model variances
-model_params <- list(error_vars = c(1,1,1), # Error variance for each source
-                     joint_var = joint_var, # Variance for joint structure
-                     indiv_vars = indiv_vars, # Variance for each individual structure
-                     beta_vars = c(joint_var, indiv_vars) # Variance of intercept effect and each joint effect 
-                     )   
 
 # Parameters for the simulation
 nsample <- 2000
@@ -207,15 +197,26 @@ for (s2nX in s2nX.list) {
 }
 
 # -----------------------------------------------------------------------------
-# BPMF
+# BPMF (Full Mode)
 # -----------------------------------------------------------------------------
+
+# Setting the model variances
+joint_var <- 1/(sqrt(n) + sqrt(sum(p.vec) + 1)) # Number of samples and number of features across all sources and Y
+indiv_vars <- sapply(1:q, function(s) 1/(sqrt(n) + sqrt(p.vec[s] + 1))) # Number of samples and number of features in each source plus Y
+
+# Setting the model variances
+model_params <- list(error_vars = c(1,1,1), # Error variance for each source
+                     joint_var = joint_var, # Variance for joint structure
+                     indiv_vars = indiv_vars, # Variance for each individual structure
+                     beta_vars = c(joint_var, indiv_vars) # Variance of intercept effect and each joint effect 
+)   
 
 BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
-    BPMF.res[[ind]] <- model_comparison(mod = "BPMF", p.vec, n, ranks, response = "continuous", true_params, model_params,
+    BPMF.res[[ind]] <- model_comparison(mod = "BPMF_Full_Mode", p.vec, n, ranks, response = "continuous", true_params, model_params,
                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
   }
@@ -224,7 +225,7 @@ for (s2nX in s2nX.list) {
 # Check that all conditions ran
 all_s2n <- c()
 combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/BPMF")
+all_files <- list.files("~/BayesianPMF/03Simulations/BPMF_Full_Mode")
 al_files_split <- strsplit(all_files, split = "_")
 ind <- 1
 for (s2nX in s2nX.list) {
@@ -238,6 +239,49 @@ for (s2nX in s2nX.list) {
 }
 names(all_s2n) <- combos
 
+# -----------------------------------------------------------------------------
+# BPMF (Data Mode)
+# -----------------------------------------------------------------------------
+
+# Setting the model variances
+joint_var <- 1/(sqrt(n) + sqrt(sum(p.vec))) # Number of samples and number of features across all sources and Y
+indiv_vars <- sapply(1:q, function(s) 1/(sqrt(n) + sqrt(p.vec[s]))) # Number of samples and number of features in each source plus Y
+
+# Setting the model variances
+model_params <- list(error_vars = c(1,1), # Error variance for each source
+                     joint_var = joint_var, # Variance for joint structure
+                     indiv_vars = indiv_vars, # Variance for each individual structure
+                     beta_vars = c(10, 1, rep(1,q)), # Variance of intercept effect and each joint effect 
+                     response_vars = c(shape = 1, rate = 1) # Hyperparameters for prior on tau2
+)   
+
+BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    BPMF.res[[ind]] <- model_comparison(mod = "BPMF_Data_Mode", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                                        s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
+# Check that all conditions ran
+all_s2n <- c()
+combos <- c()
+all_files <- list.files("~/BayesianPMF/03Simulations/BPMF_Data_Mode")
+al_files_split <- strsplit(all_files, split = "_")
+ind <- 1
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    # Select all the files corresponding to current s2nX and s2nY 
+    files_for_s2nX_s2nY <- all_files[sapply(al_files_split, function(file) (file[5] == s2nX) & (file[7] == paste0(s2nY, ".rda")))]
+    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
+    combos[ind] <- paste(s2nX, "&", s2nY)
+    ind <- ind + 1
+  }
+}
+names(all_s2n) <- combos
 
 # -----------------------------------------------------------------------------
 # Results
