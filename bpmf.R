@@ -16,7 +16,7 @@ library(natural)
 # -----------------------------------------------------------------------------
 
 # This version of BPMF is initialized with BIDIFAC+ with Y as a source
-bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE, starting_values = NULL) {
+bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE, starting_values = NULL, sigma.rmt = TRUE) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector, Y, if given
   
@@ -35,6 +35,7 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   # starting_values = list of starting values for V, U, W, Vs. If NULL and nninit = TRUE, init with BIDIFAC+,
   #    if NULL and nninit = FALSE, init from prior. If not NULL, will init with provided starting values unless 
   #    nninit. 
+  # sigma.rmt (logical): should the data be scaled to have error variance 1?
   # ---------------------------------------------------------------------------
   
   # ---------------------------------------------------------------------------
@@ -107,7 +108,7 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   scaled_Y <- Y
   
   # If initializing with BIDIFAC+, scale data to have error variance 1
-  if (nninit) {
+  if (nninit & sigma.rmt) {
     
     # Create a matrix to store the estimated error sd
     if (!response_given) {
@@ -142,7 +143,7 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   }
   
   # If not initializing with BIDIFAC+, return a sigma matrix with 1s
-  if (!nninit) {
+  if (!nninit | (nninit & !sigma.rmt)) {
     
     # Create a matrix of 1s
     if (!response_given) {
@@ -263,7 +264,9 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   r_total <- n_beta <- r + sum(r.vec)
   
   # Warning if the rank is 0
-  warning("Rank of decomposition is 0. No structure will be generated.")
+  if (n_beta == 0) {
+    warning("Rank of decomposition is 0. No structure will be generated.")
+  }
   
   # If a response is given, set up the variance matrix for the prior of the betas using the ranks and 
   # set up rank indices for betas
@@ -2043,7 +2046,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
         J.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
         
         # Calculating the individual structure and scaling by sigma.mat
-        A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,1]] %*% t(Vs.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+        A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,s]] %*% t(Vs.draw[[iter]][[1,s]])) * sigma.mat[s,1]
       }
       
       # Calculate the structure for Y
@@ -3953,11 +3956,11 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   library(natural)
   
   # The model options
-  models <- c("sJIVE", "BIDIFAC", "BIDIFAC+", "JIVE", "MOFA", "BPMF_Full_Mode", "BPMF_Data_Mode")
+  models <- c("sJIVE", "BIDIFAC", "BIDIFAC+", "JIVE", "MOFA", "BPMF_Full_Mode", "BPMF_Data_Mode", "BPMF_Full_Mode_No_Scaling")
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
-  funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
+  funcs <- c("bpmf_data", "center_data", "bpmf_full_mode", "bpmf_data_mode", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
@@ -3983,9 +3986,14 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # Saving the data
     true_data <- sim_data$data
     true_data_list <- lapply(true_data, function(s) s)
-    q <- length(p.vec)
+    
+    # Saving the underlying structure
     joint.structure <- sim_data$joint.structure
     indiv.structure <- sim_data$indiv.structure
+    EY <- sim_data$EY
+    
+    # Save the number of sources (not including Y)
+    q <- length(p.vec)
     
     # The response
     Y <- sim_data$Y
@@ -3996,7 +4004,6 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     # The response parameters
     beta <- sim_data$beta
-    EY <- sim_data$EY
     
     # Save a burn-in
     burnin <- nsample/2
@@ -4066,7 +4073,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # -------------------------------------------------------------------------
     
     for (s in 1:q) {
-      # Center the full true data (transpose to scale the cols (features) than transpose back)
+      # Center the full true data (transpose to center the cols (features) than transpose back)
       true_data[[s,1]] <- t(scale(t(true_data[[s,1]]), center = TRUE, scale = FALSE))
       true_data_list[[s]] <- t(scale(t(true_data_list[[s]]), center = TRUE, scale = FALSE))
       
@@ -4509,6 +4516,77 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       })
     }
     
+    if (mod == "BPMF_Full_Mode_No_Scaling") {
+      # Setting the test response to NA
+      Y_NA_for_test <- Y
+      Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
+      
+      # Running BPMF
+      mod.out <- bpmf_full_mode(data = true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample, sigma.rmt = FALSE)
+      
+      # Saving the joint structure
+      mod.joint.iter <- lapply(1:nsample, function(iter) {
+        lapply(1:q, function(s) {
+          mod.out$J.draw[[iter]][[s,1]]
+        })
+      })
+      
+      # Taking the posterior mean
+      mod.joint <- lapply(1:q, function(s) {
+        # Save the joint structure at each iteration for source
+        joint.source <- lapply((burnin+1):nsample, function(iter) {
+          mod.joint.iter[[iter]][[s]]
+        })
+        # Take the mean
+        Reduce("+", joint.source)/length(joint.source)
+      })
+      
+      # Saving the individual structure
+      mod.individual.iter <- lapply(1:nsample, function(iter) {
+        lapply(1:q, function(s) {
+          mod.out$A.draw[[iter]][[s,1]]
+        })
+      })
+      
+      # Taking the posterior mean
+      mod.individual <- lapply(1:q, function(s) {
+        # Save the joint structure at each iteration for source
+        indiv.source <- lapply((burnin+1):nsample, function(iter) {
+          mod.individual.iter[[iter]][[s]]
+        })
+        # Take the mean
+        Reduce("+", indiv.source)/length(indiv.source)
+      })
+      
+      # Saving the joint rank
+      joint.rank <- mod.out$ranks[1]
+      
+      # Saving the individual ranks
+      indiv.rank <- mod.out$ranks[-1]
+      
+      # Saving the joint scores
+      if (joint.rank != 0) {
+        joint.scores <- Reduce("+", lapply((burnin+1):nsample, function(iter) {
+          mod.out$V.draw[[iter]][[1,1]]
+        }))/(nsample-burnin)
+      }
+      if (joint.rank == 0) {
+        joint.scores <- NULL
+      }
+      
+      # Saving the individual scores
+      indiv.scores <- lapply(1:q, function(source) {
+        if (indiv.rank[source] != 0) {
+          indiv.scores <- Reduce("+", lapply((burnin+1):nsample, function(iter) {
+            mod.out$Vs.draw[[iter]][[1,source]]
+          }))/(nsample-burnin)
+        }
+      })
+      
+      # Save the error standard deviation estimates
+      sigma.mat <- mod.out$sigma.mat
+    }
+    
     if (mod != "test") {
       # Combining the ranks
       mod.ranks <- c(joint.rank, indiv.rank)
@@ -4527,8 +4605,8 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       all.scores.train <- all.scores[1:n,,drop=FALSE]
       
       # Fitting the Bayesian linear model
-      mod.bayes <- bpmf(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
-                        ranks = mod.ranks, scores = all.scores.train[,-1], nsample = nsample)
+      mod.bayes <- bpmf_data_mode(data = training_data, Y = Y_train, nninit = FALSE, model_params = model_params, 
+                                  ranks = mod.ranks, scores = all.scores.train[,-1], nsample = nsample)
       
       # Calculate the predicted E(Y) at each Gibbs sampling iteration using training and testing scores
       Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
@@ -4552,7 +4630,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       }))
     }
     
-    if (mod == "BPMF_Full_Mode" | mod == "BPMF_Data_Mode") {
+    if (mod == "BPMF_Full_Mode" | mod == "BPMF_Data_Mode" | mod == "BPMF_Full_Mode_No_Scaling") {
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
       Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
         mod.out$EY.draw[[iter]][[1,1]]
@@ -4650,7 +4728,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     # Comparing the predicted Y to the training and test Y
     mse_EY_train <- frob(Y.fit[1:n,] - EY_train[[1,1]])/frob(EY_train[[1,1]])
-    mse_EY_test <- frob(Y.fit[(n+1):(2*n),] - Y_test[[1,1]])/frob(EY_test[[1,1]])
+    mse_EY_test <- frob(Y.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
     
     # Save 
     save(joint.recovery.structure.train, joint.recovery.structure.test,
@@ -5105,7 +5183,7 @@ create_validation_table <- function(results_list, condition) {
   dt
 }
 
-create_simulation_table <- function(mod.list, path.list, s2nX, s2nY) {
+create_simulation_table <- function(simulation_results, mod.list, path.list, s2nX, s2nY) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -5118,17 +5196,12 @@ create_simulation_table <- function(mod.list, path.list, s2nX, s2nY) {
   # ---------------------------------------------------------------------------
   
   # Set up the results table
-  simulation_results <- data.frame(s2nX = rep(s2nX, 11),
-                                   s2nY = rep(s2nY, 11),
-                                   Metric = numeric(11),
-                                   BPMF = numeric(11),
-                                   JIVE = numeric(11),
-                                   `BIDIFAC+` = numeric(11),
-                                   check.names = FALSE)
   simulation_results$Metric <- c("MSE Joint (train)", "MSE Joint (test)", "MSE Indiv (train)",
-                                 "MSE Indiv (test)", "MSE Y (train)", "MSE Y (test)", 
+                                 "MSE Indiv (test)", "MSE EY (train)", "MSE EY (test)", 
                                  "Coverage EY (train)", "Coverage EY (test)", "Joint Rank", 
-                                 "Indiv Rank 1", "Indiv Rank 2")
+                                 "Indiv Rank 1", "Indiv Rank 2", "Estim Y Err Var")
+  simulation_results$s2nX <- s2nX
+  simulation_results$s2nY <- s2nY
   
   # Iterate through the models
   for (mod in mod.list) {
@@ -5137,28 +5210,42 @@ create_simulation_table <- function(mod.list, path.list, s2nX, s2nY) {
     all_files <- list.files(path)
     all_files_split <- strsplit(all_files, split = "_")
     
+    # Save the indices of the current s2n
+    s2nX_ind <- which(all_files_split[[1]] == "s2nX") + 1
+    s2nY_ind <- which(all_files_split[[1]] == "s2nY") + 1
+    
     # Save the names of the current results
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[5] == s2nX) & (file[7] == paste0(s2nY, ".rda")))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[s2nX_ind] == s2nX) & (file[s2nY_ind] == paste0(s2nY, ".rda")))]
     
     # Create a temporary table to load the results into
     simulation_results_temp <- data.frame(joint.structure.train = numeric(length(files_for_s2nX_s2nY)),
                                           joint.structure.test = numeric(length(files_for_s2nX_s2nY)),
                                           indiv.structure.train = numeric(length(files_for_s2nX_s2nY)),
                                           indiv.structure.test = numeric(length(files_for_s2nX_s2nY)),
-                                          mse_y_train = numeric(length(files_for_s2nX_s2nY)),
-                                          mse_y_test = numeric(length(files_for_s2nX_s2nY)),
+                                          mse_ey_train = numeric(length(files_for_s2nX_s2nY)),
+                                          mse_ey_test = numeric(length(files_for_s2nX_s2nY)),
                                           coverage_EY_train = numeric(length(files_for_s2nX_s2nY)),
                                           coverage_EY_test = numeric(length(files_for_s2nX_s2nY)),
                                           joint.rank = numeric(length(files_for_s2nX_s2nY)),
                                           indiv.rank1 = numeric(length(files_for_s2nX_s2nY)),
-                                          indiv.rank2 = numeric(length(files_for_s2nX_s2nY)))
+                                          indiv.rank2 = numeric(length(files_for_s2nX_s2nY)),
+                                          est.y.err.var = numeric(length(files_for_s2nX_s2nY)))
     
     # Iteratively load in the results
     for (ind in 1:length(files_for_s2nX_s2nY)) {
       # Load in the results
       file <- files_for_s2nX_s2nY[ind]
       res <- load(paste0(path, file))
-      simulation_results_temp[ind,] <- unlist(sapply(res, function(met) get(met)))
+      
+      # If no error variance for Y was estimated
+      if (is.null(sigma.mat)) {
+        err.y <- NA 
+      }
+      if (!is.null(sigma.mat)) {
+        err.y <- sigma.mat[3]
+      }
+      
+      simulation_results_temp[ind,] <- c(unlist(sapply(res, function(met) get(met)))[1:11], err.y)
     }
     
     # Take the mean for the results
