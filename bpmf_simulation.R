@@ -36,7 +36,7 @@ nsample <- 2000
 nsim <- 100
 
 # Signal-to-noise ratios to consider
-s2nX.list <- s2nY.list <- c(0.99/0.01, 0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75, 0.1/0.9, 0.01/0.99)
+s2nX.list <- s2nY.list <- c(0.99/0.01, 0.9/0.1, 0.75/0.25) #, 0.5/0.5, 0.25/0.75, 0.1/0.9, 0.01/0.99)
 # s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
 
 # -----------------------------------------------------------------------------
@@ -324,6 +324,34 @@ for (s2nX in s2nX.list) {
   }
 }
 names(all_s2n) <- combos
+
+# -----------------------------------------------------------------------------
+# BPMF (TEST - initializing with BIDIFAC+ and Y, no scaling, estimating tau2)
+# -----------------------------------------------------------------------------
+
+# Setting the model variances
+joint_var <- 1/(sqrt(n) + sqrt(sum(p.vec))) # Number of samples and number of features across all sources and Y
+indiv_vars <- sapply(1:q, function(s) 1/(sqrt(n) + sqrt(p.vec[s]))) # Number of samples and number of features in each source plus Y
+
+# Setting the model variances
+model_params <- list(error_vars = c(X1 = 1, X2 = 1), # Error variance for each source
+                     joint_var = joint_var, # Variance for joint structure
+                     indiv_vars = indiv_vars, # Variance for each individual structure
+                     beta_vars = c(intercept = 10, joint  = 1, indiv = rep(1,q)), # Variance of intercept effect and each joint effect 
+                     response_vars = c(shape = 1, rate = 1) # Hyperparameters for prior on tau2
+)   
+
+BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    BPMF.res[[ind]] <- model_comparison(mod = "BPMF_Data_Mode", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                                        s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
 
 # -----------------------------------------------------------------------------
 # Results
