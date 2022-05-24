@@ -9,6 +9,7 @@ library(Matrix)
 library(MASS)
 library(truncnorm)
 library(natural)
+library(RSpectra)
 # library(MCMCpack)
 
 # -----------------------------------------------------------------------------
@@ -16,7 +17,7 @@ library(natural)
 # -----------------------------------------------------------------------------
 
 # This version of BPMF is initialized with BIDIFAC+ with Y as a source
-bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE, starting_values = NULL, sigma.rmt = TRUE) {
+bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, nsample, progress = TRUE, starting_values = NULL, err.y.est = TRUE) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector, Y, if given
   
@@ -35,7 +36,7 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   # starting_values = list of starting values for V, U, W, Vs. If NULL and nninit = TRUE, init with BIDIFAC+,
   #    if NULL and nninit = FALSE, init from prior. If not NULL, will init with provided starting values unless 
   #    nninit. 
-  # sigma.rmt (logical): should the data be scaled to have error variance 1?
+  # err.y.est (logical): should the data be scaled to have error variance 1?
   # ---------------------------------------------------------------------------
   
   # ---------------------------------------------------------------------------
@@ -108,7 +109,7 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   scaled_Y <- Y
   
   # If initializing with BIDIFAC+, scale data to have error variance 1
-  if (nninit & sigma.rmt) {
+  if (nninit & err.y.est) {
     
     # Create a matrix to store the estimated error sd
     if (!response_given) {
@@ -143,7 +144,7 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   }
   
   # If not initializing with BIDIFAC+, return a sigma matrix with 1s
-  if (!nninit | (nninit & !sigma.rmt)) {
+  if (!nninit | (nninit & !err.y.est)) {
     
     # Create a matrix of 1s
     if (!response_given) {
@@ -182,8 +183,8 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
       }
     })
     
-    # Save number of samples per source
-    n.ind <- list(n)
+    # Save indices of samples per source
+    n.ind <- list(1:n)
     
     # If no response is given, p.ind.list should only include the sources
     if (!response_given) {
@@ -649,7 +650,7 @@ bpmf_full_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
       SigmaVsInv <- matrix(list(), nrow = q, ncol = q)
       
       for (s in 1:q) {
-        SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), error_vars[q+1]))
+        SigmaVsInv[[s,s]] <- diag(c(rep(1/error_vars[s], p.vec[s]), 1/error_vars[q+1]))
       }
     }
     
@@ -2577,31 +2578,50 @@ bidifac.plus.given <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, S = list(),
   max.comb=length(p.ind.list)
   X0.resid = X0-Reduce('+',S)
   obj.prev <- sum(X0.resid^2)+2*sum(pen)
-  for(jj in 1:max.iter){
-    print(jj)
-    for(k in 1:max.comb){
-      print(paste('*',k))
-      X0.temp <- X0.resid+S[[k]]
-      cur.p.ind <- p.ind.list[[k]] 
-      cur.n.ind <- n.ind.list[[k]] 
-      a <- svd(X0.temp[cur.p.ind,cur.n.ind],nu=0,nv=0)$d
-      nc <- sum(a>(lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind)))))
-      if(nc>0){
-        SVD <- svd(X0.temp[cur.p.ind,cur.n.ind], nu=nc,nv=nc)
-        s.vals <- pmax(SVD$d[1:nc]-lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind))),0)
-        Diag <- diag(s.vals,nrow=nc,ncol=nc)
-        Est <- SVD$u%*%Diag%*%t(SVD$v)
-        S[[k]] <- array(rep(0,prod(dim(X0))),dim=dim(X0))
-        S[[k]][cur.p.ind,cur.n.ind] <- Est
-        X0.resid[cur.p.ind,cur.n.ind] <- X0.temp[cur.p.ind,cur.n.ind]-Est
-        X0.resid = X0-Reduce('+',S)
-        pen[k] <- lambda*(sqrt(length(cur.n.ind))+sqrt(length(cur.p.ind)))*(sum(s.vals))
-        obj.vec <- c(obj.vec,sum(X0.resid^2)+2*sum(pen))
+  
+  conv <- FALSE
+  while(!conv) {
+    for(jj in 1:max.iter){
+      print(jj)
+      for(k in 1:max.comb){
+        print(paste('*',k))
+        X0.temp <- X0.resid+S[[k]]
+        cur.p.ind <- p.ind.list[[k]] 
+        cur.n.ind <- n.ind.list[[k]] 
+        a <- svd(X0.temp[cur.p.ind,cur.n.ind],nu=0,nv=0)$d
+        nc <- sum(a>(lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind)))))
+        if(nc>0){
+          SVD <- svd(X0.temp[cur.p.ind,cur.n.ind], nu=nc,nv=nc)
+          s.vals <- pmax(SVD$d[1:nc]-lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind))),0)
+          Diag <- diag(s.vals,nrow=nc,ncol=nc)
+          Est <- SVD$u%*%Diag%*%t(SVD$v)
+          S[[k]] <- array(rep(0,prod(dim(X0))),dim=dim(X0))
+          S[[k]][cur.p.ind,cur.n.ind] <- Est
+          X0.resid[cur.p.ind,cur.n.ind] <- X0.temp[cur.p.ind,cur.n.ind]-Est
+          X0.resid = X0-Reduce('+',S)
+          pen[k] <- lambda*(sqrt(length(cur.n.ind))+sqrt(length(cur.p.ind)))*(sum(s.vals))
+          obj.vec <- c(obj.vec,sum(X0.resid^2)+2*sum(pen))
+        }
       }
+      obj.cur <- sum(X0.resid^2)+2*sum(pen)
+      conv_check <- abs(obj.cur-obj.prev)<conv.thresh
+      if(conv_check) break
+      obj.prev <- sum(X0.resid^2)+2*sum(pen)
     }
-    obj.cur <- sum(X0.resid^2)+2*sum(pen)
-    if(abs(obj.cur-obj.prev)<conv.thresh) break
-    obj.prev <- sum(X0.resid^2)+2*sum(pen)
+    
+    # If model converged
+    if (conv_check) {
+      conv <- TRUE
+    }
+    
+    # If model did not converge
+    if (!conv_check) {
+      conv <- FALSE
+      max.iter <- 2*max.iter
+    }
+    
+    # Break after awhile
+    if (max.iter > 10000) break
   }
   
   Sums <- array(dim=c(max.comb,n.source,n.type))
@@ -2609,7 +2629,7 @@ bidifac.plus.given <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, S = list(),
     Sums[kk,j,i] = sum(S[[kk]][p.ind[[j]],n.ind[[i]]]^2)
   }}}
   
-  return(list(S=S,Sums=Sums,obj.vec=obj.vec))
+  return(list(S=S,Sums=Sums,obj.vec=obj.vec, conv=conv))
 }
 
 bidifac.plus.impute <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, all.miss, S = list(), pen=c(), given.inits = FALSE,max.iter=500,conv.thresh=0.001,temp.iter=2){
@@ -2626,38 +2646,54 @@ bidifac.plus.impute <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, all.miss, 
   obj.vec <- c(sum(X0^2))
   X0.resid = X0-Reduce('+',S)
   obj.prev <- sum(X0.resid^2)+2*sum(pen)
-  for(jj in 1:max.iter){
-    print(jj)
-    if(jj < temp.iter){
-      lambda <- 1+(temp.iter-1-jj)/temp.iter*temp.fac
-    }
-    #for(k in 1:max.comb){
-    for(k in c(1:max.comb)){
-      #     print(paste('*',k))
-      X0.temp <- X0.resid+S[[k]]
-      cur.p.ind <- p.ind.list[[k]] 
-      cur.n.ind <- n.ind.list[[k]] 
-      a <- svd(X0.temp[cur.p.ind,cur.n.ind],nu=0,nv=0)$d
-      nc <- sum(a>(lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind)))))
-      if(nc>0){
-        SVD <- svd(X0.temp[cur.p.ind,cur.n.ind], nu=nc,nv=nc)
-        s.vals <- pmax(SVD$d[1:nc]-lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind))),0)
-        Diag <- diag(s.vals,nrow=nc,ncol=nc)
-        Est <- SVD$u%*%Diag%*%t(SVD$v)
-        S[[k]] <- array(rep(0,prod(dim(X0))),dim=dim(X0))
-        S[[k]][cur.p.ind,cur.n.ind] <- Est
-        X0.resid[cur.p.ind,cur.n.ind] <- X0.temp[cur.p.ind,cur.n.ind]-Est
-        X0.resid = X0-Reduce('+',S)
-        pen[k] <- lambda*(sqrt(length(cur.n.ind))+sqrt(length(cur.p.ind)))*(sum(s.vals))
-        obj.vec <- c(obj.vec,sum(X0.resid^2)+2*sum(pen))
+  
+  conv <- FALSE
+  while (!conv) {
+    for(jj in 1:max.iter){
+      print(jj)
+      if(jj < temp.iter){
+        lambda <- 1+(temp.iter-1-jj)/temp.iter*temp.fac
       }
+      #for(k in 1:max.comb){
+      for(k in c(1:max.comb)){
+        #     print(paste('*',k))
+        X0.temp <- X0.resid+S[[k]]
+        cur.p.ind <- p.ind.list[[k]] 
+        cur.n.ind <- n.ind.list[[k]] 
+        a <- svd(X0.temp[cur.p.ind,cur.n.ind],nu=0,nv=0)$d
+        nc <- sum(a>(lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind)))))
+        if(nc>0){
+          SVD <- svd(X0.temp[cur.p.ind,cur.n.ind], nu=nc,nv=nc)
+          s.vals <- pmax(SVD$d[1:nc]-lambda*(sqrt(length(cur.p.ind))+sqrt(length(cur.n.ind))),0)
+          Diag <- diag(s.vals,nrow=nc,ncol=nc)
+          Est <- SVD$u%*%Diag%*%t(SVD$v)
+          S[[k]] <- array(rep(0,prod(dim(X0))),dim=dim(X0))
+          S[[k]][cur.p.ind,cur.n.ind] <- Est
+          X0.resid[cur.p.ind,cur.n.ind] <- X0.temp[cur.p.ind,cur.n.ind]-Est
+          X0.resid = X0-Reduce('+',S)
+          pen[k] <- lambda*(sqrt(length(cur.n.ind))+sqrt(length(cur.p.ind)))*(sum(s.vals))
+          obj.vec <- c(obj.vec,sum(X0.resid^2)+2*sum(pen))
+        }
+      }
+      Sig=Reduce('+',S)
+      X0[all.miss]=Sig[all.miss]
+      X0.resid = X0-Reduce('+',S)
+      obj.cur <- sum(X0.resid^2)+2*sum(pen)
+      conv_check <- abs(obj.cur-obj.prev)<conv.thresh
+      if(conv_check) break
+      obj.prev <- sum(X0.resid^2)+2*sum(pen)
     }
-    Sig=Reduce('+',S)
-    X0[all.miss]=Sig[all.miss]
-    X0.resid = X0-Reduce('+',S)
-    obj.cur <- sum(X0.resid^2)+2*sum(pen)
-    if(abs(obj.cur-obj.prev)<conv.thresh) break
-    obj.prev <- sum(X0.resid^2)+2*sum(pen)
+    
+    if (conv_check) {
+      conv <- TRUE
+    }
+    
+    if (!conv_check) {
+      conv <- FALSE
+      max.iter <- 2*max.iter
+    }
+    
+    if (max.iter > 10000) break
   }
   
   Sums <- array(dim=c(max.comb,n.source,n.type))
@@ -2665,7 +2701,7 @@ bidifac.plus.impute <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, all.miss, 
     Sums[kk,j,i] = sum(S[[kk]][p.ind[[j]],n.ind[[i]]]^2)
   }}}
   
-  return(list(S=S,Sums=Sums,obj.vec=obj.vec,Sig=Sig))
+  return(list(S=S,Sums=Sums,obj.vec=obj.vec,Sig=Sig, conv = conv))
 }
 
 # -----------------------------------------------------------------------------
@@ -3954,6 +3990,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   library(foreach)
   library(sup.r.jive)
   library(natural)
+  library(RSpectra)
   
   # The model options
   models <- c("sJIVE", "BIDIFAC", "BIDIFAC+", "JIVE", "MOFA", "BPMF_Full_Mode", "BPMF_Data_Mode", "BPMF_Full_Mode_No_Scaling")
@@ -3964,7 +4001,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
     if (mod == "test") {
@@ -4522,7 +4559,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
       
       # Running BPMF
-      mod.out <- bpmf_full_mode(data = true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample, sigma.rmt = FALSE)
+      mod.out <- bpmf_full_mode(data = true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample, err.y.est = FALSE)
       
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
