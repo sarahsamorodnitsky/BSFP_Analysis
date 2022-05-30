@@ -36,7 +36,7 @@ nsample <- 2000
 nsim <- 100
 
 # Signal-to-noise ratios to consider
-s2nX.list <- s2nY.list <- c(0.99/0.01, 0.9/0.1, 0.75/0.25) #, 0.5/0.5, 0.25/0.75, 0.1/0.9, 0.01/0.99)
+s2nX.list <- s2nY.list <- c(0.99/0.01, 0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75, 0.1/0.9, 0.01/0.99)
 # s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
 
 # -----------------------------------------------------------------------------
@@ -326,7 +326,7 @@ for (s2nX in s2nX.list) {
 names(all_s2n) <- combos
 
 # -----------------------------------------------------------------------------
-# BPMF (TEST - initializing with BIDIFAC+ and Y, no scaling, estimating tau2)
+# BPMF (TEST - initializing with BIDIFAC+ and Y, no scaling, fixing tau2 at 1)
 # -----------------------------------------------------------------------------
 
 # Setting the model variances
@@ -346,7 +346,34 @@ ind <- 1
 
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
-    BPMF.res[[ind]] <- model_comparison(mod = "BPMF_Data_Mode", p.vec, n, ranks, response = "continuous", true_params, model_params,
+    BPMF.res[[ind]] <- model_comparison(mod = "BPMF_test", p.vec, n, ranks, response = "continuous", true_params, model_params,
+                                        s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
+# -----------------------------------------------------------------------------
+# BPMF (TEST - initializing with BIDIFAC+ and Y, scaling, fixing tau2 at 1)
+# -----------------------------------------------------------------------------
+
+# Setting the model variances
+joint_var <- 1/(sqrt(n) + sqrt(sum(p.vec)+1)) # Number of samples and number of features across all sources and Y
+indiv_vars <- sapply(1:q, function(s) 1/(sqrt(n) + sqrt(p.vec[s] + 1))) # Number of samples and number of features in each source plus Y
+
+# Setting the model variances
+model_params <- list(error_vars = c(X1 = 1, X2 = 1), # Error variance for each source
+                     joint_var = joint_var, # Variance for joint structure
+                     indiv_vars = indiv_vars, # Variance for each individual structure
+                     beta_vars = c(intercept = 10, joint  = 1, indiv = rep(1,q)), # Variance of intercept effect and each joint effect 
+                     response_vars = c(shape = 1, rate = 1) # Hyperparameters for prior on tau2
+)   
+
+BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    BPMF.res[[ind]] <- model_comparison(mod = "BPMF_test_scale", p.vec, n, ranks, response = "continuous", true_params, model_params,
                                         s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
   }
@@ -364,25 +391,31 @@ simulation_results <- data.frame(s2nX = numeric(),
                                  BPMF_Full_Mode = numeric(),
                                  BPMF_Full_Mode_No_Scaling = numeric(),
                                  BPMF_Data_Mode = numeric(),
+                                 BPMF_test = numeric(),
+                                 BPMF_test_scale = numeric(),
                                  check.names = FALSE)
 
 # Iterate through the s2ns and append to the table
-for (s2nX in s2nX.list[1:4]) {
-  for (s2nY in s2nY.list[1:4]) {
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
     temp <- data.frame(s2nX = numeric(12),
                        s2nY = numeric(12),
                        Metric = character(12),
                        BPMF_Full_Mode = numeric(12),
                        BPMF_Full_Mode_No_Scaling = numeric(12),
                        BPMF_Data_Mode = numeric(12),
+                       BPMF_test = numeric(12),
+                       BPMF_test_scale = numeric(12),
                        check.names = FALSE)
     
     # Current results
     res <- create_simulation_table(simulation_results = temp,
-                                   mod.list = c("BPMF_Full_Mode", "BPMF_Full_Mode_No_Scaling", "BPMF_Data_Mode"),
+                                   mod.list = c("BPMF_Full_Mode", "BPMF_Full_Mode_No_Scaling", "BPMF_Data_Mode", "BPMF_test", "BPMF_test_scale"),
                                    path.list = list(BPMF_Full_Mode = "~/BayesianPMF/03Simulations/BPMF_Full_Mode/",
                                                     BPMF_Full_Mode_No_Scaling = "~/BayesianPMF/03Simulations/BPMF_Full_Mode_No_Scaling/",
-                                                    BPMF_Data_Mode = "~/BayesianPMF/03Simulations/BPMF_Data_Mode/"),
+                                                    BPMF_Data_Mode = "~/BayesianPMF/03Simulations/BPMF_Data_Mode/",
+                                                    BPMF_test = "~/BayesianPMF/03Simulations/BPMF_test/",
+                                                    BPMF_test_scale = "~/BayesianPMF/03Simulations/BPMF_test_scale/"),
                                    s2nX = s2nX, 
                                    s2nY = s2nY)
     # Save
