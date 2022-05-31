@@ -120,6 +120,18 @@ names(all_s2n) <- combos
 # BIDIFAC
 # -----------------------------------------------------------------------------
 
+# Setting the model variances
+joint_var <- 1/(sqrt(n) + sqrt(sum(p.vec))) # Number of samples and number of features across all sources and Y
+indiv_vars <- sapply(1:q, function(s) 1/(sqrt(n) + sqrt(p.vec[s]))) # Number of samples and number of features in each source plus Y
+
+# Setting the model variances
+model_params <- list(error_vars = c(X1 = 1, X2 = 1), # Error variance for each source
+                     joint_var = joint_var, # Variance for joint structure
+                     indiv_vars = indiv_vars, # Variance for each individual structure
+                     beta_vars = c(intercept = 10, joint  = 1, indiv = rep(1,q)), # Variance of intercept effect and each joint effect 
+                     response_vars = c(shape = 1, rate = 1) # Hyperparameters for prior on tau2
+)   
+
 BIDIFAC.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
