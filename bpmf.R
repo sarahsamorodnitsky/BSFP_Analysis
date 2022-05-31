@@ -7998,6 +7998,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       coverage_EY_test <- mean(sapply((n+1):(2*n), function(i) {
         (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
       }))
+      
+      # Save the posterior mean of the estimated error standard deviation for Y
+      sigma.mat <- matrix(nrow = 3, ncol = 1)
+      sigma.mat[3,] <- mean(sqrt(unlist(mod.bayes$tau2.draw)))
     }
     
     if (mod == "BPMF_Full_Mode" | mod == "BPMF_Data_Mode" | mod == "BPMF_Full_Mode_No_Scaling" | mod == "BPMF_test" | mod == "BPMF_test_scale") {
