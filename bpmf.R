@@ -8085,7 +8085,9 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       joint.recovery.structure.test <- mean(sapply(1:q, function(s) {
         frob(mod.joint[[s]][,(n+1):(2*n)] - joint.structure_test[[s,1]])/frob(joint.structure_test[[s,1]])
       }))
-      
+    }
+     
+    if (mod != "test" & mod != "sJIVE") 
       # Individual structure
       indiv.recovery.structure.train <- mean(sapply(1:q, function(s) {
         frob(mod.individual[[s]][,1:n] - indiv.structure_train[[s,1]])/frob(indiv.structure_train[[s]])
