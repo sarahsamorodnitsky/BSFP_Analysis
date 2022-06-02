@@ -7742,6 +7742,9 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
           }))/(nsample-burnin)
         }
       })
+      
+      sigma.mat <- matrix(nrow = 3, ncol = 1)
+      sigma.mat[3,] <- mean(unlist(mod.out$tau2.draw))
     }
     
     if (mod == "BPMF_Full_Mode_No_Scaling") {
