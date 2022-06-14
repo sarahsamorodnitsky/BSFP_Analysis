@@ -7192,7 +7192,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
     if (mod == "test") {
@@ -7349,8 +7349,11 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # -------------------------------------------------------------------------
     
     if (mod == "sJIVE") {
+      # Setting the number of tuning parameters to compare
+      eta <- seq(0.01, 0.99, length.out = 10)
+      
       # Running sJIVE
-      mod.out <- sJIVE(training_data_list, Y_train[[1,1]], method = "CV")
+      mod.out <- sJIVE(training_data_list, c(Y_train[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, method = "CV", max.iter = 10, threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
       
       # Saving the joint structure
       mod.joint <- lapply(1:q, function(s) {
@@ -7389,6 +7392,9 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Do not compute results for coverage
       coverage_EY_train <- coverage_EY_test <- NA
       coverage_Y_train <- coverage_Y_test <- NA
+      
+      # Do not compute results for test data
+      joint.recovery.structure.test <- indiv.recovery.structure.test <- mse_EY_test <- NA
     }
     
     if (mod == "BIDIFAC") {
@@ -7527,7 +7533,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Running JIVE
       mod.out <- jive(true_data_list, center = FALSE, scale = FALSE)
       
-      t# Saving the joint structure
+      # Saving the joint structure
       mod.joint <- mod.out$joint
       
       # Saving the individual structure
@@ -7962,17 +7968,19 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
         frob(mod.joint[[s]][,1:n] - joint.structure_train[[s,1]])/frob(joint.structure_train[[s,1]])
       }))
       
-      joint.recovery.structure.test <- mean(sapply(1:q, function(s) {
-        frob(mod.joint[[s]][,(n+1):(2*n)] - joint.structure_test[[s,1]])/frob(joint.structure_test[[s,1]])
-      }))
-    }
-     
-    if (mod != "test" & mod != "sJIVE") {
       # Individual structure
       indiv.recovery.structure.train <- mean(sapply(1:q, function(s) {
         frob(mod.individual[[s]][,1:n] - indiv.structure_train[[s,1]])/frob(indiv.structure_train[[s]])
       }))
+    }
+     
+    if (mod != "test" & mod != "sJIVE") {
+      # Joint structure
+      joint.recovery.structure.test <- mean(sapply(1:q, function(s) {
+        frob(mod.joint[[s]][,(n+1):(2*n)] - joint.structure_test[[s,1]])/frob(joint.structure_test[[s,1]])
+      }))
       
+      # Individual structure
       indiv.recovery.structure.test <- mean(sapply(1:q, function(s) {
         frob(mod.individual[[s]][,(n+1):(2*n)] - indiv.structure_test[[s,1]])/frob(indiv.structure_test[[s,1]])
       }))
@@ -7984,7 +7992,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     # Comparing the predicted Y to the training and test Y
     mse_EY_train <- frob(Y.fit[1:n,] - EY_train[[1,1]])/frob(EY_train[[1,1]])
-    mse_EY_test <- frob(Y.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
+    
+    if (mod != "sJIVE") {
+      mse_EY_test <- frob(Y.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
+    }
     
     # Save 
     save(joint.recovery.structure.train, joint.recovery.structure.test,
