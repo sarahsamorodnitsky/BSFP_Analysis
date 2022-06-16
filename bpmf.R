@@ -7156,7 +7156,7 @@ Y_predicted <- function(scores.draw, beta.draw, nsample) {
 }
 
 # Run each model being compared in model comparison simulation study
-model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust) {
+model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust, estim_ranks = TRUE) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -7587,12 +7587,32 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       mod.var.exp <- get_variance_explained(mod.out)$r2_per_factor$group1 # variance explained by factor per view
       
       # Set threshold for determining factor inclusion for joint/individual structures
-      threshold <- 15
+      # threshold <- 0.1
       
       # Determining for which views each factor is active
-      joint.factors <- which(apply(mod.var.exp, 1, function(factor) all(factor > threshold)))
+      # joint.factors <- which(apply(mod.var.exp, 1, function(factor) all(factor > threshold)))
+      # indiv.factors <- lapply(1:q, function(s) {
+      #   which(apply(mod.var.exp, 1, function(factor) factor[s] > threshold & factor[c(1:q)[!c(1:q) %in% s]] < threshold))
+      # })
+      
+      # Save which views each factor applies to
+      joint_or_individual <- apply(mod.var.exp, 1, function(row) {
+        ind.max <- which.max(row) # Highest var explained
+        ind.min <- which.min(row) # Minimum var explained
+        
+        if (row[ind.max] < 2*row[-ind.max]) { # If max var explained no larger than 2*variance explained by other factors
+          c(1:q)
+        } else { # If max var explained IS larger than 2*variance explained by other factors
+          ind.max
+        }
+      })
+      
+      # Save the joint factors
+      joint.factors <- c(1:length(joint_or_individual))[sapply(joint_or_individual, function(factor) length(factor) == q)]
+      
+      # Save the individual factors
       indiv.factors <- lapply(1:q, function(s) {
-        which(apply(mod.var.exp, 1, function(factor) factor[s] > threshold & factor[c(1:q)[!c(1:q) %in% s]] < threshold))
+        c(1:length(joint_or_individual))[sapply(joint_or_individual, function(factor) all(factor %in% s))]
       })
       
       # Saving the joint rank
