@@ -7350,10 +7350,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     if (mod == "sJIVE") {
       # Setting the number of tuning parameters to compare
-      eta <- seq(0.01, 0.99, length.out = 10)
+      eta <- c(0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99)
       
       # Running sJIVE
-      mod.out <- sJIVE(training_data_list, c(Y_train[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, method = "CV", max.iter = 10, threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+      mod.out <- sJIVE(X = training_data_list, Y = c(Y_train[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, method = "permute", threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
       
       # Saving the joint structure
       mod.joint <- lapply(1:q, function(s) {
@@ -7531,13 +7531,15 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     if (mod == "JIVE") {
       # Running JIVE
-      mod.out <- jive(true_data_list, center = FALSE, scale = FALSE)
+      mod.out <- jive(true_data_list, center = FALSE, scale = TRUE)
       
       # Saving the joint structure
       mod.joint <- mod.out$joint
+      mod.joint <- lapply(1:q, function(s) mod.joint[[s]] * mod.out$scale$`Scale Values`[s])
       
       # Saving the individual structure
       mod.individual <- mod.out$individual
+      mod.individual <- lapply(1:q, function(s) mod.individual[[s]] * mod.out$scale$`Scale Values`[s])
       
       # Saving the joint rank
       joint.rank <- mod.out$rankJ
@@ -7572,11 +7574,14 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Train the MOFA model
       mod.out <- run_mofa(MOFAobject)
       
+      # Set threshold for determining factor inclusion for joint/individual structures
+      threshold <- 15
+      
       # Determining for which views each factor is active
       mod.var.exp <- get_variance_explained(mod.out)$r2_per_factor$group1 # variance explained by factor per view
-      joint.factors <- which(apply(mod.var.exp, 1, function(factor) all(factor > 0.002)))
+      joint.factors <- which(apply(mod.var.exp, 1, function(factor) all(factor > threshold)))
       indiv.factors <- lapply(1:q, function(s) {
-        which(apply(mod.var.exp, 1, function(factor) factor[s] > 0.002 & factor[c(1:q)[!c(1:q) %in% s]] < 0.002))
+        which(apply(mod.var.exp, 1, function(factor) factor[s] > threshold & factor[c(1:q)[!c(1:q) %in% s]] < threshold))
       })
       
       # Saving the joint rank
