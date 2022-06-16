@@ -7955,23 +7955,30 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     if (mod == "BPMF_Data_Mode" | mod == "BPMF_test" | mod == "BPMF_test_scale") {
       # Calculate the predicted E(Y) at each Gibbs sampling iteration
-      Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
+      EY.fit.iter <- lapply((burnin+1):nsample, function(iter) {
         mod.out$EY.draw[[iter]][[1,1]]
       })
       
-      Y.fit <- Reduce("+", Y.fit.iter)/length(Y.fit.iter)
+      EY.fit <- Reduce("+", EY.fit.iter)/length(EY.fit.iter)
       
       # Calculate the coverage of training E(Y) and test E(Y)
-      Y.fit.iter <- do.call(cbind, Y.fit.iter)
-      ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
+      EY.fit.iter <- do.call(cbind, EY.fit.iter)
+      ci_by_EY <- apply(EY.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
       
       coverage_EY_train <- mean(sapply(1:n, function(i) {
-        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
+        (EY[[1,1]][i,] >= ci_by_EY[1,i]) & (EY[[1,1]][i,] <= ci_by_EY[2,i])
       }))
       
       coverage_EY_test <- mean(sapply((n+1):(2*n), function(i) {
-        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
+        (EY[[1,1]][i,] >= ci_by_EY[1,i]) & (EY[[1,1]][i,] <= ci_by_EY[2,i])
       }))
+      
+      # Calculate the predicted Y at each Gibbs sampling iteration using training and testing scores
+      Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
+        mod.out$EY.draw[[iter]][[1,1]] + rnorm(2*n, mean = 0, sd = sqrt(unlist(mod.out$tau2.draw[[iter]])))
+      })
+      Y.fit.iter <- do.call(cbind, Y.fit.iter)
+      ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
       
       coverage_Y_train <- mean(sapply(1:n, function(i) {
         (Y[[1,1]][i,] >= ci_by_Y[1,i]) & (Y[[1,1]][i,] <= ci_by_Y[2,i])
@@ -8062,10 +8069,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # -------------------------------------------------------------------------
     
     # Comparing the predicted Y to the training and test Y
-    mse_EY_train <- frob(Y.fit[1:n,] - EY_train[[1,1]])/frob(EY_train[[1,1]])
+    mse_EY_train <- frob(EY.fit[1:n,] - EY_train[[1,1]])/frob(EY_train[[1,1]])
     
     if (mod != "sJIVE") {
-      mse_EY_test <- frob(Y.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
+      mse_EY_test <- frob(EY.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
     }
     
     # Save 
