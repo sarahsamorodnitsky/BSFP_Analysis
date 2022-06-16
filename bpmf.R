@@ -7566,19 +7566,30 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     }
     
     if (mod == "MOFA") {
+      # Create an untrained MOFA object
+      mofa_pre_train <- create_mofa(true_data_list)
+      
+      # Set the model options so that the spike-and-slab prior and ARD prior is used on the factors
+      model_opts <- get_default_model_options(mofa_pre_train)
+      # model_opts$spikeslab_factors <- TRUE
+      # model_opts$ard_factors <- TRUE
+      
       # Create the MOFA object
       MOFAobject <- prepare_mofa(
-        object = create_mofa(true_data_list)
+        object = mofa_pre_train,
+        model_options = model_opts
       )
       
       # Train the MOFA model
       mod.out <- run_mofa(MOFAobject)
       
+      # Getting the variance explained in each source by each factor
+      mod.var.exp <- get_variance_explained(mod.out)$r2_per_factor$group1 # variance explained by factor per view
+      
       # Set threshold for determining factor inclusion for joint/individual structures
       threshold <- 15
       
       # Determining for which views each factor is active
-      mod.var.exp <- get_variance_explained(mod.out)$r2_per_factor$group1 # variance explained by factor per view
       joint.factors <- which(apply(mod.var.exp, 1, function(factor) all(factor > threshold)))
       indiv.factors <- lapply(1:q, function(s) {
         which(apply(mod.var.exp, 1, function(factor) factor[s] > threshold & factor[c(1:q)[!c(1:q) %in% s]] < threshold))
