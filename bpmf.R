@@ -7352,9 +7352,16 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Setting the number of tuning parameters to compare
       eta <- c(0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99)
       
-      # Running sJIVE
-      mod.out <- sJIVE(X = training_data_list, Y = c(Y_train[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, method = "permute", threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+      # Running sJIVE with rank estimation
+      if (estim_ranks) {
+        mod.out <- sJIVE(X = training_data_list, Y = c(Y_train[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, method = "permute", threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+      }
       
+      # Running sJIVE with fixed ranks
+      if (!estim_ranks) {
+        mod.out <- sJIVE(X = training_data_list, Y = c(Y_train[[1,1]]), eta = eta, rankA = rep(1,q), rankJ = 1, threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+      }
+
       # Saving the joint structure
       mod.joint <- lapply(1:q, function(s) {
         t(t(mod.out$U_I[[s]])) %*% mod.out$S_J
@@ -7530,16 +7537,21 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     }
     
     if (mod == "JIVE") {
-      # Running JIVE
-      mod.out <- jive(true_data_list, center = FALSE, scale = TRUE)
+      # Running JIVE with rank estimation
+      if (estim_ranks) {
+        mod.out <- jive(true_data_list, center = FALSE, scale = FALSE, method = "perm")
+      }
+      
+      # Running JIVE with fixed ranks
+      if (!estim_ranks) {
+        mod.out <- jive(true_data_list, rankJ = 1, rankA = rep(1,q), center = FALSE, scale = FALSE, method = "given")
+      }
       
       # Saving the joint structure
       mod.joint <- mod.out$joint
-      mod.joint <- lapply(1:q, function(s) mod.joint[[s]] * mod.out$scale$`Scale Values`[s])
       
       # Saving the individual structure
       mod.individual <- mod.out$individual
-      mod.individual <- lapply(1:q, function(s) mod.individual[[s]] * mod.out$scale$`Scale Values`[s])
       
       # Saving the joint rank
       joint.rank <- mod.out$rankJ
@@ -7571,6 +7583,12 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Set the model options so that the spike-and-slab prior and ARD prior is used on the factors
       model_opts <- get_default_model_options(mofa_pre_train)
+      
+      # If using fixed ranks
+      if (!estim_ranks) {
+        model_opts$num_factors <- sum(ranks)
+      }
+      
       # model_opts$spikeslab_factors <- TRUE
       # model_opts$ard_factors <- TRUE
       
@@ -7653,8 +7671,16 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       Y_NA_for_test <- Y
       Y_NA_for_test[[1,1]][(n+1):(2*n),] <- NA
       
-      # Running BPMF
-      mod.out <- bpmf_data_mode(data = true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
+      # Running BPMF with rank estimation
+      if (estim_ranks) {
+        mod.out <- bpmf_data_mode(data = true_data, Y = Y_NA_for_test, nninit = TRUE, model_params = model_params, nsample = nsample)
+      }
+      
+      # Running BPMF with fixed ranks
+      if (!estim_ranks) {
+        mod.out <- bpmf_data_mode(data = true_data, Y = Y_NA_for_test, ranks = ranks, nninit = FALSE, model_params = model_params, nsample = nsample)
+      }
+      
       
       # Saving the joint structure
       mod.joint.iter <- lapply(1:nsample, function(iter) {
@@ -7885,25 +7911,34 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
                                   ranks = mod.ranks, scores = all.scores.train[,-1], nsample = nsample)
       
       # Calculate the predicted E(Y) at each Gibbs sampling iteration using training and testing scores
-      Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
+      EY.fit.iter <- lapply((burnin+1):nsample, function(iter) {
         VStar.iter <- cbind(1, all.scores[,-1])
         beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]] # Beta depends only on training data
         VStar.iter %*% beta.iter
       })
       
-      Y.fit <- Reduce("+", Y.fit.iter)/length(Y.fit.iter)
+      EY.fit <- Reduce("+", EY.fit.iter)/length(EY.fit.iter)
       
       # Calculate the coverage of training E(Y) and test E(Y)
-      Y.fit.iter <- do.call(cbind, Y.fit.iter)
-      ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
+      EY.fit.iter <- do.call(cbind, EY.fit.iter)
+      ci_by_EY <- apply(EY.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
       
       coverage_EY_train <- mean(sapply(1:n, function(i) {
-        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
+        (EY[[1,1]][i,] >= ci_by_EY[1,i]) & (EY[[1,1]][i,] <= ci_by_EY[2,i])
       }))
       
       coverage_EY_test <- mean(sapply((n+1):(2*n), function(i) {
-        (EY[[1,1]][i,] >= ci_by_Y[1,i]) & (EY[[1,1]][i,] <= ci_by_Y[2,i])
+        (EY[[1,1]][i,] >= ci_by_EY[1,i]) & (EY[[1,1]][i,] <= ci_by_EY[2,i])
       }))
+      
+      # Calculate the predicted Y at each Gibbs sampling iteration using training and testing scores
+      Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
+        VStar.iter <- cbind(1, all.scores[,-1])
+        beta.iter <- mod.bayes$beta.draw[[iter]][[1,1]] # Beta depends only on training data
+        VStar.iter %*% beta.iter + rnorm(2*n, mean = 0, sd = sqrt(unlist(mod.bayes$tau2.draw[[iter]])))
+      })
+      Y.fit.iter <- do.call(cbind, Y.fit.iter)
+      ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
       
       coverage_Y_train <- mean(sapply(1:n, function(i) {
         (Y[[1,1]][i,] >= ci_by_Y[1,i]) & (Y[[1,1]][i,] <= ci_by_Y[2,i])
@@ -8034,11 +8069,19 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     }
     
     # Save 
+    if (estim_ranks) {
+      file_name <- paste0("~/BayesianPMF/03Simulations/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda")
+    }
+    
+    if (!estim_ranks) {
+      file_name <- paste0("~/BayesianPMF/03Simulations/", mod, "_Fixed_Ranks", "/", mod,"_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, "_fixed_ranks.rda")
+    }
+    
     save(joint.recovery.structure.train, joint.recovery.structure.test,
          indiv.recovery.structure.train, indiv.recovery.structure.test,
          mse_EY_train, mse_EY_test, coverage_EY_train, coverage_EY_test, 
          coverage_Y_train, coverage_Y_test, mod.ranks, sigma.mat,
-         file = paste0("~/BayesianPMF/03Simulations/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda"))
+         file = file_name)
     
     res <- c(joint.recovery.structure.train, joint.recovery.structure.test, indiv.recovery.structure.train, indiv.recovery.structure.test, mse_EY_train, mse_EY_test, coverage_EY_train, coverage_EY_test, coverage_Y_train, coverage_Y_test, mod.ranks)
     names(res) <- c("joint mse (train)", "joint mse (test)", "indiv mse (train)", "indiv mse (test)", "E(Y) mse (train)", "E(Y) mse (test)", "coverage E(y) (train)", "coverage E(y) (test)", "coverage y (train)", "coverage y (test)", "joint rank", paste("indiv rank", 1:q))
