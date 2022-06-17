@@ -7172,6 +7172,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # nsim = number of simulations to run
   # nsample = number of Gibbs sampling iterations to draw for the linear model
   # n_clust = how many clusters to run simulation in parallel?
+  # estim_ranks = should the ranks be estimated? Default is TRUE
   # ---------------------------------------------------------------------------
   
   # Loading in the packages
@@ -7959,12 +7960,14 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
         mod.out$EY.draw[[iter]][[1,1]]
       })
       
+      # Calculate the mean estimated E(Y)
       EY.fit <- Reduce("+", EY.fit.iter)/length(EY.fit.iter)
       
       # Calculate the coverage of training E(Y) and test E(Y)
       EY.fit.iter <- do.call(cbind, EY.fit.iter)
       ci_by_EY <- apply(EY.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
       
+      # Calculate the coverage for true E(Y)
       coverage_EY_train <- mean(sapply(1:n, function(i) {
         (EY[[1,1]][i,] >= ci_by_EY[1,i]) & (EY[[1,1]][i,] <= ci_by_EY[2,i])
       }))
@@ -7977,6 +7980,8 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       Y.fit.iter <- lapply((burnin+1):nsample, function(iter) {
         mod.out$EY.draw[[iter]][[1,1]] + rnorm(2*n, mean = 0, sd = sqrt(unlist(mod.out$tau2.draw[[iter]])))
       })
+      
+      # Calculate the coverage of Y
       Y.fit.iter <- do.call(cbind, Y.fit.iter)
       ci_by_Y <- apply(Y.fit.iter, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
       
