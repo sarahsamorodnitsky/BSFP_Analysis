@@ -7395,7 +7395,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       })
       
       # Saving the E(Y)
-      Y.fit <- t(mod.out$fittedY)
+      EY.fit <- t(mod.out$fittedY)
       
       # Save the ranks
       mod.ranks <- c(joint.rank, indiv.rank)
