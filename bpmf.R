@@ -7360,7 +7360,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Running sJIVE with fixed ranks
       if (!estim_ranks) {
-        mod.out <- sJIVE(X = training_data_list, Y = c(Y_train[[1,1]]), eta = eta, rankA = rep(1,q), rankJ = 1, threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+        mod.out <- sJIVE(X = training_data_list, Y = c(Y_train[[1,1]]), eta = eta, rankA = ranks[-1], rankJ = ranks[1], threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
       }
 
       # Saving the joint structure
@@ -7545,7 +7545,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Running JIVE with fixed ranks
       if (!estim_ranks) {
-        mod.out <- jive(true_data_list, rankJ = 1, rankA = rep(1,q), center = FALSE, scale = FALSE, method = "given")
+        mod.out <- jive(true_data_list, rankJ = ranks[1], rankA = ranks[-1], center = FALSE, scale = FALSE, method = "given")
       }
       
       # Saving the joint structure
