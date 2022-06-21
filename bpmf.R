@@ -7582,8 +7582,12 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Create an untrained MOFA object
       mofa_pre_train <- create_mofa(true_data_list)
       
-      # Set the model options so that the spike-and-slab prior and ARD prior is used on the factors
+      # Set the data options so that the data is not additionally centered and fix the ranks if desired
+      data_opts <- get_default_data_options(mofa_pre_train)
       model_opts <- get_default_model_options(mofa_pre_train)
+      
+      # No centering
+      data_opts$center_groups <- FALSE
       
       # If using fixed ranks
       if (!estim_ranks) {
@@ -7605,6 +7609,8 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Getting the variance explained in each source by each factor
       mod.var.exp <- get_variance_explained(mod.out)$r2_per_factor$group1 # variance explained by factor per view
       
+      # OLD --
+      
       # Set threshold for determining factor inclusion for joint/individual structures
       # threshold <- 0.1
       
@@ -7614,16 +7620,31 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       #   which(apply(mod.var.exp, 1, function(factor) factor[s] > threshold & factor[c(1:q)[!c(1:q) %in% s]] < threshold))
       # })
       
+      # OLD -- 
+      
       # Save which views each factor applies to
-      joint_or_individual <- apply(mod.var.exp, 1, function(row) {
+      joint_or_individual <- lapply(1:nrow(mod.var.exp), function(factor) {
+        # Save variance explained for current factor
+        row <- mod.var.exp[factor,]
+        
         ind.max <- which.max(row) # Highest var explained
         ind.min <- which.min(row) # Minimum var explained
         
-        if (row[ind.max] < 2*row[-ind.max]) { # If max var explained no larger than 2*variance explained by other factors
-          c(1:q)
-        } else { # If max var explained IS larger than 2*variance explained by other factors
-          ind.max
+        # First, check that factor explains at least 1% of variation in each source
+        greater_than_1p <- any(row > 1)
+        
+        # If explains more than 1% variation in at least one source
+        if (greater_than_1p) {
+          
+          # If factor explains substantial (max var is less than 2 * min var) variation in both sources, it is joint
+          if (row[ind.max] < 2*row[-ind.max]) { 
+            c(1:q)
+          } else { # If factor explains substantial variation in just one source, it is individual
+            ind.max
+          }
+    
         }
+        
       })
       
       # Save the joint factors
@@ -7631,7 +7652,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Save the individual factors
       indiv.factors <- lapply(1:q, function(s) {
-        c(1:length(joint_or_individual))[sapply(joint_or_individual, function(factor) all(factor %in% s))]
+        c(1:length(joint_or_individual))[sapply(joint_or_individual, function(factor) all(factor %in% s) & length(factor) > 0)]
       })
       
       # Saving the joint rank
