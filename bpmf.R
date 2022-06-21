@@ -7397,6 +7397,13 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Saving the E(Y)
       Y.fit <- t(mod.out$fittedY)
       
+      # Save the ranks
+      mod.ranks <- c(joint.rank, indiv.rank)
+      
+      # Combining all scores together
+      all.scores <- cbind(Y_train[[1,1]], joint.scores, do.call(cbind, indiv.scores))
+      colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
+      
       # Do not compute results for coverage
       coverage_EY_train <- coverage_EY_test <- NA
       coverage_Y_train <- coverage_Y_test <- NA
@@ -7911,7 +7918,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       sigma.mat <- mod.out$sigma.mat
     }
     
-    if (mod != "test") {
+    if (mod != "test" & mod != "sJIVE") {
       # Combining the ranks
       mod.ranks <- c(joint.rank, indiv.rank)
       
