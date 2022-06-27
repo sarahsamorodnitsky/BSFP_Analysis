@@ -581,7 +581,7 @@ plotCI(x = betas_ls_sparse_mat_results$Factor,               # plotrix plot with
 
 
 # -----------------------------------------------------------------------------
-# Cross Validated Model Fit
+# Cross-Validated Model Fit
 # -----------------------------------------------------------------------------
 
 # Saving the index for each pair 
@@ -594,7 +594,7 @@ funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
            "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
 packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
 
-# Running each training and test run in parallel
+# Running BPMF on each training and test run in parallel with sparsity
 cl <- makeCluster(3)
 registerDoParallel(cl)
 fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
@@ -686,10 +686,9 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
 stopCluster(cl)
 
 # Running the cross validation algorithm again, this time without sparsity
-# cl <- makeCluster(3)
-# registerDoParallel(cl)
-# fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
-for (pair in ind_of_pairs[-c(1:12)]) {
+cl <- makeCluster(3)
+registerDoParallel(cl)
+fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
   # Create a new vector of the outcome with the current pair set to NA
   fev1pp_cv <- fev1pp
   fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
@@ -776,6 +775,18 @@ for (pair in ind_of_pairs[-c(1:12)]) {
   gc()
 }
 stopCluster(cl)
+
+# Running BIDIFAC with cross validation
+
+# Running sJIVE with cross validation
+
+# Running JIVE with cross validation
+
+# Running MOFA with cross validation
+
+# -----------------------------------------------------------------------------
+# Cross-Validated Model Fit Results
+# -----------------------------------------------------------------------------
 
 # Loading in the predicted outcome iteratively for each pair and computing
 # the posterior mean predicted outcome. Comparing to the true FEV1pp 
