@@ -127,7 +127,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(al_files_split, function(file) (file[5] == s2nX) & (file[7] == paste0(s2nY, ".rda")))]
+    files_for_s2nX_s2nY <- all_files[sapply(al_files_split, function(file) (file[5] == s2nX) & (file[7] == s2nY))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -271,8 +271,8 @@ names(all_s2n) <- combos
 MOFA.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
-for (s2nX in s2nX.list[4]) {
-  for (s2nY in s2nY.list[3:4]) {
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
     MOFA.res[[ind]] <- model_comparison(mod = "MOFA", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
@@ -303,7 +303,7 @@ names(all_s2n) <- combos
 MOFA.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
-for (s2nX in s2nX.list[4]) {
+for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     MOFA.res[[ind]] <- model_comparison(mod = "MOFA", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
                                         s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10, estim_ranks = FALSE)
@@ -327,38 +327,6 @@ for (s2nX in s2nX.list) {
   }
 }
 names(all_s2n) <- combos
-
-# -----------------------------------------------------------------------------
-# BPMF (Full Mode)
-# -----------------------------------------------------------------------------
-
-# BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
-# ind <- 1
-# 
-# for (s2nX in s2nX.list) {
-#   for (s2nY in s2nY.list) {
-#     BPMF.res[[ind]] <- model_comparison(mod = "BPMF_Full_Mode", p.vec, n, ranks, response = "continuous", true_params, model_params,
-#                                         s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
-#     ind <- ind + 1
-#   }
-# }
-# 
-# # Check that all conditions ran
-# all_s2n <- c()
-# combos <- c()
-# all_files <- list.files("~/BayesianPMF/03Simulations/BPMF_Full_Mode")
-# all_files_split <- strsplit(all_files, split = "_")
-# ind <- 1
-# for (s2nX in s2nX.list) {
-#   for (s2nY in s2nY.list) {
-#     # Select all the files corresponding to current s2nX and s2nY 
-#     files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[7] == s2nX) & (file[9] == paste0(s2nY, ".rda")))]
-#     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-#     combos[ind] <- paste(s2nX, "&", s2nY)
-#     ind <- ind + 1
-#   }
-# }
-# names(all_s2n) <- combos
 
 # -----------------------------------------------------------------------------
 # BPMF (Data Mode)
