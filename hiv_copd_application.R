@@ -62,6 +62,9 @@ hiv_copd_data <- matrix(list(), nrow = 2, ncol = 1)
 hiv_copd_data[[1,1]] <- lavage_processed_no_info_log_scale
 hiv_copd_data[[2,1]] <- somascan_normalized_clean_no_info_transpose_reorder
 
+# Creating a list of the two sources
+hiv_copd_data_list <- list(Metabolomics = lavage_processed_no_info_log_scale, Proteomics = somascan_normalized_clean_no_info_transpose_reorder)
+
 # Preparing the response variable
 fev1pp <- matrix(list(), nrow = 1, ncol = 1)
 fev1pp[[1,1]] <- matrix(subject_processed$FEV1_percent_predicted, ncol = 1)
@@ -121,7 +124,7 @@ thinned_iters_burnin <- seq(burnin, nsample, by = 10)
 # Training Data Model Fit
 # -----------------------------------------------------------------------------
 
-# Fitting the model without sparsity first
+# Fitting BPMF
 fev1pp_training_fit_nonsparse <- bpmf(
   data = hiv_copd_data,
   Y = fev1pp,
@@ -134,6 +137,40 @@ fev1pp_training_fit_nonsparse <- bpmf(
 
 # Save the results
 # save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(results_wd, "training_data_fit.rda"))
+
+# Fitting BIDIFAC
+BIDIFAC_training_fit <- BIDIFAC(hiv_copd_data, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
+  
+# Fitting sJIVE
+eta <- c(0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99)
+sJIVE_training_fit <- sJIVE(X = hiv_copd_data_list, Y = c(fev1pp[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, method = "permute", threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+
+# Fitting JIVE
+JIVE_training_fit <- jive(hiv_copd_data_list, center = FALSE, scale = FALSE, method = "perm")
+
+# Fitting MOFA
+mofa_pre_train <- create_mofa(hiv_copd_data_list)
+
+# Set the data options so that the data is not additionally centered and fix the ranks if desired
+data_opts <- get_default_data_options(mofa_pre_train)
+model_opts <- get_default_model_options(mofa_pre_train)
+
+# No centering
+data_opts$center_groups <- FALSE
+
+# If using fixed ranks
+if (!estim_ranks) {
+  model_opts$num_factors <- sum(ranks)
+}
+
+# Create the MOFA object
+MOFAobject <- prepare_mofa(
+  object = mofa_pre_train,
+  model_options = model_opts
+)
+
+# Train the MOFA model
+MOFA_training_fit <- run_mofa(MOFAobject)
 
 # -----------------------------------------------------------------------------
 # Investigating training data fit results
