@@ -140,13 +140,16 @@ fev1pp_training_fit_nonsparse <- bpmf(
 
 # Fitting BIDIFAC
 BIDIFAC_training_fit <- BIDIFAC(hiv_copd_data, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
+save(BIDIFAC_training_fit, file = paste0(results_wd, "/BIDIFAC/BIDIFAC_training_data_fit.rda"))
   
 # Fitting sJIVE
 eta <- c(0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99)
 sJIVE_training_fit <- sJIVE(X = hiv_copd_data_list, Y = c(fev1pp[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, method = "permute", threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+save(sJIVE_training_fit, file = paste0(results_wd, "/sJIVE/sJIVE_training_data_fit.rda"))
 
 # Fitting JIVE
 JIVE_training_fit <- jive(hiv_copd_data_list, center = FALSE, scale = FALSE, method = "perm")
+save(JIVE_training_fit, file = paste0(results_wd, "/JIVE/JIVE_training_data_fit.rda"))
 
 # Fitting MOFA
 mofa_pre_train <- create_mofa(hiv_copd_data_list)
@@ -171,6 +174,7 @@ MOFAobject <- prepare_mofa(
 
 # Train the MOFA model
 MOFA_training_fit <- run_mofa(MOFAobject)
+save(MOFA_training_fit, file = paste0(results_wd, "/MOFA/MOFA_training_data_fit.rda"))
 
 # -----------------------------------------------------------------------------
 # Investigating training data fit results
