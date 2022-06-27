@@ -132,19 +132,8 @@ fev1pp_training_fit_nonsparse <- bpmf(
   progress = TRUE
 )
 
-# Fitting the model with sparsity
-fev1pp_training_fit_sparse <- bpmf(
-  data = hiv_copd_data,
-  Y = fev1pp,
-  nninit = TRUE,
-  model_params = model_params,
-  sparsity = TRUE,
-  nsample = nsample,
-  progress = TRUE
-)
-
 # Save the results
-save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(results_wd, "training_data_fit.rda"))
+# save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(results_wd, "training_data_fit.rda"))
 
 # -----------------------------------------------------------------------------
 # Investigating training data fit results
