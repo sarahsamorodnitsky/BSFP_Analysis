@@ -8650,16 +8650,26 @@ create_simulation_table <- function(simulation_results, mod.list, path.list, s2n
 # Functions for data application
 # -----------------------------------------------------------------------------
 
-run_model_with_cv <- function(mod, outcome, outcome_name) {
+run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, model_params, nsample) {
   
   # ---------------------------------------------------------------------------
   # For a given model, run cross validation in parallel
   #
   # Arguments:
   # mod (character): in c(JIVE, BIDIFAC, MOFA)
+  # hiv_copd_data (list): data for the model
   # outcome (double): response vector for Bayesian modeling
   # outcome_name (character): name of the outcome for saving files
+  # model_params (list): model parameters for the Bayesian model
+  # nsample (int): how many Gibbs samples to generate
   # ---------------------------------------------------------------------------
+  
+  # Set the functions and packages for the parallel computation
+  funcs <- c("bpmf_data", "center_data", "bpmf_full_mode", "bpmf_data_mode", "bpmf_test", "bpmf_test_scale", "get_results", "BIDIFAC",
+             "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
+             "bidifac.plus.impute", "bidifac.plus.given")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
   
   # Load in the full training data fit
   results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/", mod, "_training_data_fit.rda") 
