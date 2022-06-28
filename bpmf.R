@@ -8650,7 +8650,7 @@ create_simulation_table <- function(simulation_results, mod.list, path.list, s2n
 # Functions for data application
 # -----------------------------------------------------------------------------
 
-run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, model_params, nsample) {
+run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_pairs, model_params, nsample) {
   
   # ---------------------------------------------------------------------------
   # For a given model, run cross validation in parallel
@@ -8660,6 +8660,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, model_p
   # hiv_copd_data (list): data for the model
   # outcome (double): response vector for Bayesian modeling
   # outcome_name (character): name of the outcome for saving files
+  # ind_of_pairs (list): indices to cross validate over
   # model_params (list): model parameters for the Bayesian model
   # nsample (int): how many Gibbs samples to generate
   # ---------------------------------------------------------------------------
