@@ -8650,6 +8650,195 @@ create_simulation_table <- function(simulation_results, mod.list, path.list, s2n
 # Functions for data application
 # -----------------------------------------------------------------------------
 
+run_model_with_cv <- function(mod, outcome, outcome_name) {
+  
+  # ---------------------------------------------------------------------------
+  # For a given model, run cross validation in parallel
+  #
+  # Arguments:
+  # mod (character): in c(JIVE, BIDIFAC, MOFA)
+  # outcome (double): response vector for Bayesian modeling
+  # outcome_name (character): name of the outcome for saving files
+  # ---------------------------------------------------------------------------
+  
+  # Load in the full training data fit
+  results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/", mod, "_training_data_fit.rda") 
+  out <- load(results_path, verbose = TRUE)
+  
+  # For JIVE
+  if (mod == "JIVE") {
+    # Saving the joint structure
+    mod.joint <- get(out)$joint
+    
+    # Saving the individual structure
+    mod.individual <- get(out)$individual
+    
+    # Saving the joint rank
+    joint.rank <- get(out)$rankJ
+    
+    # Saving the individual ranks
+    indiv.rank <- get(out)$rankA
+    
+    # Obtaining the joint scores
+    if (joint.rank != 0)  {
+      svd.joint <- svd(mod.joint[[1]])
+      joint.scores <- (svd.joint$v[,1:joint.rank,drop=FALSE]) %*% diag(svd.joint$d[1:joint.rank], nrow = joint.rank)
+    }
+    if (joint.rank == 0) {
+      joint.scores <- NULL
+    }
+    
+    # Obtaining the individual scores
+    indiv.scores <- lapply(1:q, function(s) {
+      if (indiv.rank[s] != 0) {
+        svd.source <- svd(mod.individual[[s]])
+        (svd.source$v[,1:indiv.rank[s],drop=FALSE]) %*% diag(svd.source$d[1:indiv.rank[s]], nrow = indiv.rank[s])
+      }
+    })
+  }
+  
+  # For BIDIFAC
+  if (mod == "BIDIFAC") {
+    # Saving the column structure (the joint structure)
+    mod.joint <- lapply(1:q, function(s) {
+      get(out)$C[[s,1]]
+    })
+    
+    # Saving the individual structure 
+    mod.individual <- lapply(1:q, function(s) {
+      get(out)$I[[s,1]]
+    })
+    
+    # Saving the joint rank
+    joint.rank <- rankMatrix(get(out)$C[[1,1]])[1]
+    
+    # Saving the individual ranks
+    indiv.rank <- sapply(get(out)$I, function(s) {
+      rankMatrix(s)[1]
+    }) 
+    
+    # Obtaining the joint scores
+    if (joint.rank != 0)  {
+      svd.joint <- svd(mod.joint[[1]])
+      joint.scores <- (svd.joint$v[,1:joint.rank,drop=FALSE]) %*% diag(svd.joint$d[1:joint.rank], nrow = joint.rank)
+    }
+    if (joint.rank == 0) {
+      joint.scores <- NULL
+    }
+    
+    # Obtaining the individual scores
+    indiv.scores <- lapply(1:q, function(s) {
+      if (indiv.rank[s] != 0) {
+        svd.source <- svd(mod.individual[[s]])
+        (svd.source$v[,1:indiv.rank[s],drop=FALSE]) %*% diag(svd.source$d[1:indiv.rank[s]], nrow = indiv.rank[s])
+      }
+    })
+  }
+  
+  # For MOFA
+  if (mod == "MOFA") {
+    # Getting the variance explained in each source by each factor
+    mod.var.exp <- get_variance_explained(get(out))$r2_per_factor$group1 # variance explained by factor per view
+    
+    # Save which views each factor applies to
+    joint_or_individual <- lapply(1:nrow(mod.var.exp), function(factor) {
+      # Save variance explained for current factor
+      row <- mod.var.exp[factor,]
+      
+      ind.max <- which.max(row) # Highest var explained
+      ind.min <- which.min(row) # Minimum var explained
+      
+      # First, check that factor explains at least 1% of variation in each source
+      greater_than_1p <- any(row > 1)
+      
+      # If explains more than 1% variation in at least one source
+      if (greater_than_1p) {
+        
+        # If factor explains substantial (max var is less than 2 * min var) variation in both sources, it is joint
+        if (row[ind.max] < 2*row[-ind.max]) { 
+          c(1:q)
+        } else { # If factor explains substantial variation in just one source, it is individual
+          ind.max
+        }
+        
+      }
+      
+    })
+    
+    # Save the joint factors
+    joint.factors <- c(1:length(joint_or_individual))[sapply(joint_or_individual, function(factor) length(factor) == q)]
+    
+    # Save the individual factors
+    indiv.factors <- lapply(1:q, function(s) {
+      c(1:length(joint_or_individual))[sapply(joint_or_individual, function(factor) all(factor %in% s) & length(factor) > 0)]
+    })
+    
+    # Saving the joint rank
+    joint.rank <- length(joint.factors)
+    
+    # Saving the individual rank
+    indiv.rank <- sapply(indiv.factors, length)
+    
+    # Save the underlying structure
+    mod.joint <- lapply(1:q, function(s) {
+      t(get(out)@expectations$Z$group1[, joint.factors, drop = FALSE] %*% t(get(out)@expectations$W[[s]][, joint.factors, drop = FALSE]))
+    })
+    mod.individual <- lapply(1:q, function(s) {
+      t(get(out)@expectations$Z$group1[, indiv.factors[[s]], drop = FALSE] %*% t(get(out)@expectations$W[[s]][, indiv.factors[[s]], drop = FALSE]))
+    })
+    
+    # Save the MOFA scores (all.equal(get_factors(mod.out)$group1, mod.out@expectations$Z$group1[, joint.factors, drop = FALSE]) # TRUE!)
+    mofa.scores <- get_factors(get(out))$group1
+    
+    # Save the joint scores
+    if (joint.rank != 0) {
+      joint.scores <- mofa.scores[,joint.factors, drop = FALSE]
+    }
+    if (joint.rank == 0) {
+      joint.scores <- NULL
+    }
+    
+    # Save the individual scores
+    indiv.scores <- lapply(1:q, function(s) {
+      if (indiv.rank[s] != 0) {
+        indiv.scores <- mofa.scores[,unlist(indiv.factors[[s]]), drop = FALSE]
+      }
+    })
+  }
+  
+  # Combine the scores together
+  all.scores <- cbind(joint.scores, do.call(cbind, indiv.scores))
+  colnames(all.scores) <- c(rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
+  
+  # Running in parallel
+  cl <- makeCluster(10)
+  registerDoParallel(cl)
+  fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+    # Create a new vector of the outcome with the current pair set to NA
+    fev1pp_cv <- fev1pp
+    fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
+    
+    # Fitting the Bayesian linear model
+    mod.bayes <- bpmf_data_mode(data = hiv_copd_data, Y = fev1pp_cv, nninit = FALSE, model_params = model_params, 
+                                ranks = c(joint.rank, indiv.rank), scores = all.scores, nsample = nsample)
+    
+    # Save the imputed outcomes
+    Ym.draw_pair <- mod.bayes$Ym.draw
+    
+    # Save just the relevant output
+    ranks <- c(joint.rank, indiv.rank)
+    save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+    
+    # Remove large objects
+    rm(mod.bayes)
+    
+    # Garbage collection
+    gc()
+  }
+  stopCluster(cl)
+  
+}
+
 # -----------------------------------------------------------------------------
 # Addressing the factor switching problem
 # -----------------------------------------------------------------------------
