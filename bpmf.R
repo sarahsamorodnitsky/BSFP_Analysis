@@ -8826,11 +8826,11 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   registerDoParallel(cl)
   fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
     # Create a new vector of the outcome with the current pair set to NA
-    fev1pp_cv <- fev1pp
-    fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
+    outcome_cv <- outcome
+    outcome_cv[[1,1]][pair:(pair+1),] <- NA
     
     # Fitting the Bayesian linear model
-    mod.bayes <- bpmf_data_mode(data = hiv_copd_data, Y = fev1pp_cv, nninit = FALSE, model_params = model_params, 
+    mod.bayes <- bpmf_data_mode(data = hiv_copd_data, Y = outcome_cv, nninit = FALSE, model_params = model_params, 
                                 ranks = c(joint.rank, indiv.rank), scores = all.scores, nsample = nsample)
     
     # Save the imputed outcomes
