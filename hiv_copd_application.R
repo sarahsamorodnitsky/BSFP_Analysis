@@ -598,98 +598,10 @@ funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
            "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
 packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
 
-# Running BPMF on each training and test run in parallel with sparsity
-cl <- makeCluster(3)
-registerDoParallel(cl)
-fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
-  # -------------------------------------
-  # Run the model with pair response removed
-  # -------------------------------------
-  
-  # Create a new vector of the outcome with the current pair set to NA
-  fev1pp_cv <- fev1pp
-  fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
-  
-  # Run the model with the above pair's continuous outcome missing
-  fev1pp_cv_fit_sparse <- bpmf(
-    data = hiv_copd_data,
-    Y = fev1pp_cv,
-    nninit = TRUE,
-    model_params = model_params,
-    sparsity = TRUE,
-    nsample = nsample,
-    progress = TRUE
-  )
-  
-  # -------------------------------------
-  # Calculate the log joint density for held-out pair
-  # -------------------------------------
-  
-  # Subset the data to just this pair
-  hiv_copd_data_pair <- matrix(list(), nrow = q, ncol = 1)
-  for (s in 1:q) {
-    hiv_copd_data_pair[[s,1]] <- hiv_copd_data[[s,1]][, pair:(pair+1)]
-  }
-  
-  # Subset the posterior samples for the scores for just these subjects
-  V.draw_pair <- lapply(fev1pp_cv_fit_sparse$V.draw, function(iter) {
-    # Init the subsetted matrix
-    V <- matrix(list(), nrow = 1, ncol = 1)
-    
-    # Fill in 
-    V[[1,1]] <- iter[[1,1]][pair:(pair+1),]
-    
-    # Return
-    V
-  })
-  
-  Vs.draw_pair <- lapply(fev1pp_cv_fit_sparse$Vs.draw, function(iter) {
-    # Init the subsetted matrix
-    Vs <- matrix(list(), nrow = 1, ncol = q)
-    
-    # Fill in 
-    for (s in 1:q) {
-      Vs[[1,s]] <- iter[[1,s]][pair:(pair+1),]
-    }
-    
-    # Return
-    Vs
-  })
-  
-  # Saving the true outcomes for the missing subjects
-  Y_pair <- matrix(list(), nrow = 1, ncol = 1)
-  Y_pair[[1,1]] <- fev1pp_cv[[1,1]][pair:(pair+1),,drop = FALSE]
-  
-  # Save the ranks
-  ranks <- fev1pp_cv_fit_sparse$ranks
-  
-  # Save the imputed outcomes
-  Ym.draw_pair <- fev1pp_cv_fit_sparse$Ym.draw
-  
-  # Calculating the log-joint density after burn-in
-  convergence <- sapply(thinned_iters_burnin, function(sim_iter) {
-    # Calculate the log-joint density at each thinned iterations
-    log_joint_density(data = hiv_copd_data_pair, 
-                      U.iter = fev1pp_cv_fit_sparse$U.draw[[sim_iter]], 
-                      V.iter = V.draw_pair[[sim_iter]], 
-                      W.iter = fev1pp_cv_fit_sparse$W.draw[[sim_iter]], 
-                      Vs.iter = Vs.draw_pair[[sim_iter]],
-                      model_params = model_params,
-                      ranks = fev1pp_cv_fit_sparse$ranks,
-                      Y = Y_pair,
-                      Ym.iter = Ym.draw_pair[[sim_iter]],
-                      beta.iter = fev1pp_cv_fit_sparse$beta.draw[[sim_iter]],
-                      tau2.iter = fev1pp_cv_fit_sparse$tau2.draw[[sim_iter]],
-                      gamma.iter = fev1pp_cv_fit_sparse$gamma.draw[[sim_iter]],
-                      p.iter = fev1pp_cv_fit_sparse$p.draw[[sim_iter]])
-  })
+# -------------------------------------
+# Running BPMF with cross validation
+# -------------------------------------
 
-  # Save just the relevant output
-  save(Ym.draw_pair, ranks, convergence, file = paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
-}
-stopCluster(cl)
-
-# Running the cross validation algorithm again, this time without sparsity
 cl <- makeCluster(3)
 registerDoParallel(cl)
 fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
@@ -780,13 +692,22 @@ fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .v
 }
 stopCluster(cl)
 
-# Running BIDIFAC with cross validation
+# -------------------------------------
+# Running BIDIFAC with cross validation 
+# -------------------------------------
 
-# Running sJIVE with cross validation
+run_model_with_cv(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = 100)
 
+
+# -------------------------------------
 # Running JIVE with cross validation
+# -------------------------------------
 
+# -------------------------------------
 # Running MOFA with cross validation
+# -------------------------------------
 
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit Results
