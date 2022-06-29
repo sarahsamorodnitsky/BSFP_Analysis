@@ -8650,7 +8650,7 @@ create_simulation_table <- function(simulation_results, mod.list, path.list, s2n
 # Functions for data application
 # -----------------------------------------------------------------------------
 
-run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_pairs, model_params, nsample) {
+run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_pairs, model_params, nsample, results_wd = "~/BayesianPMF/04DataApplication/") {
   
   # ---------------------------------------------------------------------------
   # For a given model, run cross validation in parallel
