@@ -705,6 +705,10 @@ run_model_with_cv(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data, outcome = fev1
 # Running JIVE with cross validation
 # -------------------------------------
 
+run_model_with_cv(mod = "JIVE", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = nsample)
+
 # -------------------------------------
 # Running MOFA with cross validation
 # -------------------------------------
