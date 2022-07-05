@@ -219,6 +219,11 @@ fev1pp_training_sparse_conv <- sapply(thinned_iters, function(sim_iter) {
 plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Non-Sparse Model")
 plot(fev1pp_training_sparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Sparse Model")
 
+# -------------------------------------
+# Applying our label switching algorithm
+# to the results
+# -------------------------------------
+
 # Applying the label switching algorithm to the training data fits
 fev1pp_training_fit_sparse_ls <- label_switching(U.draw = fev1pp_training_fit_sparse$U.draw,
                                                  V.draw = fev1pp_training_fit_sparse$V.draw,
@@ -726,7 +731,8 @@ models <- c("BPMF", "BIDIFAC", "JIVE", "MOFA")
 
 # Create a vector of cross-validated FEV1pp results for each model
 fev1pp_cv <- lapply(models, function(mod) c())
-names(fev1pp_cv) <- models
+fev1pp_cv_ci <- lapply(models, function(mod) matrix(nrow = n, ncol = 2))
+names(fev1pp_cv) <- names(fev1pp_cv_ci) <- models
 
 # Iterate through the case-control pairs
 for (mod in models) {
@@ -755,10 +761,28 @@ for (mod in models) {
     # Save in the vector
     fev1pp_cv[[mod]][pair:(pair+1)] <- rowMeans(samps_burnin)
     
+    # Calculate the 95% credible interval for each held-out individual
+    fev1pp_cv_ci[[mod]][pair,] <- c(quantile(samps_burnin[1,], 0.025), quantile(samps_burnin[1,], 0.975))
+    fev1pp_cv_ci[[mod]][pair+1,] <- c(quantile(samps_burnin[2,], 0.025), quantile(samps_burnin[2,], 0.975))
   }
 }
 
-# Plotting the results
-plot(fev1pp_cv, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp from Model Without Sparsity")
-abline(a=0, b=1)
-cor.test(fev1pp_cv, c(fev1pp[[1,1]]))
+# Plotting the results from each model against the truth
+plot(fev1pp_cv$BPMF, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross-Validated FEV1pp vs. True FEV1pp", pch = 16)
+points(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]]), col = 2, pch = 16) # BIDIFAC
+points(fev1pp_cv$JIVE, c(fev1pp[[1,1]]), col = 3, pch = 16) # JIVE
+points(fev1pp_cv$MOFA, c(fev1pp[[1,1]]), col = 4, pch = 16) # MOFA
+abline(a=0, b=1, lwd = 2)
+legend("bottomright", legend = c("BPMF", "BIDIFAC", "JIVE", "MOFA"), col = c(1, 2, 3, 4), pch = rep(16, 4), cex = 0.5)
+
+# Calculating a correlation test for each cross validated outcome vs. true FEV1pp
+cor.test(fev1pp_cv$BPMF, c(fev1pp[[1,1]])) # BPMF
+cor.test(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]])) # BIDIFAC
+cor.test(fev1pp_cv$JIVE, c(fev1pp[[1,1]])) # JIVE
+cor.test(fev1pp_cv$MOFA, c(fev1pp[[1,1]])) # MOFA
+
+# Compare the coverage rates for FEV1pp
+mean(sapply(1:n, function(i) fev1pp_cv_ci$BPMF[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$BPMF[i,2])) # BPMF
+mean(sapply(1:n, function(i) fev1pp_cv_ci$BIDIFAC[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$BIDIFAC[i,2])) # BIDIFAC
+mean(sapply(1:n, function(i) fev1pp_cv_ci$JIVE[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$JIVE[i,2])) # JIVE
+mean(sapply(1:n, function(i) fev1pp_cv_ci$MOFA[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$MOFA[i,2])) # MOFA
