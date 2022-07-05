@@ -588,6 +588,13 @@ plotCI(x = betas_ls_sparse_mat_results$Factor,               # plotrix plot with
        xlab = "Factor", ylab = "Posterior Mean",
        scol = c(rep(1, joint_rank), rep(2, indiv_rank1), rep(3, indiv_rank2)))
 
+# -----------------------------------------------------------------------------
+# Using the Poworoznek et al. solution to factor switching
+# -----------------------------------------------------------------------------
+
+# Loading in the library for factor switching
+library(infinitefactor)
+
 
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit
