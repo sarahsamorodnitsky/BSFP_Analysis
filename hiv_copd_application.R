@@ -721,25 +721,41 @@ run_model_with_cv(mod = "MOFA", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
 # Cross-Validated Model Fit Results
 # -----------------------------------------------------------------------------
 
-# Loading in the predicted outcome iteratively for each pair and computing
-# the posterior mean predicted outcome. Comparing to the true FEV1pp 
+# Create a vector with model names
+models <- c("BPMF", "BIDIFAC", "JIVE", "MOFA")
 
-fev1pp_cv <- convergence_cv_nonsparse <- c()
-for (pair in ind_of_pairs) {
-  # Load in the results
-  load(paste0(results_wd, "FEV1pp_CV_NonSparse_Pair", pair, ".rda"))
-  
-  # Combine the samples
-  samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
-  
-  # Take a burn-in
-  samps_burnin <- samps[,thinned_iters_burnin]
-  
-  # Save in the vector
-  fev1pp_cv[pair:(pair+1)] <- rowMeans(samps_burnin)
-  
-  # Save the vector of log-joint densities after burn-in
-  convergence_cv_nonsparse <- c(convergence_cv_nonsparse, mean(convergence))
+# Create a vector of cross-validated FEV1pp results for each model
+fev1pp_cv <- lapply(models, function(mod) c())
+names(fev1pp_cv) <- models
+
+# Iterate through the case-control pairs
+for (mod in models) {
+  for (pair in ind_of_pairs) {
+    
+    # Load in the results
+    if (mod == "BPMF") {
+      load(paste0(results_wd, "BPMF/FEV1pp_CV_NonSparse_Pair", pair, ".rda"), verbose = TRUE)
+    }
+    if (mod == "BIDIFAC") {
+      load(paste0(results_wd, "BIDIFAC/FEV1pp_CV_BIDIFAC_Pair_", pair, ".rda"), verbose = TRUE)
+    }
+    if (mod == "JIVE") {
+      load(paste0(results_wd, "JIVE/FEV1pp_CV_JIVE_Pair_", pair, ".rda"), verbose = TRUE)
+    }
+    if (mod == "MOFA") {
+      load(paste0(results_wd, "MOFA/FEV1pp_CV_MOFA_Pair_", pair, ".rda"), verbose = TRUE)
+    }
+    
+    # Combine the samples
+    samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
+    
+    # Take a burn-in
+    samps_burnin <- samps[,thinned_iters_burnin]
+    
+    # Save in the vector
+    fev1pp_cv[[mod]][pair:(pair+1)] <- rowMeans(samps_burnin)
+    
+  }
 }
 
 # Plotting the results
