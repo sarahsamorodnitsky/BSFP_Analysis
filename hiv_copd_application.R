@@ -724,35 +724,6 @@ run_model_with_cv(mod = "MOFA", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
 # Loading in the predicted outcome iteratively for each pair and computing
 # the posterior mean predicted outcome. Comparing to the true FEV1pp 
 
-fev1pp_cv_sparsity <- convergence_cv_sparsity <- c()
-for (pair in ind_of_pairs[-8]) {
-  # Sparse results --
-  
-  # Load in the results
-  load(paste0(results_wd, "FEV1pp_CV_Sparse_Pair", pair, ".rda"))
-  
-  # Combine the samples
-  samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
-  
-  # Take a burn-in
-  samps_burnin <- samps[,thinned_iters_burnin]
-  
-  # Save in the vector
-  fev1pp_cv_sparsity[pair:(pair+1)] <- rowMeans(samps_burnin)
-  
-  # Save the vector of log-joint densities after burn-in
-  convergence_cv_sparsity <- c(convergence_cv_sparsity, mean(convergence))
-}
-
-# Plotting the results
-plot(fev1pp_cv_sparsity, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp from Sparse Model")
-abline(a=0, b=1)
-cor.test(fev1pp_cv_sparsity, c(fev1pp[[1,1]]))
-
-# Loading in the predicted outcome iteratively for each pair and computing
-# the posterior mean predicted outcome. Comparing to the true FEV1pp 
-# Using the non-sparse model
-
 fev1pp_cv <- convergence_cv_nonsparse <- c()
 for (pair in ind_of_pairs) {
   # Load in the results
@@ -775,15 +746,3 @@ for (pair in ind_of_pairs) {
 plot(fev1pp_cv, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp from Model Without Sparsity")
 abline(a=0, b=1)
 cor.test(fev1pp_cv, c(fev1pp[[1,1]]))
-
-# Plotting observed vs. predicted from both models together
-png("~/BayesianPMF/04DataApplication/Figures/Observed_vs_Predicted_FEV1pp.png", width = 800)
-par(mfrow = c(1,2))
-plot(fev1pp_cv_sparsity, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp \n from Sparse Model", pch = 16)
-abline(a=0, b=1)
-plot(fev1pp_cv, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross Validated FEV1pp \n from Non-Sparse Model", pch = 16)
-abline(a=0, b=1)
-par(mfrow = c(1,1))
-dev.off()
-
-
