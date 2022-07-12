@@ -76,6 +76,8 @@ fev1pp[[1,1]] <- matrix(subject_processed$FEV1_percent_predicted, ncol = 1)
 # Data dimensions
 p1 <- nrow(lavage_processed_no_info_log_scale)
 p2 <- nrow(somascan_normalized_clean_no_info_transpose_reorder)
+p <- p1 + p2
+p.vec <- c(p1, p2)
 n <- ncol(lavage_processed_no_info_log_scale)
 q <- nrow(hiv_copd_data)
 
@@ -598,17 +600,46 @@ load(paste0(results_wd, "BPMF/training_data_fit.rda"), verbose = TRUE)
 # Loading in the library for factor switching
 library(infinitefactor)
 
-# Joint structure --
-joint.loadings <- lapply(1:nsample, function(iter) do.call(rbind, fev1pp_training_fit_nonsparse$U.draw[[iter]]))
+# Save the ranks from the model fit
+ranks <- fev1pp_training_fit_nonsparse$ranks
+
+# Create a vector for the indices of each rank
+beta.ind <- lapply(1:length(ranks), function(i) {
+  if (i == 1) { 
+    (1:ranks[i]) + 1
+  } else {
+    ((sum(ranks[1:(i-1)])+1):sum(ranks[1:i])) + 1
+  }
+})
+
+# Joint structure (plus joint regression coefficients) --
+joint.loadings <- lapply(1:nsample, function(iter) {
+  rbind(do.call(rbind, fev1pp_training_fit_nonsparse$U.draw[[iter]]), # Joint loadings  
+        t(fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[1]],])) # Joint regression coefficients
+})
 joint.scores <- lapply(1:nsample, function(iter) fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
 
-# Applying the  factor switching to the joint loadings and scores
+# Applying the  factor switching to the joint loadings (including joint betas) and scores
 joint.results.varimax <- jointRot(joint.loadings, joint.scores)
 
-# Create a pivot based on the initial value
-joint.pivot <- joint.results.varimax$lambda[[1]] # The rotated BIDIFAC solution
-joint.loadings.final <- lapply(1:nsample, function(iter) msf(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))
+# Create a pivot based on the initial value for the data
+joint.pivot.data <- joint.results.varimax$lambda[[1]][1:p,] # The rotated BIDIFAC solution
+
+# Create a pivot for the betas based on the Varimax-BIDIFAC solution and posterior mean for betas
+X <- joint.results.varimax$eta[[1]] # Saving the Varimax-rotated scores at the BIDIFAC solution
+joint_var_betas <- diag(rep(model_params$beta_vars[2], ranks[1]))
+joint.pivot.betas <- solve(t(X) %*% X + solve(joint_var_betas)) %*% (t(X) %&% fev1pp[[1,1]])
+
+# Combine the pivots together to create a fully joint pivot
+joint.pivot <- rbind(joint.pivot.data, t(as.matrix(joint.pivot.betas)))
+
+# Apply the greedy algorithm to reorder and resign the loadings
+joint.loadings <- lapply(1:nsample, function(iter) msf(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))
 joint.perms.signs <- lapply(1:nsample, function(iter) msfOUT(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))                              
+
+# Separate the joint loadings from the joint scores
+joint.loadings.final <- lapply(joint.loadings, function(iter) iter[1:p,])
+joint.betas.final <- lapply(joint.loadings, function(iter) t(iter[p+1,,drop=FALSE]))
 
 # Applying the permutation and sign switching to the scores
 joint.scores.final <- lapply(1:(nsample-1), function(iter) {
@@ -622,15 +653,28 @@ joint.scores.final <- lapply(1:(nsample-1), function(iter) {
   scores.signed
 })
 
-# Individual structure --
-individual.loadings <- lapply(1:q, function(s) lapply(1:nsample, function(iter) fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]]))
+# Individual structure (plus individual regression coefficients) --
+individual.loadings <- lapply(1:q, function(s) lapply(1:nsample, function(iter) {
+  rbind(fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]], 
+        fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
+}))
 individual.scores <- lapply(1:q, function(s) lapply(1:nsample, function(iter) fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]]))
 
-# Applying the factor switching algorithm to the individual loadings and scores
+# Applying the factor switching algorithm to the individual loadings (including individual betas) and scores
 individual.results.varimax <- lapply(1:q, function(s) jointRot(individual.loadings[[s]], individual.scores[[s]]))
 
+# Saving the Varimax-rotated BIDIFAC solution for the data which serves as the pivot
+individual.pivot.data <- lapply(1:q, function(s) individual.results.varimax[[s]]$lambda[[1]][1:p.vec[s],]) # lapply(1:q, function(s) fev1pp_training_fit_nonsparse$W.draw[[1]][[s,s]]) # The rotated BIDIFAC solution
+
+# Create a pivot for the betas based on the Varimax-BIDIFAC solution and posterior mean for betas
+X.indiv <- lapply(1:q, function(s) individual.results.varimax[[s]]$eta[[1]]) # Saving the Varimax-rotated scores at the BIDIFAC solution
+indiv_var_betas <- lapply(1:q, function(s) diag(rep(model_params$beta_vars[s+2], ranks[s+1])))
+indiv.pivot.betas <- lapply(1:q, function(s) solve(t(X.indiv[[s]]) %*% X.indiv[[s]] + solve(indiv_var_betas[[s]])) %*% (t(X.indiv[[s]]) %*% fev1pp[[1,1]]))
+
+# Combine the pivots together to create a fully joint pivot
+individual.pivot <- lapply(1:q, function(s) rbind(individual.pivot.data[[s]], t(as.matrix(indiv.pivot.betas[[s]]))))
+
 # Applying the signed-permutation algorithm
-individual.pivot <- lapply(1:q, function(s) individual.results.varimax[[s]]$lambda[[1]]) # lapply(1:q, function(s) fev1pp_training_fit_nonsparse$W.draw[[1]][[s,s]]) # The rotated BIDIFAC solution
 individual.loadings.final <- lapply(1:q, function(s) lapply(1:nsample, function(iter) msf(individual.results.varimax[[s]]$lambda[[iter]], pivot = individual.pivot[[s]])))
 individual.perms.signs <- lapply(1:q, function(s) lapply(1:nsample, function(iter) msfOUT(individual.results.varimax[[s]]$lambda[[iter]], pivot = individual.pivot[[s]])))                              
 
@@ -646,36 +690,12 @@ individual.scores.final <- lapply(1:q, function(s) lapply(1:(nsample-1), functio
   scores.signed
 }))
 
-# Regression for FEV1pp -- 
-betas.loadings <- lapply(1:nsample, function(iter) t(do.call(rbind, fev1pp_training_fit_nonsparse$beta.draw[[iter]])))
-VStar.scores <- lapply(1:nsample, function(iter) cbind(1, fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]],
-                                                       do.call(cbind, fev1pp_training_fit_nonsparse$Vs.draw[[iter]])))
-
-# Applying the  factor switching to the joint loadings and scores
-regresion.results.varimax <- jointRot(betas.loadings, VStar.scores)
-
 # Create a pivot based on the posterior mode of beta given y and Sigma_beta
 # using the rotated, signed, permuted, BIDIFAC results as a starting point
 # Calculate the marginal posterior mode using the label swapped results 
 X <- cbind(1, joint.scores.final[[1]], individual.scores.final[[1]][[1]], individual.scores.final[[2]][[1]])
 TVar <- diag(c(model_params$beta_vars[1], rep(model_params$beta_vars[2], sum(fev1pp_training_fit_nonsparse$ranks))))
 regression.pivot <- t(solve(t(X) %*% X + solve(TVar)) %*% (t(X) %*% fev1pp[[1,1]]))
-
-# Apply the signed permutation algorithm to the varimax-rotated scores and loadings 
-betas.loadings.final <- lapply(1:nsample, function(iter) msf(regresion.results.varimax$lambda[[iter]], pivot = regression.pivot))
-regression.perms.signs <- lapply(1:nsample, function(iter) msfOUT(regresion.results.varimax$lambda[[iter]], pivot = regression.pivot))                              
-
-# Applying the permutation and sign switching to the scores
-VStar.scores.final <- lapply(1:(nsample-1), function(iter) {
-  # Permuting the columns
-  scores.unsigned <- joint.results.varimax$eta[[iter]][, abs(c(joint.perms.signs[[iter]]))]
-  
-  # Changing the signs
-  scores.signed <- scores.unsigned %*% diag(c(sign(joint.perms.signs[[iter]])))
-  
-  # Returning
-  scores.signed
-})
 
 # Save the results from the label switching algorithm
 save(joint.scores.final, individual.scores.final, 
