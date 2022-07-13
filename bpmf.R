@@ -7183,9 +7183,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   library(sup.r.jive)
   library(natural)
   library(RSpectra)
+  library(BIPnet)
   
   # The model options
-  models <- c("sJIVE", "BIDIFAC", "JIVE", "MOFA", "BPMF_Data_Mode", "BPMF_test", "BPMF_test_scale")
+  models <- c("sJIVE", "BIDIFAC", "JIVE", "MOFA", "BPMF_Data_Mode", "BIP", "BPMF_test", "BPMF_test_scale")
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
@@ -7776,6 +7777,102 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       sigma.mat[3,] <- mean(sqrt(unlist(mod.out$tau2.draw))) 
     }
     
+    if (mod == "BIP") {
+      # Transpose the data sets so they are in nxp orientation
+      training_data_list_bip <- lapply(training_data_list, function(s) t(s))
+      
+      # Add the response to the training data list
+      training_data_list_bip[[3]] <- Y_train[[1,1]]
+      
+      # If estimating the ranks, set to a very high value 
+      if (estim_ranks) {
+        bip_num_ranks <- 10
+      }
+      
+      # If not estimating the ranks, fix at the true ranks
+      if (!estim_ranks) {
+        bip_num_ranks <- sum(ranks)
+      }
+      
+      # Running the model
+      mod.out <- BIP(dataList = training_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = 5000, burnin = 2500, nbrcomp = bip_num_ranks)
+      
+      # Saving the results
+      bip.scores <- mod.out$EstU
+      bip.loadings <- mod.out$EstLoad
+      
+      # Save the component selection
+      factor_mpp_by_source <- mod.out$CompoSelMean[1:q,]
+      factor_mpp_by_source_list <- split(factor_mpp_by_source, rep(1:ncol(factor_mpp_by_source), each = nrow(factor_mpp_by_source)))
+      bip.joint.individual <- lapply(factor_mpp_by_source_list, function(comp) {
+        # Save lowest MPP
+        ind.min <- which.min(comp)
+        
+        # Save the highest MPP
+        ind.max <- which.max(comp)
+        
+        # If the smallest MPP is still greater than 0.5 then it is joint
+        if (comp[ind.min] > 0.5) {
+          1:q
+        } 
+        
+        # If the smallest MPP is less than 0.5, check the max
+        else if (comp[ind.min] <= 0.5) {
+          if (comp[ind.max] > 0.5) {
+            ind.max
+          } 
+        }
+      })
+      
+      # Save the joint factor indices
+      joint.factors <- sapply(bip.joint.individual, function(comp) {
+        length(comp) == q
+      })
+      
+      # Save the individual factor indices
+      indiv.factors <- lapply(1:q, function(s) {
+        sapply(bip.joint.individual, function(comp) {
+          all(comp %in% s) & length(comp) > 0
+        })
+      })
+      
+      # Save the joint rank
+      joint.rank <- sum(joint.factors)
+      
+      # Save the individual rank
+      indiv.rank <- sapply(1:q, function(s) {
+        sum(indiv.factors[[s]])
+      })
+      
+      # Save the ranks
+      mod.ranks <- c(joint.rank, indiv.rank)
+      
+      # Save the posterior mean of the joint structure
+      mod.joint <- lapply(1:q, function(s) {
+        t(bip.scores[,joint.factors,drop=FALSE] %*% bip.loadings[[s]][joint.factors,,drop=FALSE])
+      })
+      
+      # Save the posterior mean of the individual structure
+      mod.individual <- lapply(1:q, function(s) {
+        t(bip.scores[,indiv.factors[[s]],drop=FALSE] %*% bip.loadings[[s]][indiv.factors[[s]],,drop=FALSE])
+      })
+      
+      # Save the predicted Y
+      comp.inc.y <- sapply(mod.out$CompoSelMean[q+1,], function(comp) comp > 0.5)
+      EY.fit <- bip.test$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE]
+      
+      # Save the estimated error sd for Y
+      sigma.mat <- matrix(nrow = q+1, ncol = 1)
+      sigma.mat[q+1,] <- sqrt(mod.out$EstSig2[[q+1]])
+      
+      # Do not compute results for coverage
+      coverage_EY_train <- coverage_EY_test <- NA
+      coverage_Y_train <- coverage_Y_test <- NA
+      
+      # Do not compute results for test data
+      joint.recovery.structure.test <- indiv.recovery.structure.test <- mse_EY_test <- NA
+    }
+    
     if (mod == "BPMF_test") {
       # Setting the test response to NA
       Y_NA_for_test <- Y
@@ -7918,7 +8015,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       sigma.mat <- mod.out$sigma.mat
     }
     
-    if (mod != "test" & mod != "sJIVE") {
+    if (mod != "test" & mod != "sJIVE" & mod != "BIP") {
       # Combining the ranks
       mod.ranks <- c(joint.rank, indiv.rank)
       
@@ -8085,7 +8182,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       }))
     }
      
-    if (mod != "test" & mod != "sJIVE") {
+    if (mod != "test" & mod != "sJIVE" & mod != "BIP") {
       # Joint structure
       joint.recovery.structure.test <- mean(sapply(1:q, function(s) {
         frob(mod.joint[[s]][,(n+1):(2*n)] - joint.structure_test[[s,1]])/frob(joint.structure_test[[s,1]])
@@ -8104,7 +8201,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # Comparing the predicted Y to the training and test Y
     mse_EY_train <- frob(EY.fit[1:n,] - EY_train[[1,1]])/frob(EY_train[[1,1]])
     
-    if (mod != "sJIVE") {
+    if (mod != "sJIVE" & mod != "BIP") {
       mse_EY_test <- frob(EY.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
     }
     
