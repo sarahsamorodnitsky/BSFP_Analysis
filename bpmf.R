@@ -7176,13 +7176,13 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # ---------------------------------------------------------------------------
   
   # Loading in the packages
-  library(r.jive)
-  library(MOFA2)
+  # library(r.jive)
+  # library(MOFA2)
   library(doParallel)
   library(foreach)
-  library(sup.r.jive)
-  library(natural)
-  library(RSpectra)
+  # library(sup.r.jive)
+  # library(natural)
+  # library(RSpectra)
   library(BIPnet)
   
   # The model options
@@ -7194,7 +7194,8 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
+  packs <- c("Matrix", "MASS", "truncnorm", "BIPnet")
+             # , "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
     if (mod == "test") {
@@ -7801,6 +7802,9 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       bip.scores <- mod.out$EstU
       bip.loadings <- mod.out$EstLoad
       
+      # Saving the feature sds to scale the estimated structure
+      bip.est.sd <- mod.out$SDData
+      
       # Save the component selection
       factor_mpp_by_source <- mod.out$CompoSelMean[1:q,]
       factor_mpp_by_source_list <- split(factor_mpp_by_source, rep(1:ncol(factor_mpp_by_source), each = nrow(factor_mpp_by_source)))
@@ -7812,12 +7816,12 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
         ind.max <- which.max(comp)
         
         # If the smallest MPP is still greater than 0.5 then it is joint
-        if (comp[ind.min] > 0.5) {
+        if (comp[ind.min] >= 0.5) {
           1:q
         } 
         
         # If the smallest MPP is less than 0.5, check the max
-        else if (comp[ind.min] <= 0.5) {
+        else if (comp[ind.min] < 0.5) {
           if (comp[ind.max] > 0.5) {
             ind.max
           } 
@@ -7849,12 +7853,12 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Save the posterior mean of the joint structure
       mod.joint <- lapply(1:q, function(s) {
-        t(bip.scores[,joint.factors,drop=FALSE] %*% bip.loadings[[s]][joint.factors,,drop=FALSE])
+        t(bip.scores[,joint.factors,drop=FALSE] %*% bip.loadings[[s]][joint.factors,,drop=FALSE] %*% diag(bip.est.sd[[s]]))
       })
       
       # Save the posterior mean of the individual structure
       mod.individual <- lapply(1:q, function(s) {
-        t(bip.scores[,indiv.factors[[s]],drop=FALSE] %*% bip.loadings[[s]][indiv.factors[[s]],,drop=FALSE])
+        t(bip.scores[,indiv.factors[[s]],drop=FALSE] %*% bip.loadings[[s]][indiv.factors[[s]],,drop=FALSE] %*% diag(bip.est.sd[[s]]))
       })
       
       # Save the predicted Y
