@@ -634,12 +634,12 @@ joint.pivot.betas <- solve(t(X) %*% X + solve(joint_var_betas)) %*% (t(X) %&% fe
 joint.pivot <- rbind(joint.pivot.data, t(as.matrix(joint.pivot.betas)))
 
 # Apply the greedy algorithm to reorder and resign the loadings
-joint.loadings <- lapply(1:nsample, function(iter) msf(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))
+joint.loadings.with.betas <- lapply(1:nsample, function(iter) msf(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))
 joint.perms.signs <- lapply(1:nsample, function(iter) msfOUT(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))                              
 
 # Separate the joint loadings from the joint scores
-joint.loadings.final <- lapply(joint.loadings, function(iter) iter[1:p,])
-joint.betas.final <- lapply(joint.loadings, function(iter) t(iter[p+1,,drop=FALSE]))
+joint.loadings.final <- lapply(joint.loadings.with.betas, function(iter) iter[1:p,])
+joint.betas.final <- lapply(joint.loadings.with.betas, function(iter) t(iter[p+1,,drop=FALSE]))
 
 # Applying the permutation and sign switching to the scores
 joint.scores.final <- lapply(1:(nsample-1), function(iter) {
@@ -675,8 +675,12 @@ indiv.pivot.betas <- lapply(1:q, function(s) solve(t(X.indiv[[s]]) %*% X.indiv[[
 individual.pivot <- lapply(1:q, function(s) rbind(individual.pivot.data[[s]], t(as.matrix(indiv.pivot.betas[[s]]))))
 
 # Applying the signed-permutation algorithm
-individual.loadings.final <- lapply(1:q, function(s) lapply(1:nsample, function(iter) msf(individual.results.varimax[[s]]$lambda[[iter]], pivot = individual.pivot[[s]])))
+individual.loadings.with.betas <- lapply(1:q, function(s) lapply(1:nsample, function(iter) msf(individual.results.varimax[[s]]$lambda[[iter]], pivot = individual.pivot[[s]])))
 individual.perms.signs <- lapply(1:q, function(s) lapply(1:nsample, function(iter) msfOUT(individual.results.varimax[[s]]$lambda[[iter]], pivot = individual.pivot[[s]])))                              
+
+# Save the final individual loadings and betas
+individual.loadings.final <- lapply(1:q, function(s) lapply(individual.loadings.with.betas[[s]], function(iter) t(iter[1:p.vec[s],,drop=FALSE])))
+individual.betas.final <- lapply(1:q, function(s) lapply(individual.loadings.with.betas[[s]], function(iter) t(iter[p.vec[s]+1,,drop=FALSE])))
 
 # Applying the permutation and sign switching to the scores
 individual.scores.final <- lapply(1:q, function(s) lapply(1:(nsample-1), function(iter) {
@@ -698,8 +702,18 @@ TVar <- diag(c(model_params$beta_vars[1], rep(model_params$beta_vars[2], sum(fev
 regression.pivot <- t(solve(t(X) %*% X + solve(TVar)) %*% (t(X) %*% fev1pp[[1,1]]))
 
 # Save the results from the label switching algorithm
-save(joint.scores.final, individual.scores.final, 
+save(joint.scores.final, joint.loadings.final, individual.scores.final, individual.loadings.final, joint.betas.final, 
      file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching.rda")
+
+# Checking that the factor switching algorithm did not change the estimated underlying structure --
+
+# Calculating the structure prior to running the algorithm
+est_structure_before_alg <- lapply(1:nsample, function(iter) {
+  do.call(rbind, fev1pp_training_fit_nonsparse$Indiv.draw[[iter]]) +
+    do.call(rbind, fev1pp_training_fit_nonsparse$Indiv.draw[[iter]])
+})
+
+# Calculating the structure after the algorithm
 
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit
