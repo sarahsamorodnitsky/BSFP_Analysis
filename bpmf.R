@@ -7863,7 +7863,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Save the predicted Y
       comp.inc.y <- sapply(mod.out$CompoSelMean[q+1,], function(comp) comp > 0.5)
-      EY.fit <- bip.test$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE]
+      EY.fit <- mod.out$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE]
       
       # Save the estimated error sd for Y
       sigma.mat <- matrix(nrow = q+1, ncol = 1)
