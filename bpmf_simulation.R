@@ -431,7 +431,7 @@ for (s2nX in s2nX.list) {
 }
 
 # -----------------------------------------------------------------------------
-# BIP
+# BIP (Estimated Ranks)
 # -----------------------------------------------------------------------------
 
 BIP.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
@@ -444,6 +444,22 @@ for (s2nX in s2nX.list) {
     ind <- ind + 1
   }
 }
+
+# -----------------------------------------------------------------------------
+# BIP (Fixed Ranks)
+# -----------------------------------------------------------------------------
+
+BIP.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    BIP.res[[ind]] <- model_comparison(mod = "BIP", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_test,
+                                       s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10, estim_ranks = FALSE)
+    ind <- ind + 1
+  }
+}
+
 
 
 
