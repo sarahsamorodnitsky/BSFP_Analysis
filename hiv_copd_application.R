@@ -600,6 +600,18 @@ load(paste0(results_wd, "BPMF/training_data_fit.rda"), verbose = TRUE)
 # Loading in the library for factor switching
 library(infinitefactor)
 
+jointRot_V2 <- function(lambda, eta, piv) {
+  vari = lapply(lambda, varimax)
+  loads = lapply(vari, `[[`, 1)
+  rots = lapply(vari, `[[`, 2)
+  rotfact = mapply(`%*%`, eta, rots, SIMPLIFY = FALSE)
+  norms = sapply(loads, norm, "2")
+  matches = lapply(loads, msfOUT, piv)
+  lamout = mapply(aplr, loads, matches, SIMPLIFY = FALSE)
+  etaout = mapply(aplr, rotfact, matches, SIMPLIFY = FALSE)
+  return(list(lambda = lamout, eta = etaout))
+}
+
 # Save the ranks from the model fit
 ranks <- fev1pp_training_fit_nonsparse$ranks
 
@@ -619,9 +631,6 @@ joint.loadings <- lapply(1:nsample, function(iter) {
 })
 joint.scores <- lapply(1:nsample, function(iter) fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
 
-# Applying the  factor switching to the joint loadings (including joint betas) and scores
-joint.results.varimax <- jointRot(joint.loadings, joint.scores)
-
 # Create a pivot based on the initial value for the data
 joint.pivot.data <- joint.results.varimax$lambda[[1]][1:p,] # The rotated BIDIFAC solution
 
@@ -633,25 +642,31 @@ joint.pivot.betas <- solve(t(X) %*% X + solve(joint_var_betas)) %*% (t(X) %&% fe
 # Combine the pivots together to create a fully joint pivot
 joint.pivot <- rbind(joint.pivot.data, t(as.matrix(joint.pivot.betas)))
 
-# Apply the greedy algorithm to reorder and resign the loadings
-joint.loadings.with.betas <- lapply(1:nsample, function(iter) msf(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))
-joint.perms.signs <- lapply(1:nsample, function(iter) msfOUT(joint.results.varimax$lambda[[iter]], pivot = joint.pivot))                              
+# -------------
+# Trying out a different way
+joint.results.rotate <- jointRot_V2(joint.loadings, joint.scores, piv = joint.pivot)
+
+# Check the joint structure after the algorithm matches the original structure
+
+joint.structure.original <- lapply(1:nsample, function(iter) {
+  joint.loadings[[iter]] %*% t(joint.scores[[iter]])
+})
+
+joint.structure.new <- lapply(1:nsample, function(iter) {
+  joint.results.rotate$lambda[[iter]] %*% t(joint.results.rotate$eta[[iter]])
+})
+
+# Check
+all.equal(joint.structure.original, joint.structure.new)
 
 # Separate the joint loadings from the joint scores
-joint.loadings.final <- lapply(joint.loadings.with.betas, function(iter) iter[1:p,])
-joint.betas.final <- lapply(joint.loadings.with.betas, function(iter) t(iter[p+1,,drop=FALSE]))
+joint.loadings.final <- lapply(joint.results.rotate$lambda, function(iter) iter[1:p,])
+joint.betas.final <- lapply(joint.results.rotate$lambda, function(iter) t(iter[p+1,,drop=FALSE]))
 
 # Applying the permutation and sign switching to the scores
-joint.scores.final <- lapply(1:(nsample-1), function(iter) {
-  # Permuting the columns
-  scores.unsigned <- joint.results.varimax$eta[[iter]][, abs(c(joint.perms.signs[[iter]]))]
-  
-  # Changing the signs
-  scores.signed <- scores.unsigned %*% diag(c(sign(joint.perms.signs[[iter]])))
-  
-  # Returning
-  scores.signed
-})
+joint.scores.final <- joint.results.rotate$eta
+
+# -------------
 
 # Individual structure (plus individual regression coefficients) --
 individual.loadings <- lapply(1:q, function(s) lapply(1:nsample, function(iter) {
@@ -659,9 +674,6 @@ individual.loadings <- lapply(1:q, function(s) lapply(1:nsample, function(iter) 
         fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
 }))
 individual.scores <- lapply(1:q, function(s) lapply(1:nsample, function(iter) fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]]))
-
-# Applying the factor switching algorithm to the individual loadings (including individual betas) and scores
-individual.results.varimax <- lapply(1:q, function(s) jointRot(individual.loadings[[s]], individual.scores[[s]]))
 
 # Saving the Varimax-rotated BIDIFAC solution for the data which serves as the pivot
 individual.pivot.data <- lapply(1:q, function(s) individual.results.varimax[[s]]$lambda[[1]][1:p.vec[s],]) # lapply(1:q, function(s) fev1pp_training_fit_nonsparse$W.draw[[1]][[s,s]]) # The rotated BIDIFAC solution
@@ -674,46 +686,46 @@ indiv.pivot.betas <- lapply(1:q, function(s) solve(t(X.indiv[[s]]) %*% X.indiv[[
 # Combine the pivots together to create a fully joint pivot
 individual.pivot <- lapply(1:q, function(s) rbind(individual.pivot.data[[s]], t(as.matrix(indiv.pivot.betas[[s]]))))
 
-# Applying the signed-permutation algorithm
-individual.loadings.with.betas <- lapply(1:q, function(s) lapply(1:nsample, function(iter) msf(individual.results.varimax[[s]]$lambda[[iter]], pivot = individual.pivot[[s]])))
-individual.perms.signs <- lapply(1:q, function(s) lapply(1:nsample, function(iter) msfOUT(individual.results.varimax[[s]]$lambda[[iter]], pivot = individual.pivot[[s]])))                              
-
-# Save the final individual loadings and betas
-individual.loadings.final <- lapply(1:q, function(s) lapply(individual.loadings.with.betas[[s]], function(iter) t(iter[1:p.vec[s],,drop=FALSE])))
-individual.betas.final <- lapply(1:q, function(s) lapply(individual.loadings.with.betas[[s]], function(iter) t(iter[p.vec[s]+1,,drop=FALSE])))
-
-# Applying the permutation and sign switching to the scores
-individual.scores.final <- lapply(1:q, function(s) lapply(1:(nsample-1), function(iter) {
-  # Permuting the columns
-  scores.unsigned <- individual.results.varimax[[s]]$eta[[iter]][, abs(c(individual.perms.signs[[s]][[iter]]))]
-  
-  # Changing the signs
-  scores.signed <- scores.unsigned %*% diag(c(sign(individual.perms.signs[[s]][[iter]])))
-  
-  # Returning
-  scores.signed
-}))
-
-# Create a pivot based on the posterior mode of beta given y and Sigma_beta
-# using the rotated, signed, permuted, BIDIFAC results as a starting point
-# Calculate the marginal posterior mode using the label swapped results 
-X <- cbind(1, joint.scores.final[[1]], individual.scores.final[[1]][[1]], individual.scores.final[[2]][[1]])
-TVar <- diag(c(model_params$beta_vars[1], rep(model_params$beta_vars[2], sum(fev1pp_training_fit_nonsparse$ranks))))
-regression.pivot <- t(solve(t(X) %*% X + solve(TVar)) %*% (t(X) %*% fev1pp[[1,1]]))
-
-# Save the results from the label switching algorithm
-save(joint.scores.final, joint.loadings.final, individual.scores.final, individual.loadings.final, joint.betas.final, 
-     file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching.rda")
-
-# Checking that the factor switching algorithm did not change the estimated underlying structure --
-
-# Calculating the structure prior to running the algorithm
-est_structure_before_alg <- lapply(1:nsample, function(iter) {
-  do.call(rbind, fev1pp_training_fit_nonsparse$Indiv.draw[[iter]]) +
-    do.call(rbind, fev1pp_training_fit_nonsparse$Indiv.draw[[iter]])
+# Trying it a different way
+individual.results.rotate <- lapply(1:q, function(s) {
+  jointRot_V2(individual.loadings[[s]], individual.scores[[s]], piv = individual.pivot[[s]])
 })
 
-# Calculating the structure after the algorithm
+# Save the final individual loadings and betas
+individual.loadings.final <- lapply(1:q, function(s) lapply(individual.results.rotate[[s]]$lambda, function(iter) iter[1:p.vec[s],,drop=FALSE]))
+individual.betas.final <- lapply(1:q, function(s) lapply(individual.results.rotate[[s]]$lambda, function(iter) t(iter[p.vec[s]+1,,drop=FALSE])))
+
+# Applying the permutation and sign switching to the scores
+individual.scores.final <- lapply(1:q, function(s) individual.results.rotate[[s]]$eta)
+
+# Save the results from the label switching algorithm
+save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
+     file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching.rda")
+
+# Check the individual structure after the algorithm matches the original structure
+
+# Calculate the original structure
+individual.structure.original <- lapply(1:q, function(s) {
+  lapply(1:nsample, function(iter) {
+    individual.loadings[[s]][[iter]] %*% t(individual.scores[[s]][[iter]])
+  })
+})
+
+# Calculate the new structure
+individual.structure.new <- lapply(1:q, function(s) {
+  lapply(1:nsample, function(iter) {
+    individual.results.rotate[[s]]$lambda[[iter]] %*% t(individual.results.rotate[[s]]$eta[[iter]])
+  })
+})
+
+# Check
+lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]]))
+
+# -------------
+
+# Save the results from the label switching algorithm
+save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
+     file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching.rda")
 
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit
