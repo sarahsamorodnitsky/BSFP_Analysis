@@ -178,6 +178,19 @@ MOFAobject <- prepare_mofa(
 MOFA_training_fit <- run_mofa(MOFAobject)
 save(MOFA_training_fit, file = paste0(results_wd, "/MOFA/MOFA_training_data_fit.rda"))
 
+# Fitting BIP
+
+library(BIPnet)
+
+# Transposing the data matrices
+hiv_copd_data_list_bip <- lapply(hiv_copd_data_list, function(data) t(data))
+
+# Adding the response vector
+hiv_copd_data_list_bip[[3]] <- fev1pp[[1,1]]
+
+# Fitting the model
+BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = nsample, burnin = nsample/2, nbrcomp = 5)
+
 # -----------------------------------------------------------------------------
 # Investigating training data fit results
 # -----------------------------------------------------------------------------
