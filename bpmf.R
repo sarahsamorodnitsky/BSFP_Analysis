@@ -8220,7 +8220,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     save(joint.recovery.structure.train, joint.recovery.structure.test,
          indiv.recovery.structure.train, indiv.recovery.structure.test,
-         mse_EY_train, mse_EY_test, coverage_EY_train, coverage_EY_test, 
+         mse_EY_train, mse_EY_test, coverage_EY_train, coverage_EY_test,
          coverage_Y_train, coverage_Y_test, mod.ranks, sigma.mat,
          file = file_name)
     
