@@ -403,32 +403,18 @@ dev.off()
 # Credible Intervals for Coefficients Using Non-Sparse Model
 # -----------------------------------------------------------------------------
 
-# Creating a matrix with the posterior samples for the betas after burnin and thinning
-betas_ls_nonsparse_mat <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse_ls$swapped_betas[[iter]][[1,1]]
+library(dplyr)
+
+# Examining joint factor 1 as an example
+joint.factor1.aligned <- do.call(cbind, lapply((nsample/2 + 1):nsample, function(iter) joint.loadings.aligned[[iter]][,1,drop=FALSE]))
+
+# Calculating means and CIs for each loading
+joint.factor1.aligned.summary <- t(apply(joint.factor1.aligned, 1, function(load) {
+  c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
 }))
 
-# Calculate the mean and CIs
-betas_ls_nonsparse_mat_results <- t(apply(betas_ls_nonsparse_mat, 1, function(beta) {
-  c(mean(beta), quantile(beta, 0.025), quantile(beta, 0.975))
-}))
-
-# Add factor labels
-betas_ls_nonsparse_mat_results <- as.data.frame(betas_ls_nonsparse_mat_results)
-betas_ls_nonsparse_mat_results <- cbind.data.frame(0:(nrow(betas_ls_nonsparse_mat_results)-1),
-                                                   betas_ls_nonsparse_mat_results)
-colnames(betas_ls_nonsparse_mat_results) <- c("Factor", "Posterior Mean", "Lower (2.5%)", "Upper (97.5%)")
-betas_ls_nonsparse_mat_results <- betas_ls_nonsparse_mat_results[-1,] # Remove intercept
-
-# Create plot
-library(plotrix)
-plotCI(x = betas_ls_nonsparse_mat_results$Factor,               # plotrix plot with confidence intervals
-       y = betas_ls_nonsparse_mat_results$`Posterior Mean`,
-       li = betas_ls_nonsparse_mat_results$`Lower (2.5%)`,
-       ui = betas_ls_nonsparse_mat_results$`Upper (97.5%)`,
-       main = "95% Credible Intervals for Factor Effects \n on FEV1pp (Non-Sparse)",
-       xlab = "Factor", ylab = "Posterior Mean",
-       scol = c(rep(1, joint_rank), rep(2, indiv_rank1), rep(3, indiv_rank2)))
+# Name the rows by the respective biomarker
+rownames(joint.factor1.aligned.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
 
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit
