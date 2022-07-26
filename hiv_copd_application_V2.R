@@ -121,6 +121,7 @@ model_params <- list(error_vars = c(sigma21, sigma22),
 # Gibbs sampler parameters
 nsample <- 5000
 burnin <- nsample/2
+iters_burnin <- seq(burnin+1, nsample)
 thinned_iters <- seq(1, nsample, by = 10)
 thinned_iters_burnin <- seq(burnin, nsample, by = 10)
 
@@ -228,6 +229,11 @@ plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joi
 # Loading in the full training data fit
 load(paste0(results_wd, "BPMF/training_data_fit.rda"), verbose = TRUE)
 
+# Save the ranks
+ranks <- fev1pp_training_fit_nonsparse$ranks
+joint.rank <- fev1pp_training_fit_nonsparse$ranks[1]
+indiv.ranks <- fev1pp_training_fit_nonsparse$ranks[-1]
+
 # Applying the Match Align algorithm to undo rotational invariance in the results
 fev1pp_training_fit_nonsparse_aligned <- match_align_bpmf(fev1pp_training_fit_nonsparse, y = fev1pp,
                                                           model_params = model_params, p.vec = p.vec)
@@ -241,9 +247,163 @@ individual.scores.aligned <- fev1pp_training_fit_nonsparse_aligned$individual.sc
 individual.loadings.aligned <- fev1pp_training_fit_nonsparse_aligned$individual.loadings.final
 individual.betas.aligned <- fev1pp_training_fit_nonsparse_aligned$individual.betas.final
 
+# Order the components by squared Frobenius-norm of the corresponding rank-1 structure after burn-in --
+
+# Save the aligned components after burn-in
+joint.scores.aligned.burnin <- joint.scores.aligned[iters_burnin]
+joint.loadings.aligned.burnin <- joint.loadings.aligned[iters_burnin]
+joint.betas.aligned.burnin <- joint.betas.aligned[iters_burnin]
+
+# For each component, calculate the posterior mean of the corresponding rank-1 structure
+joint.rank1.structure <- lapply(1:joint.rank, function(r) {
+  # Calculate the rank-1 structure for the given component at each iteration
+  factor_r_structure <- lapply(1:burnin, function(iter) {
+    rbind(joint.loadings.aligned.burnin[[iter]][,r,drop=FALSE], t(joint.betas.aligned.burnin[[iter]][r,,drop=FALSE])) %*% 
+      t(joint.scores.aligned.burnin[[iter]][,r,drop=FALSE])
+  })
+  
+  # Calculate the posterior mean
+  Reduce("+", factor_r_structure)/length(factor_r_structure)
+})
+
+# Calculate the norm of each rank-1 structure
+joint.structure.norm <- sapply(joint.rank1.structure, function(str) frob(str))
+
+# Order the factors
+joint.factor.order <- order(joint.structure.norm, decreasing = TRUE)
+
+# Reorder the joint scores, loadings, and betas after burn-in
+joint.scores.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+  joint.scores.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
+})
+joint.loadings.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+  joint.loadings.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
+})
+joint.betas.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+  joint.betas.aligned.burnin[[iter]][joint.factor.order,,drop=FALSE]
+})
+
+# Order the factors in each individual structure by the Frobenius norm of their corresponding rank-1 structure --
+
+# Save the aligned components after burn-in
+individual.scores.aligned.burnin <- lapply(1:q, function(s) individual.scores.aligned[[s]][iters_burnin])
+individual.loadings.aligned.burnin <- lapply(1:q, function(s) individual.loadings.aligned[[s]][iters_burnin])
+individual.betas.aligned.burnin <- lapply(1:q, function(s) individual.betas.aligned[[s]][iters_burnin])
+
+# For each source and each component, calculate the posterior mean of the corresponding rank-1 structure
+individual.rank1.structure <- lapply(1:q, function(s) {
+  lapply(1:indiv.ranks[s], function(r) {
+    # Calculate the rank-1 structure for the given component at each iteration
+    factor_r_structure <- lapply(1:burnin, function(iter) {
+      rbind(individual.loadings.aligned.burnin[[s]][[iter]][,r,drop=FALSE], t(individual.betas.aligned.burnin[[s]][[iter]][r,,drop=FALSE])) %*% 
+        t(individual.scores.aligned.burnin[[s]][[iter]][,r,drop=FALSE])
+    })
+    
+    # Calculate the posterior mean
+    Reduce("+", factor_r_structure)/length(factor_r_structure)
+  })
+})
+
+# Calculate the norm of each rank-1 structure for each source
+individual.structure.norm <- lapply(1:q, function(s) {
+  sapply(individual.rank1.structure[[s]], function(str) frob(str))
+})
+
+# Order the factors
+individual.factor.order <- lapply(1:q, function(s) {
+  order(individual.structure.norm[[s]], decreasing = TRUE)
+})
+
+# Reorder the individual scores, loadings, and betas after burn-in
+individual.scores.aligned.burnin.order <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    individual.scores.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+  })
+})
+individual.loadings.aligned.burnin.order <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    individual.loadings.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+  })
+})
+individual.betas.aligned.burnin.order <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    individual.betas.aligned.burnin[[s]][[iter]][individual.factor.order[[s]],,drop=FALSE]
+  })
+})
+
+# Check the joint structure after the algorithm matches the original structure --
+
+# Create a vector for the indices of each rank
+beta.ind <- lapply(1:length(ranks), function(i) {
+  if (i == 1) { 
+    (1:ranks[i]) + 1
+  } else {
+    ((sum(ranks[1:(i-1)])+1):sum(ranks[1:i])) + 1
+  }
+})
+
+# Save the joint loadings
+joint.loadings <- lapply(iters_burnin, function(iter) {
+  rbind(do.call(rbind, fev1pp_training_fit_nonsparse$U.draw[[iter]]), # Joint loadings  
+        t(fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[1]],])) # Joint regression coefficients
+})
+
+# Save joint scores
+joint.scores <- lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
+
+# Save the original joint structure
+joint.structure.original <- lapply(1:burnin, function(iter) {
+  joint.loadings[[iter]] %*% t(joint.scores[[iter]])
+})
+
+# Calculate the new structure
+joint.structure.new <- lapply(1:burnin, function(iter) {
+  rbind(joint.loadings.aligned.burnin.order[[iter]], t(joint.betas.aligned.burnin.order[[iter]])) %*%
+    t(joint.scores.aligned.burnin.order[[iter]])
+})
+
+# Check
+all.equal(joint.structure.original, joint.structure.new) # TRUE!
+
+# Check the individual structure after the algorithm matches the original structure --
+
+# Combine the individual loadings and betas
+individual.loadings <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) {
+  rbind(fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]], 
+        fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
+}))
+individual.scores <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]]))
+
+# Calculate the original structure
+individual.structure.original <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    individual.loadings[[s]][[iter]] %*% t(individual.scores[[s]][[iter]])
+  })
+})
+
+# Calculate the new structure
+individual.structure.new <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    rbind(individual.loadings.aligned.burnin.order[[s]][[iter]], t(individual.betas.aligned.burnin.order[[s]][[iter]])) %*%
+      t(individual.scores.aligned.burnin.order[[s]][[iter]])
+  })
+})
+
+# Check
+lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]])) # TRUE TRUE!
+
+# Rename
+joint.scores.final <- joint.scores.aligned.burnin.order
+joint.loadings.final <- joint.loadings.aligned.burnin.order
+joint.betas.final <- joint.betas.aligned.burnin.order
+
+individual.scores.final <- individual.scores.aligned.burnin.order
+individual.loadings.final <- individual.loadings.aligned.burnin.order
+individual.betas.final <- individual.betas.aligned.burnin.order
+
 # Save the results
-save(joint.scores.aligned, joint.loadings.aligned, joint.betas.aligned, individual.scores.aligned, individual.loadings.aligned, individual.betas.aligned,
-     file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching.rda")
+save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
+     file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda")
 
 # -----------------------------------------------------------------------------
 # PCA-like plots using non-sparse model
@@ -262,29 +422,29 @@ cluster_colors <- viridis(3)[1:2][clusters.soma]
 cluster_shapes <- c(3,4)[clusters.soma]
 
 # Load in the aligned factors
-load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching.rda", verbose = TRUE)
+load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda", verbose = TRUE)
 
 # -------------------------------------
 # Joint structure
 # -------------------------------------
 
 # Calculate the posterior mean of the joint scores
-joint.scores.aligned.mean <- Reduce("+", lapply((nsample/2 + 1):nsample, function(iter) joint.scores.aligned[[iter]]))/(nsample/2)
+joint.scores.final.mean <- Reduce("+", lapply(1:burnin, function(iter) joint.scores.final[[iter]]))/(nsample/2)
 
 # Plot subjects against every combination of PCs
 joint_rank <- fev1pp_training_fit_nonsparse$ranks[1]
-pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Joint_Structure_Aligned_PCA_Plot.pdf"), width = 15)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Joint_Structure_Aligned_Ordered_PCA_Plot.pdf"), width = 15)
 for (rs1 in 1:joint_rank) {
  for (rs2 in 1:joint_rank) {
    if (rs2 > rs1) {
      par(mfrow = c(1,2), mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
      # Plot with case-control label as colors
-     plot(joint.scores.aligned.mean[,rs1], joint.scores.aligned.mean[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
+     plot(joint.scores.final.mean[,rs1], joint.scores.final.mean[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
           ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
           col = ccstat_colors, lwd = 3)
      
      # Plot with stand-out subjects as colors
-     plot(joint.scores.aligned.mean[,rs1], joint.scores.aligned.mean[,rs2], xlab = paste0("Joint Factor ", rs1),
+     plot(joint.scores.final.mean[,rs1], joint.scores.final.mean[,rs2], xlab = paste0("Joint Factor ", rs1),
           ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
           col = cluster_colors, pch = cluster_shapes, lwd = 3)
      legend("topleft", col = c("#440154FF", "#21908CFF"), pch = c(3,4),
@@ -300,24 +460,24 @@ dev.off()
 # -------------------------------------
 
 # Saving the reordered individual factors, ordered by variance explained in each source
-individual.scores.aligned <- lapply(1:q, function(s) Reduce("+", lapply((nsample/2 + 1):nsample, function(iter) individual.scores.aligned[[s]][[iter]]))/(nsample/2))
+individual.scores.final.mean <- lapply(1:q, function(s) Reduce("+", lapply(1:burnin, function(iter) individual.scores.final[[s]][[iter]]))/(nsample/2))
 
 # Plot subjects against every combination of PCs for Biocrates
 indiv_rank1 <- fev1pp_training_fit_nonsparse$ranks[2]
-pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Individual_Structure_Biocrates_Aligned_PCA_Plot.pdf"), width = 15)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Individual_Structure_Biocrates_Aligned_Ordered_PCA_Plot.pdf"), width = 15)
 for (rs1 in 1:indiv_rank1) {
   for (rs2 in 1:indiv_rank1) {
     if (rs2 > rs1) {
       par(mfrow = c(1,2))
       # Plot with case-control label as colors
-      plot(individual.scores.aligned[[1]][,rs1], individual.scores.aligned[[1]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+      plot(individual.scores.final.mean[[1]][,rs1], individual.scores.final.mean[[1]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Metabolomic ", rs1, " vs ", rs2),
            col = ccstat_colors)
       
       # Plot with stand-out subjects as colors
-      plot(individual.scores.aligned[[1]][,rs1], individual.scores.aligned[[1]][,rs2], xlab = paste0("Individual Factor ", rs1),
+      plot(individual.scores.final.mean[[1]][,rs1], individual.scores.final.mean[[1]][,rs2], xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Metabolomic ", rs1, " vs ", rs2),
-           col = cluster_colors, pch = cluster_shapes)
+           col = cluster_colors, pch = cluster_shapes, lwd = 3)
       legend("bottomleft", col = c("#440154FF", "#21908CFF"), pch = c(3,4),
              legend = c("Cluster 1", "Cluster 2"))
       par(mfrow = c(1,1))
@@ -328,20 +488,20 @@ dev.off()
 
 # Plot subjects against every combination of PCs for Somascan
 indiv_rank2 <- fev1pp_training_fit_nonsparse$ranks[3]
-pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Individual_Structure_Somascan_Aligned_PCA_Plot.pdf"), width = 15)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Individual_Structure_Somascan_Aligned_Ordered_PCA_Plot.pdf"), width = 15)
 for (rs1 in 1:indiv_rank2) {
   for (rs2 in 1:indiv_rank2) {
     if (rs2 > rs1) {
       par(mfrow = c(1,2))
       # Plot with case-control label as colors
-      plot(individual.scores.aligned[[2]][,rs1], individual.scores.aligned[[2]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+      plot(individual.scores.final.mean[[2]][,rs1], individual.scores.final.mean[[2]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Proteomic ", rs1, " vs ", rs2),
            col = ccstat_colors)
       
       # Plot with stand-out subjects as colors
-      plot(individual.scores.aligned[[2]][,rs1], individual.scores.aligned[[2]][,rs2], xlab = paste0("Individual Factor ", rs1),
+      plot(individual.scores.final.mean[[2]][,rs1], individual.scores.final.mean[[2]][,rs2], xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Proteomic ", rs1, " vs ", rs2),
-           col = cluster_colors, pch = cluster_shapes)
+           col = cluster_colors, pch = cluster_shapes, lwd = 3)
       par(mfrow = c(1,1))
     }
   } 
@@ -406,15 +566,30 @@ dev.off()
 library(dplyr)
 
 # Examining joint factor 1 as an example
-joint.factor1.aligned <- do.call(cbind, lapply((nsample/2 + 1):nsample, function(iter) joint.loadings.aligned[[iter]][,1,drop=FALSE]))
+joint.factor2.final <- do.call(cbind, lapply(1:burnin, function(iter) joint.loadings.final[[iter]][,2,drop=FALSE]))
 
 # Calculating means and CIs for each loading
-joint.factor1.aligned.summary <- t(apply(joint.factor1.aligned, 1, function(load) {
+joint.factor2.final.summary <- t(apply(joint.factor2.final, 1, function(load) {
   c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
 }))
 
 # Name the rows by the respective biomarker
-rownames(joint.factor1.aligned.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
+rownames(joint.factor2.final.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
+
+# Separate the loadings by metabolites and proteins
+joint.factor2.final.summary.metabolites <- joint.factor2.final.summary[1:p.vec[1],,drop=FALSE]
+joint.factor2.final.summary.proteins <- joint.factor2.final.summary[(p.vec[1]+1):p,,drop=FALSE]
+
+# Order the loadings within the metabolites and proteins by the posterior mean
+joint.factor2.final.summary.metabolites.order <- 
+  joint.factor2.final.summary.metabolites[order(joint.factor2.final.summary.metabolites[,1], decreasing = FALSE),]
+
+joint.factor2.final.summary.proteins.order <- 
+  joint.factor2.final.summary.proteins[order(joint.factor2.final.summary.proteins[,1], decreasing = FALSE),]
+
+# Save the results
+save(joint.factor2.final.summary, joint.factor2.final.summary.metabolites.order, joint.factor2.final.summary.proteins.order,
+     file = "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/Joint_Factor2_Aligned_Ordered_Summary.rda")
 
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit
