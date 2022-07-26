@@ -5267,17 +5267,16 @@ bpmf_test_scale <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, 
 # Validation Simulation
 # -----------------------------------------------------------------------------
 
-bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, 
-                     center = FALSE, nninit, ranks,  response = NULL, missingness = NULL, 
-                     prop_missing = NULL, entrywise = NULL, sparsity = FALSE) {
+bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, center = FALSE, nninit, ranks, 
+                     response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE) {
   
   # ---------------------------------------------------------------------------
   # Check availability of parameters
   # ---------------------------------------------------------------------------
-  results_available <- c(TRUE, TRUE, !is.null(response), 
+  results_available <- c(TRUE, TRUE, !is.null(response), check_availability(response, "continuous"), 
                          check_availability(missingness, "missingness_in_data") | check_availability(missingness, "both"), 
                          check_availability(missingness, "missingness_in_response") | check_availability(missingness, "both"))
-  names(results_available) <- c("joint structure", "indiv structure", "EY", "Xm", "Ym")
+  names(results_available) <- c("joint structure", "indiv structure", "EY", "tau2", "Xm", "Ym")
   
   # sim_results <- lapply(1:nsim, function(i) list())
   cl <- makeCluster(n_clust)
@@ -5287,14 +5286,14 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
   packs <- c("Matrix", "MASS", "truncnorm")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
-  # for (sim_iter in 1:nsim) {
+    # for (sim_iter in 1:nsim) {
     # svMisc::progress(sim_iter/(nsim/100))
     
     # -------------------------------------------------------------------------
     # Generating the data
     # -------------------------------------------------------------------------
-  
-    sim_data <- bpmf_data(p.vec = p.vec, n = n, ranks = ranks, true_params = true_params, s2nX = NULL, s2nY = NULL, response = response, missingness = missingness, entrywise = entrywise, prop_missing = prop_missing, sparsity = sparsity)
+    
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity)
     
     # Saving the data
     true_data <- sim_data$data
@@ -5316,6 +5315,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     
     # The response parameters
     beta <- sim_data$beta
+    tau2 <- sim_data$tau2
     EY <- sim_data$EY
     
     # Setting the ranks
@@ -5347,7 +5347,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
         Y_observed <- Y_missing
       }
     }
-  
+    
     # -------------------------------------------------------------------------
     # Center the data
     # -------------------------------------------------------------------------
@@ -5366,7 +5366,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data = observed_data, Y = Y_observed, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, nsample, progress = TRUE, starting_values = NULL)
+    res <- bpmf(data = observed_data, Y = Y_observed, nninit = nninit, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -5377,6 +5377,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     Vs.draw <- res$Vs.draw
     beta.draw <- res$beta.draw
     Z.draw <- res$Z.draw
+    tau2.draw <- res$tau2.draw
     Xm.draw <- res$Xm.draw
     Ym.draw <- res$Ym.draw
     
@@ -5391,6 +5392,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     Vs.burnin <- Vs.draw[burnin:nsample]
     beta.burnin <- beta.draw[burnin:nsample]
     Z.burnin <- Z.draw[burnin:nsample]
+    tau2.burnin <- tau2.draw[burnin:nsample]
     Xm.burnin <- Xm.draw[burnin:nsample]
     Ym.burnin <- Ym.draw[burnin:nsample]
     
@@ -5433,7 +5435,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
             if (r.vec[s] == 0) Vs.burnin.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
           }
           
-          VStar.iter <- cbind(do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
+          VStar.iter <- cbind(1, do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
           mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
           mat
         })
@@ -5451,7 +5453,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
             if (r.vec[s] == 0) Vs.burnin.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
           }
           
-          VStar.iter <- cbind(do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
+          VStar.iter <- cbind(1, do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
           
           mat[[1,1]] <- pnorm(VStar.iter %*% beta.burnin[[res]][[1,1]])
           mat
@@ -5467,6 +5469,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     draws <- list(joint.structure.burnin = joint.structure.burnin,
                   indiv.structure.burnin = indiv.structure.burnin,
                   EY = EY.burnin,
+                  tau2 = tau2.burnin,
                   Xm = Xm.burnin,
                   Ym = Ym.burnin)
     
@@ -5482,6 +5485,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     truth <- list(joint.structure = joint.structure,
                   indiv.structure = indiv.structure,
                   EY = EY,
+                  tau2 = tau2,
                   Xm = Xm,
                   Ym = Ym)
     
@@ -5514,7 +5518,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   
   # Calculate the denominator for the average
   denominator <- calculate_denominator(sim_results, q, p.vec, n, nsim, results_available)
-
+  
   # Taking the averages of all the results
   sim_results_avg <- average_results(sim_results, denominator, p.vec, n, q, nsim, results_available, missingness)
   
