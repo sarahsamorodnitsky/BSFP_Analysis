@@ -1285,7 +1285,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   W.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = q))
   
   if (!response_given) {
-    beta.draw <- Z.draw <- Ym.draw <- VStar.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
+    beta.draw <- tau2.draw <- Z.draw <- Ym.draw <- VStar.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   }
   
   if (!missingness_in_data) {
@@ -5281,7 +5281,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
   # sim_results <- lapply(1:nsim, function(i) list())
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
-  funcs <- c("bpmf_data", "center_data", "bpmf", "get_results", "BIDIFAC",
+  funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
   packs <- c("Matrix", "MASS", "truncnorm")
@@ -5366,7 +5366,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
-    res <- bpmf(data = observed_data, Y = Y_observed, nninit = nninit, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
+    res <- bpmf_data_mode(data = observed_data, Y = Y_observed, nninit = nninit, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
     
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
@@ -5952,6 +5952,11 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   sigma2_joint <- joint_var <- true_params$joint_var
   sigma2_indiv <- indiv_vars <- true_params$indiv_vars
   beta_vars <- true_params$beta_vars
+  response_vars <- true_params$response_vars
+  
+  if (!is.null(response_vars)) {
+    shape <- response_vars[1]; rate <- response_vars[2]
+  }
   
   # -------------------------------------------------------------------------
   # Generating the underlying structure
@@ -6124,9 +6129,22 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
     }
     
     if (response == "continuous") {
+      
+      # If a true error variance is provided, set tau2 to this value
+      if (length(error_vars) > q) {
+        tau2 <- matrix(list(), nrow = 1, ncol = 1)
+        tau2[[1,1]] <- error_vars[q+1]
+      }
+      
+      # If a true error variance is not provided, use prior 
+      if (length(error_vars) == q) {
+        tau2 <- matrix(list(), nrow = 1, ncol = 1)
+        tau2[[1,1]] <- matrix(1/rgamma(1, shape = shape, rate = rate)) 
+      }
+      
       Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
       EY[[1,1]] <- VStar %*% beta[[1,1]]
-      error_y <- matrix(rnorm(n, mean = 0, sd = sqrt(error_vars[q+1])), ncol = 1)
+      error_y <- matrix(rnorm(n, mean = 0, sd = sqrt(tau2[[1,1]])), ncol = 1)
       
       # -------------------------------------------------------------------------
       # Standardizing the variance of the signal in the response
@@ -6220,7 +6238,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
        joint.structure = joint.structure, # Joint structure
        indiv.structure = indiv.structure, # Individual structure
        V = V, U = U, Vs = Vs, W = W, # Components of the structure
-       beta = beta, EY = EY, gamma = gamma, p.prior = p.prior)
+       beta = beta, EY = EY, tau2 = tau2, gamma = gamma, p.prior = p.prior)
 }
 
 # Returns the entries in the true data that were not observed
