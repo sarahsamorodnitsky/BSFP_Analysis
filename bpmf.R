@@ -7387,15 +7387,22 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       if (!estim_ranks) {
         mod.out <- sJIVE(X = training_data_list, Y = c(Y_train[[1,1]]), eta = eta, rankA = ranks[-1], rankJ = ranks[1], threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
       }
+      
+      # Fitting the model on test data
+      mod.test <- stats::predict(mod.out, newdata = test_data_list)
 
       # Saving the joint structure
       mod.joint <- lapply(1:q, function(s) {
-        t(t(mod.out$U_I[[s]])) %*% mod.out$S_J
+        training <- matrix(mod.out$U_I[[s]]) %*% mod.out$S_J
+        testing <-  matrix(mod.out$U_I[[s]]) %*% mod.test$Sj
+        cbind(training, testing)
       })
       
       # Saving the individual structure
       mod.individual <- lapply(1:q, function(s) {
-        mod.out$W_I[[s]] %*% mod.out$S_I[[s]]
+        training <- mod.out$W_I[[s]] %*% mod.out$S_I[[s]]
+        testing <- mod.out$W_I[[s]] %*% mod.test$Si[[s]]
+        cbind(training, testing)
       })
       
       # Saving the joint rank
@@ -7406,7 +7413,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Saving the joint scores
       if (joint.rank != 0) {
-        joint.scores <- t(mod.out$S_J)
+        joint.scores <- t(cbind(mod.out$S_J, mod.test$Sj))
       }
       if (joint.rank == 0) {
         joint.scores <- NULL
@@ -7415,26 +7422,23 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Saving the individual scores
       indiv.scores <- lapply(1:q, function(s) {
         if (indiv.rank[s] != 0) {
-          t(mod.out$S_I[[s]])
+          t(cbind(mod.out$S_I[[s]], mod.test$Si[[s]]))
         }
       })
       
       # Saving the E(Y)
-      EY.fit <- t(mod.out$fittedY)
+      EY.fit <- t(cbind(mod.out$fittedY, mod.test$Ypred))
       
       # Save the ranks
       mod.ranks <- c(joint.rank, indiv.rank)
       
       # Combining all scores together
-      all.scores <- cbind(Y_train[[1,1]], joint.scores, do.call(cbind, indiv.scores))
+      all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
       colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
       
       # Do not compute results for coverage
       coverage_EY_train <- coverage_EY_test <- NA
       coverage_Y_train <- coverage_Y_test <- NA
-      
-      # Do not compute results for test data
-      joint.recovery.structure.test <- indiv.recovery.structure.test <- mse_EY_test <- NA
     }
     
     if (mod == "BIDIFAC") {
@@ -8042,7 +8046,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       sigma.mat <- mod.out$sigma.mat
     }
     
-    if (mod != "test" & mod != "sJIVE" & mod != "BIP") {
+    if (mod != "test" & mod != "BIP") {
       # Combining the ranks
       mod.ranks <- c(joint.rank, indiv.rank)
       
@@ -8209,7 +8213,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       }))
     }
      
-    if (mod != "test" & mod != "sJIVE" & mod != "BIP") {
+    if (mod != "test" & mod != "BIP") {
       # Joint structure
       joint.recovery.structure.test <- mean(sapply(1:q, function(s) {
         frob(mod.joint[[s]][,(n+1):(2*n)] - joint.structure_test[[s,1]])/frob(joint.structure_test[[s,1]])
@@ -8228,7 +8232,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # Comparing the predicted Y to the training and test Y
     mse_EY_train <- frob(EY.fit[1:n,] - EY_train[[1,1]])/frob(EY_train[[1,1]])
     
-    if (mod != "sJIVE" & mod != "BIP") {
+    if (mod != "BIP") {
       mse_EY_test <- frob(EY.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
     }
     
