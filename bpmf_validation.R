@@ -26,21 +26,14 @@ q <- 2
 model_params <- true_params <- list(error_vars = c(1,1),
                                     joint_var = 1,
                                     indiv_vars = c(1,1),
-                                    beta_vars = c(1, rep(1, q)) # Use the same variance for all the effects from each source
-)
+                                    beta_vars = c(1, 1, rep(1, q)), # Use the same variance for all the effects from each source
+                                    response_vars = c(shape = 1, rate = 1))
 
 no_response_no_missing <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Continuous response, no missingness
 # -----------------------------------------------------------------------------
-
-# Setting up the model parameters
-model_params <- true_params <- list(error_vars = c(1,1,1),
-                                    joint_var = 1,
-                                    indiv_vars = c(1,1),
-                                    beta_vars = c(1, rep(1, q)) # Use the same variance for all the effects from each source
-)
 
 # Continuous response
 response_continuous <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
@@ -56,13 +49,6 @@ response_binary <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, 
 # Coverage simulations - Continuous response with missingness
 # -----------------------------------------------------------------------------
 
-# Setting up the model parameters
-model_params <- true_params <- list(error_vars = c(1,1,1),
-                                    joint_var = 1,
-                                    indiv_vars = c(1,1),
-                                    beta_vars = c(1, rep(1, q)) # Use the same variance for all the effects from each source
-)
-
 # Missing continuous response
 response_continuous_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100,  center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
 response_continuous_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
@@ -71,13 +57,6 @@ response_continuous_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Binary response with missingness
 # -----------------------------------------------------------------------------
-
-# Setting up the model parameters
-model_params <- true_params <- list(error_vars = c(1,1),
-                                    joint_var = 1,
-                                    indiv_vars = c(1,1),
-                                    beta_vars = c(1, rep(1, q)) # Use the same variance for all the effects from each source
-)
 
 # Missing binary response
 response_binary_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
@@ -88,13 +67,6 @@ response_binary_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, t
 # Coverage simulations - No response, entrywise missing data
 # -----------------------------------------------------------------------------
 
-# Setting up the model parameters
-model_params <- true_params <- list(error_vars = c(1,1),
-                                    joint_var = 1,
-                                    indiv_vars = c(1,1),
-                                    beta_vars = c(1, rep(1, q)) # Use the same variance for all the effects from each source
-)
-
 # Entrywise missing data
 missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
 missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
@@ -103,13 +75,6 @@ missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, mode
 # -----------------------------------------------------------------------------
 # Coverage simulations - No response, columnwise missing data
 # -----------------------------------------------------------------------------
-
-# Setting up the model parameters
-model_params <- true_params <- list(error_vars = c(1,1),
-                                    joint_var = 1,
-                                    indiv_vars = c(1,1),
-                                    beta_vars = c(1, rep(1, q)) # Use the same variance for all the effects from each source
-)
 
 # Columnwise missing data
 columnwise_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.1)
@@ -122,13 +87,6 @@ columnwise_missing0.3 <- bpmf_sim(nsample = 20000, n_clust = 10, p.vec, n, true_
 # -----------------------------------------------------------------------------
 # Coverage simulations - Continuous response, entrywise missing data
 # -----------------------------------------------------------------------------
-
-# Setting up the model parameters
-model_params <- true_params <- list(error_vars = c(1,1,1),
-                                    joint_var = 1,
-                                    indiv_vars = c(1,1),
-                                    beta_vars = c(1, rep(1, q)) # Use the same variance for all the effects from each source
-)
 
 # Continuous response
 response_continuous_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.1)
