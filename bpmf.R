@@ -6457,13 +6457,13 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
         }
         
         if (param == 3) {
-          if (!results_available[5]) { # If there is NO missing data
+          if (!results_available[6]) { # If there is NO missing data
             mse_s_observed <- mse(truth[[param]][[s,1]], current_draws)
             mse_s_missing <- NULL
             mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
           }
           
-          if (results_available[5]) { # If there IS missing data
+          if (results_available[6]) { # If there IS missing data
             # For the entries in the structure that ARE observed -- 
             obs_inds <- 1:length(truth[[param]][[s,1]])
             
@@ -6504,6 +6504,7 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
   # Return the results
   results
 }
+
 
 # Count the number of times each entry in each parameter was observed (i.e. not missing)
 calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_available) {
