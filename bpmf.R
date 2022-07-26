@@ -7429,9 +7429,6 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Saving the E(Y)
       EY.fit <- t(cbind(mod.out$fittedY, mod.test$Ypred))
       
-      # Save the ranks
-      mod.ranks <- c(joint.rank, indiv.rank)
-      
       # Combining all scores together
       all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
       colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
@@ -7808,6 +7805,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     if (mod == "BIP") {
       # Transpose the data sets so they are in nxp orientation
       training_data_list_bip <- lapply(training_data_list, function(s) t(s))
+      test_data_list_bip <- lapply(test_data_list, function(s) t(s))
       
       # Add the response to the training data list
       training_data_list_bip[[3]] <- Y_train[[1,1]]
@@ -7822,11 +7820,14 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
         bip_num_ranks <- sum(ranks)
       }
       
-      # Running the model
+      # Running the model on training data
       mod.out <- BIP(dataList = training_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = 5000, burnin = 2500, nbrcomp = bip_num_ranks)
       
+      # Predicting on test data
+      mod.test <- BIPpredict(dataListNew = test_data_list_bip, Result = mod.out, meth = "BA")
+      
       # Saving the results
-      bip.scores <- mod.out$EstU
+      bip.scores <- rbind(mod.out$EstU, mod.test$Upredtest)
       bip.loadings <- mod.out$EstLoad
       
       # Saving the feature sds to scale the estimated structure
@@ -7875,9 +7876,6 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
         sum(indiv.factors[[s]])
       })
       
-      # Save the ranks
-      mod.ranks <- c(joint.rank, indiv.rank)
-      
       # Save the posterior mean of the joint structure
       mod.joint <- lapply(1:q, function(s) {
         t(bip.scores[,joint.factors,drop=FALSE] %*% bip.loadings[[s]][joint.factors,,drop=FALSE] %*% diag(bip.est.sd[[s]]))
@@ -7890,7 +7888,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Save the predicted Y
       comp.inc.y <- sapply(mod.out$CompoSelMean[q+1,], function(comp) comp > 0.5)
-      EY.fit <- mod.out$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE]
+      EY.fit <- mod.out$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE] # Note: this includes mod.test$ypredict, check: all(mod.test$ypredict == EY.fit[31:60,])
       
       # Save the estimated error sd for Y
       sigma.mat <- matrix(nrow = q+1, ncol = 1)
@@ -7899,9 +7897,6 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Do not compute results for coverage
       coverage_EY_train <- coverage_EY_test <- NA
       coverage_Y_train <- coverage_Y_test <- NA
-      
-      # Do not compute results for test data
-      joint.recovery.structure.test <- indiv.recovery.structure.test <- mse_EY_test <- NA
     }
     
     if (mod == "BPMF_test") {
@@ -8046,20 +8041,18 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       sigma.mat <- mod.out$sigma.mat
     }
     
-    if (mod != "test" & mod != "BIP") {
-      # Combining the ranks
-      mod.ranks <- c(joint.rank, indiv.rank)
-      
-      # Combining all scores together
-      all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
-      colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
-    }
+    # Combining the ranks
+    mod.ranks <- c(joint.rank, indiv.rank)
     
     # -------------------------------------------------------------------------
     # As applicable, use structure in Bayesian linear model
     # -------------------------------------------------------------------------
     
     if (mod %in% c("BIDIFAC", "JIVE", "MOFA")) {
+      # Combining all scores together
+      all.scores <- cbind(Y[[1,1]], joint.scores, do.call(cbind, indiv.scores))
+      colnames(all.scores) <- c("y", rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
+      
       # Subset the scores to just the training data
       all.scores.train <- all.scores[1:n,,drop=FALSE]
       
@@ -8202,6 +8195,8 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     }
     
     if (mod != "test") {
+      # Training data --
+      
       # Joint structure
       joint.recovery.structure.train <- mean(sapply(1:q, function(s) {
         frob(mod.joint[[s]][,1:n] - joint.structure_train[[s,1]])/frob(joint.structure_train[[s,1]])
@@ -8211,9 +8206,9 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       indiv.recovery.structure.train <- mean(sapply(1:q, function(s) {
         frob(mod.individual[[s]][,1:n] - indiv.structure_train[[s,1]])/frob(indiv.structure_train[[s]])
       }))
-    }
-     
-    if (mod != "test" & mod != "BIP") {
+      
+      # Test data --
+
       # Joint structure
       joint.recovery.structure.test <- mean(sapply(1:q, function(s) {
         frob(mod.joint[[s]][,(n+1):(2*n)] - joint.structure_test[[s,1]])/frob(joint.structure_test[[s,1]])
@@ -8231,10 +8226,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     
     # Comparing the predicted Y to the training and test Y
     mse_EY_train <- frob(EY.fit[1:n,] - EY_train[[1,1]])/frob(EY_train[[1,1]])
-    
-    if (mod != "BIP") {
-      mse_EY_test <- frob(EY.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
-    }
+    mse_EY_test <- frob(EY.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
     
     # Save 
     if (estim_ranks) {
