@@ -6864,24 +6864,24 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       }
       
       # For tau2
-      # if (param == 4) {
-      #   # Calculate the average
-      #   avg_coverage <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[1]]))/(denominator[[param]][[1,1]])
-      #   
-      #   # Calculate the average MSE
-      #   avg_mse <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[2]]))/nsim
-      #   
-      #   # Calculate the average CI width
-      #   avg_ci_width <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[3]]))/(denominator[[param]][[1,1]])
-      #   
-      #   # Save the results
-      #   results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage),
-      #                                    avg_mse = mean(avg_mse),
-      #                                    avg_ci_width = mean(avg_ci_width))
-      # }
+      if (param == 4) {
+        # Calculate the average
+        avg_coverage <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[1]]))/(denominator[[param]][[1,1]])
+
+        # Calculate the average MSE
+        avg_mse <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[2]]))/nsim
+
+        # Calculate the average CI width
+        avg_ci_width <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[3]]))/(denominator[[param]][[1,1]])
+
+        # Save the results
+        results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage),
+                                         avg_mse = mean(avg_mse),
+                                         avg_ci_width = mean(avg_ci_width))
+      }
       
       # For Xm
-      if (param == 4) {
+      if (param == 5) {
         for (s in 1:q) {
           # Save the indices for missing observations in X.
           missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs[[s,1]])
@@ -6906,7 +6906,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       }
         
       # For Ym
-      if (param == 5) {
+      if (param == 6) {
         missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs_Y[[1,1]])
         results_compiled <- compile_missing_results(param_by_sim_iter, s = 1, dims = c(n, 1), nsim, missing_obs_inds, type = "observed_data")
         
