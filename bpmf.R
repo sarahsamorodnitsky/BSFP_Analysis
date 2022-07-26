@@ -6525,7 +6525,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
   
   # sim_results (list) = list of results from the simulation
   n_param <- length(results_available)
-   
+  
   # Create a list to store the results by model parameter
   counts <- lapply(1:n_param, function(i) list())
   names(counts) <- names(sim_results[[1]])[1:n_param]
@@ -6570,13 +6570,13 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
       }
       
       # For tau2, return the number of simulation replications 
-      # if (param == 4) {
-      #   counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
-      #   counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
-      # }
+      if (param == 4) {
+        counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
+        counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
+      }
       
       # For Xm, count how many times in X. each entry WAS missing
-      if (param == 4) {
+      if (param == 5) {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
         for (s in 1:q) {
@@ -6591,7 +6591,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
       }
       
       # For Ym, count how many times in y each entry WAS missing
-      if (param == 5) {
+      if (param == 6) {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         obs_inds <- 1:n
         counts[[param]][[1,1]] <- rep(0, length(obs_inds))
@@ -6606,7 +6606,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
       counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
     }
   }
-
+  
   # Return
   counts
 }
