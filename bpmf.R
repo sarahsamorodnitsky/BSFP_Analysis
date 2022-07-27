@@ -2035,7 +2035,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   # ---------------------------------------------------------------------------
   
   # Storing the structures at each Gibbs sampling iteration
-  J.draw <- A.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  J.draw <- A.draw <- S.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   
   # Calculating the structure for Y at each Gibbs sampling iteration
   EY.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
@@ -2048,6 +2048,9 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
         
         # Calculating the individual structure and scaling by sigma.mat
         A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,s]] %*% t(Vs.draw[[iter]][[1,s]])) * sigma.mat[s,1]
+        
+        # Calculate the overall structure (joint + individual
+        S.draw[[iter]][[s,1]] <- J.draw[[iter]][[s,1]] + A.draw[[iter]][[s,1]]
       }
       
       # Calculate the structure for Y
@@ -2067,7 +2070,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   list(data = data, # Returning the scaled version of the data
         Y = Y, # Return the response vector
         sigma.mat = sigma.mat, # Scaling factors
-        J.draw = J.draw, A.draw = A.draw, EY.draw = EY.draw, # Underlying structure
+        J.draw = J.draw, A.draw = A.draw, S.draw = S.draw, EY.draw = EY.draw, # Underlying structure
         V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
         VStar.draw = VStar.draw, # Components that predict Y,
         Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
@@ -5279,10 +5282,10 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
   # ---------------------------------------------------------------------------
   # Check availability of parameters
   # ---------------------------------------------------------------------------
-  results_available <- c(TRUE, TRUE, !is.null(response), check_availability(response, "continuous"), 
+  results_available <- c(TRUE, TRUE, TRUE, !is.null(response), check_availability(response, "continuous"), 
                          check_availability(missingness, "missingness_in_data") | check_availability(missingness, "both"), 
                          check_availability(missingness, "missingness_in_response") | check_availability(missingness, "both"))
-  names(results_available) <- c("joint structure", "indiv structure", "EY", "tau2", "Xm", "Ym")
+  names(results_available) <- c("joint structure", "indiv structure", "overall structure", "EY", "tau2", "Xm", "Ym")
   
   # sim_results <- lapply(1:nsim, function(i) list())
   cl <- makeCluster(n_clust)
@@ -5306,6 +5309,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     q <- length(p.vec)
     joint.structure <- sim_data$joint.structure
     indiv.structure <- sim_data$indiv.structure
+    overall.structure <- sim_data$overall.structure
     
     missing_data <- sim_data$missing_data
     missing_obs <- sim_data$missing_obs
@@ -5408,6 +5412,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     
     joint.structure.burnin <- res$J.draw[burnin:nsample]
     indiv.structure.burnin <- res$A.draw[burnin:nsample]
+    overall.structure.burnin <- res$S.draw[burnin:nsample]
     
     # -------------------------------------------------------------------------
     # Calculating the estimate for E(Y) at each iteration
@@ -5427,6 +5432,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     # Saving the draws from the sampler together
     draws <- list(joint.structure.burnin = joint.structure.burnin,
                   indiv.structure.burnin = indiv.structure.burnin,
+                  overall.structure.burnin = overall.structure.burnin,
                   EY = EY.burnin,
                   tau2 = tau2.burnin,
                   Xm = Xm.burnin,
@@ -5443,6 +5449,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     
     truth <- list(joint.structure = joint.structure,
                   indiv.structure = indiv.structure,
+                  overall.structure = overall.structure,
                   EY = EY,
                   tau2 = tau2,
                   Xm = Xm,
@@ -5921,7 +5928,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   # Generating the underlying structure
   # -------------------------------------------------------------------------
   
-  joint.structure <- indiv.structure <- matrix(list(), ncol = 1, nrow = q)
+  joint.structure <- indiv.structure <- overall.structure <- matrix(list(), ncol = 1, nrow = q)
   
   V <- matrix(list(), nrow = 1, ncol = 1)
   
@@ -5967,6 +5974,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
     
     joint.structure[[s,1]] <- U[[s,1]] %*% t(V[[1,1]])
     indiv.structure[[s,1]] <- W[[s,s]] %*% t(Vs[[1,s]])
+    overall.structure[[s,1]] <- joint.structure[[s,1]] + indiv.structure[[s,1]]
   }
   
   # -------------------------------------------------------------------------
@@ -5986,6 +5994,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
       
       joint.structure[[s,1]] <- s2nX_coef[s] * joint.structure[[s,1]]
       indiv.structure[[s,1]] <- s2nX_coef[s] * indiv.structure[[s,1]]
+      overall.structure[[s,1]] <- joint.structure[[s,1]] + indiv.structure[[s,1]]
     }
   }
   
@@ -6196,6 +6205,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
        s2nY = s2nY, s2nY_coef = s2nY_coef, # Scaling for the response
        joint.structure = joint.structure, # Joint structure
        indiv.structure = indiv.structure, # Individual structure
+       overall.structure = overall.structure, # Joint + Individual structure
        V = V, U = U, Vs = Vs, W = W, # Components of the structure
        beta = beta, EY = EY, tau2 = tau2, gamma = gamma, p.prior = p.prior)
 }
@@ -6368,6 +6378,9 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
   # Save the number of model parameters to check coverage for
   n_param <- length(draws)
   
+  # Save the parameter names
+  param_names <- names(results_available)
+  
   # Create a list to save the results 
   results <- lapply(1:n_param, function(i) list())
   names(results) <- names(truth)
@@ -6376,6 +6389,9 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
   for (param in 1:n_param) {
     # Check the dimension of the current parameter
     dim_param <- nrow(truth[[param]])
+    
+    # Save the name of the parameter
+    current_param <- param_names[param]
     
     # Creating a matrix to store the results. 
     # (This is what will be returned if no results are available) 
@@ -6397,14 +6413,14 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
         
         # Calculate MSE
         # (Calculate the MSE separately for missing and not missing entries in the structure)
-        if (param %in% c(1,2)) {
-          if (!results_available[5]) { # If there is NO missing data
+        if (current_param %in% c("joint structure", "indiv structure", "overall structure")) {
+          if (!results_available[names(results_available) == "Xm"]) { # If there is NO missing data
             mse_s_observed <- mse(truth[[param]][[s,1]], current_draws)
             mse_s_missing <- NULL
             mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
           }
           
-          if (results_available[5]) { # If there IS missing data
+          if (results_available[names(results_available) == "Xm"]) { # If there IS missing data
             # For the entries in the structure that ARE observed -- 
             obs_inds <- 1:length(truth[[param]][[s,1]])
             
@@ -6433,14 +6449,14 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
           }
         }
         
-        if (param == 3) {
-          if (!results_available[6]) { # If there is NO missing data
+        if (current_param == "EY") {
+          if (!results_available[names(results_available) == "Ym"]) { # If there is NO missing data
             mse_s_observed <- mse(truth[[param]][[s,1]], current_draws)
             mse_s_missing <- NULL
             mse_s <- list(observed = mse_s_observed, missing = mse_s_missing)
           }
           
-          if (results_available[6]) { # If there IS missing data
+          if (results_available[names(results_available) == "Ym"]) { # If there IS missing data
             # For the entries in the structure that ARE observed -- 
             obs_inds <- 1:length(truth[[param]][[s,1]])
             
@@ -6470,7 +6486,7 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
         }
         
         # For all other parameters
-        if (param != 1 & param != 2 & param != 3) mse_s <- mse(truth[[param]][[s,1]], current_draws)
+        if (!(current_param %in% c("joint structure", "indiv structure", "overall structure", "EY"))) mse_s <- mse(truth[[param]][[s,1]], current_draws)
         
         # Save the results
         results[[param]][[s,1]] <- list(coverage_s, mse_s, ci_width_s)
@@ -6481,7 +6497,6 @@ get_results <- function(truth, draws, burnin, results_available, missing_obs, mi
   # Return the results
   results
 }
-
 
 # Count the number of times each entry in each parameter was observed (i.e. not missing)
 calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_available) {
@@ -6503,15 +6518,22 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
   # sim_results (list) = list of results from the simulation
   n_param <- length(results_available)
   
+  # Save the parameter names
+  param_names <- names(results_available)
+  
   # Create a list to store the results by model parameter
   counts <- lapply(1:n_param, function(i) list())
   names(counts) <- names(sim_results[[1]])[1:n_param]
   
   for (param in 1:n_param) {
+    
+    # Save the name of the current parameter
+    current_param <- param_names[param]
+    
     if (results_available[param]) {
       
       # Counting how many times entries in the underlying structure corresponded to observed X.
-      if (param %in% c(1, 2)) {
+      if (current_param %in% c("joint structure", "indiv structure", "overall structure")) {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
         for (s in 1:q) {
@@ -6530,7 +6552,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
       }
       
       # For E(Y), count how many times each entry corresponded to an observed response value
-      if (param == 3) {
+      if (current_param == "EY") {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         
         # Vector of indices for each entry
@@ -6547,13 +6569,13 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
       }
       
       # For tau2, return the number of simulation replications 
-      if (param == 4) {
+      if (current_param == "tau2") {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         counts[[param]][[1,1]] <- rep(nsim, length(sim_results[[1]][[param]][[1,1]][[1]]))
       }
       
       # For Xm, count how many times in X. each entry WAS missing
-      if (param == 5) {
+      if (current_param == "Xm") {
         counts[[param]] <- matrix(list(), nrow = q, ncol = 1)
         
         for (s in 1:q) {
@@ -6568,7 +6590,7 @@ calculate_denominator <- function(sim_results, q, p.vec, n, nsim, results_availa
       }
       
       # For Ym, count how many times in y each entry WAS missing
-      if (param == 6) {
+      if (current_param == "Ym") {
         counts[[param]] <- matrix(list(), nrow = 1, ncol = 1)
         obs_inds <- 1:n
         counts[[param]][[1,1]] <- rep(0, length(obs_inds))
@@ -6640,11 +6662,17 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
   # Save the number of parameters
   n_param <- length(results_available)
   
+  # Save the names of the parameters
+  param_names <- names(results_available)
+  
   # Initialize a list to contain the averages
   results_avg <- lapply(1:n_param, function(i) list())
   names(results_avg) <- names(results_available)
   
   for (param in 1:n_param) {
+    # Save the name of the current parameter
+    current_param <- param_names[param]
+    
     # Save the coverage, mse, ci widths across the simulation replications for this parameter
     param_by_sim_iter <- lapply(sim_results, function(sim_iter) sim_iter[[param]])
     
@@ -6657,7 +6685,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       results_for_param <- matrix(list(), nrow = dim_param, ncol = 1)
       
       # For the underlying structure
-      if (param %in% c(1,2)) {
+      if (current_param %in% c("joint structure", "indiv structure", "overall structure")) {
         for (s in 1:dim_param) {
           # Save the results for source s
           results_by_source <- lapply(param_by_sim_iter, function(sim_iter) sim_iter[[s,1]])
@@ -6750,7 +6778,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       }
       
       # For E(Y)
-      if (param == 3) {
+      if (current_param == "EY") {
         # Save the results for source s
         results_by_source <- lapply(param_by_sim_iter, function(sim_iter) sim_iter[[1,1]])
         
@@ -6841,7 +6869,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       }
       
       # For tau2
-      if (param == 4) {
+      if (current_param == "tau2") {
         # Calculate the average
         avg_coverage <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[1]]))/(denominator[[param]][[1,1]])
 
@@ -6858,7 +6886,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       }
       
       # For Xm
-      if (param == 5) {
+      if (current_param == "Xm") {
         for (s in 1:q) {
           # Save the indices for missing observations in X.
           missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs[[s,1]])
@@ -6883,7 +6911,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       }
         
       # For Ym
-      if (param == 6) {
+      if (current_param == "Ym") {
         missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs_Y[[1,1]])
         results_compiled <- compile_missing_results(param_by_sim_iter, s = 1, dims = c(n, 1), nsim, missing_obs_inds, type = "observed_data")
         
