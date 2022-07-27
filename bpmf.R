@@ -5273,8 +5273,8 @@ bpmf_test_scale <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, 
 # Validation Simulation
 # -----------------------------------------------------------------------------
 
-bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, center = FALSE, nninit, ranks, 
-                     response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE) {
+validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, center = FALSE, nninit, ranks, 
+                                  response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE) {
   
   # ---------------------------------------------------------------------------
   # Check availability of parameters

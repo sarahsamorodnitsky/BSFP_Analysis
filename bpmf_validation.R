@@ -29,71 +29,71 @@ model_params <- true_params <- list(error_vars = c(1,1),
                                     beta_vars = c(1, 1, rep(1, q)), # Use the same variance for all the effects from each source
                                     response_vars = c(shape = 1, rate = 1))
 
-no_response_no_missing <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks)
+no_response_no_missing <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Continuous response, no missingness
 # -----------------------------------------------------------------------------
 
 # Continuous response
-response_continuous <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
+response_continuous <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Binary response, no missingness
 # -----------------------------------------------------------------------------
 
 # Binary response
-response_binary <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
+response_binary <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Continuous response with missingness
 # -----------------------------------------------------------------------------
 
 # Missing continuous response
-response_continuous_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100,  center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
-response_continuous_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
-response_continuous_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
+response_continuous_missing0.3 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100,  center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
+response_continuous_missing0.5 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
+response_continuous_missing0.7 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Binary response with missingness
 # -----------------------------------------------------------------------------
 
 # Missing binary response
-response_binary_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
-response_binary_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
-response_binary_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
+response_binary_missing0.3 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.3)
+response_binary_missing0.5 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.5)
+response_binary_missing0.7 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", entrywise = NULL, prop_missing = 0.7)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - No response, entrywise missing data
 # -----------------------------------------------------------------------------
 
 # Entrywise missing data
-missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
-missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
-missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.7)
+missing0.3 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
+missing0.5 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
+missing0.7 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.7)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - No response, columnwise missing data
 # -----------------------------------------------------------------------------
 
 # Columnwise missing data
-columnwise_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.1)
-columnwise_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.3)
-columnwise_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.5)
+columnwise_missing0.1 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.1)
+columnwise_missing0.3 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.3)
+columnwise_missing0.5 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.5)
 
 # Considering columnwise missingness with many Gibbs sampling iterations
-columnwise_missing0.3 <- bpmf_sim(nsample = 20000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.3)
+columnwise_missing0.3 <- validation_simulation(nsample = 20000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", entrywise = FALSE, prop_missing = 0.3)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Continuous response, entrywise missing data
 # -----------------------------------------------------------------------------
 
 # Continuous response
-response_continuous_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.1)
-response_continuous_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
-response_continuous_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
-response_continuous_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
-response_continuous_missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
+response_continuous_missing0.1 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.1)
+response_continuous_missing0.3 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
+response_continuous_missing0.5 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
+response_continuous_missing0.7 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
+response_continuous_missing0.9 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
 
 # -----------------------------------------------------------------------------
 # Save results
@@ -170,13 +170,13 @@ r.vec <- c(1, 0)
 ranks <- c(r, r.vec)
 
 # No response, no missingness
-no_response_no_missing <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks)
+no_response_no_missing <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks)
 
 # Continuous response
-response_continuous_joint_rank_only <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
+response_continuous_joint_rank_only <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
 
 # Binary response
-response_binary_joint_rank_only <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
+response_binary_joint_rank_only <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
 
 # -----------------------------------------------------------------------------
 # Coverage simulations with 3 data sources
@@ -198,10 +198,10 @@ model_params <- true_params <- list(error_vars = c(1,1,1),
                                     response_vars = c(shape = 1, rate = 1))
 
 # No response, no missingness
-no_response_no_missing <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks)
+no_response_no_missing <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks)
 
 # Continuous response
-response_continuous <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
+response_continuous <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous")
 
 # Binary response
-response_binary <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
+response_binary <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, s2nX = NULL, s2nY = NULL, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary")
