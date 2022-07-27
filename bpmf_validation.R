@@ -91,6 +91,9 @@ columnwise_missing0.3 <- bpmf_sim(nsample = 20000, n_clust = 10, p.vec, n, true_
 # Continuous response
 response_continuous_missing0.1 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.1)
 response_continuous_missing0.3 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.3)
+response_continuous_missing0.5 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
+response_continuous_missing0.7 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
+response_continuous_missing0.9 <- bpmf_sim(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", entrywise = TRUE, prop_missing = 0.5)
 
 # -----------------------------------------------------------------------------
 # Save results
