@@ -2038,7 +2038,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   J.draw <- A.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   
   # Calculating the structure for Y at each Gibbs sampling iteration
-  EY.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
+  EY.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   
   if (is.null(scores)) {
     for (iter in 1:nsample) {
@@ -2052,7 +2052,13 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
       
       # Calculate the structure for Y
       if (response_given) {
-        EY.draw[[iter]][[1,1]] <- VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]]
+        if (response_type == "continuous") {
+          EY.draw[[iter]][[1,1]] <- VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]]
+        }
+        
+        if (response_type == "binary") {
+          EY.draw[[iter]][[1,1]] <- pnorm(VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]])
+        }
       }
     }
   }
@@ -5399,21 +5405,9 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     # -------------------------------------------------------------------------
     # Computing the underlying structure for each Xs after burn-in from the sampler
     # -------------------------------------------------------------------------
-    joint.structure.burnin <- lapply(1:(burnin+1), function(res) {
-      mat <- matrix(list(), nrow = q, ncol = 1)
-      for (s in 1:q) {
-        mat[[s,1]] <- U.burnin[[res]][[s,1]] %*% t(V.burnin[[res]][[1,1]])
-      }
-      mat
-    })
     
-    indiv.structure.burnin <- lapply(1:(burnin+1), function(res) {
-      mat <- matrix(list(), nrow = q, ncol = 1)
-      for (s in 1:q) {
-        mat[[s,1]] <- W.burnin[[res]][[s,s]] %*% t(Vs.burnin[[res]][[1,s]])
-      }
-      mat
-    })
+    joint.structure.burnin <- res$J.draw[burnin:nsample]
+    indiv.structure.burnin <- res$A.draw[burnin:nsample]
     
     # -------------------------------------------------------------------------
     # Calculating the estimate for E(Y) at each iteration
@@ -5423,42 +5417,7 @@ bpmf_sim <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim
     }
     
     if (!is.null(response)) {
-      if (response == "continuous") {
-        EY.burnin <- lapply(1:(burnin+1), function(res) {
-          mat <- matrix(list(), nrow = 1, ncol = 1)
-          
-          V.burnin.star <- V.burnin[[res]]
-          if (ranks[1] == 0) V.burnin.star[[1,1]] <- matrix(nrow = n, ncol = r)
-          
-          Vs.burnin.star <- Vs.burnin[[res]]
-          for (s in 1:q) {
-            if (r.vec[s] == 0) Vs.burnin.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
-          }
-          
-          VStar.iter <- cbind(1, do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
-          mat[[1,1]] <- VStar.iter %*% beta.burnin[[res]][[1,1]]
-          mat
-        })
-      }
-      
-      if (response == "binary") {
-        EY.burnin <- lapply(1:(burnin+1), function(res) {
-          mat <- matrix(list(), nrow = 1, ncol = 1)
-          
-          V.burnin.star <- V.burnin[[res]]
-          if (ranks[1] == 0) V.burnin.star[[1,1]] <- matrix(nrow = n, ncol = r)
-          
-          Vs.burnin.star <- Vs.burnin[[res]]
-          for (s in 1:q) {
-            if (r.vec[s] == 0) Vs.burnin.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
-          }
-          
-          VStar.iter <- cbind(1, do.call(cbind, V.burnin.star), do.call(cbind, Vs.burnin.star))
-          
-          mat[[1,1]] <- pnorm(VStar.iter %*% beta.burnin[[res]][[1,1]])
-          mat
-        })
-      }
+      EY.burnin <- res$EY.draw[burnin:nsample]
     }
     
     # -------------------------------------------------------------------------
