@@ -788,3 +788,109 @@ mean(sapply(1:n, function(i) fev1pp_cv_ci$BPMF[i,1] <= fev1pp[[1,1]][i] & fev1pp
 mean(sapply(1:n, function(i) fev1pp_cv_ci$BIDIFAC[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$BIDIFAC[i,2])) # BIDIFAC
 mean(sapply(1:n, function(i) fev1pp_cv_ci$JIVE[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$JIVE[i,2])) # JIVE
 mean(sapply(1:n, function(i) fev1pp_cv_ci$MOFA[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$MOFA[i,2])) # MOFA
+
+
+# -----------------------------------------------------------------------------
+# Missing data imputation
+# -----------------------------------------------------------------------------
+
+# Setting the proportion of missing values (columns) in each dataset
+prop_missing <- 0.1
+
+# Save the number of replications
+nsim <- 100
+
+# For 100 replications:
+cl <- makeCluster(10)
+registerDoParallel(cl)
+hiv_copd_imputation <- foreach(sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
+  
+  # Set a seed
+  set.seed(sim_iter)
+  
+  # Randomly sample samples to remove from each source
+  metabolome_missing <- sample(1:length(hiv_copd_data[[1,1]]), size = prop_missing * length(hiv_copd_data[[1,1]]), replace = FALSE)
+  proteome_missing <- sample(1:length(hiv_copd_data[[2,1]]), size = prop_missing * length(hiv_copd_data[[2,1]]), replace = FALSE)
+  
+  # Setting these samples to missing 
+  hiv_copd_data_missing <- hiv_copd_data
+  hiv_copd_data_missing[[1,1]][metabolome_missing] <- NA
+  hiv_copd_data_missing[[2,1]][proteome_missing] <- NA
+  
+  # Save the missing samples
+  metabolome_missing_samples <- hiv_copd_data[[1,1]][metabolome_missing]
+  proteome_missing_samples <- hiv_copd_data[[2,1]][proteome_missing]
+  
+  # Running the model
+  bpmf_impute <- bpmf_data_mode(
+      data = hiv_copd_data_missing,
+      Y = fev1pp,
+      nninit = TRUE,
+      model_params = model_params,
+      sparsity = FALSE,
+      nsample = nsample,
+      progress = TRUE
+  )
+  
+  # Saving the imputed values for each source with burn-in
+  metabolome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+    matrix(bpmf_impute$Xm.draw[[iter]][[1,1]], nrow = 1)
+  })
+  
+  proteome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+    matrix(bpmf_impute$Xm.draw[[iter]][[2,1]], nrow = 1)
+  })
+  
+  # Create a matrix of imputed values
+  metabolome_impute_burnin <- do.call(rbind, metabolome_impute_burnin)
+  proteome_impute_burnin <- do.call(rbind, proteome_impute_burnin)
+  
+  # Calculate credible intervals for each imputed values
+  metabolome_cis <- apply(metabolome_impute_burnin, 2, function(row) {
+    c(quantile(row, 0.025), quantile(row, 0.975))
+  })
+  
+  proteome_cis <- apply(proteome_impute_burnin, 2, function(row) {
+    c(quantile(row, 0.025), quantile(row, 0.975))
+  })
+  
+  # Calculate coverage
+  metabolome_coverage <- mean(sapply(1:length(metabolome_missing), function(i) {
+    metabolome_cis[1,i] <= metabolome_missing_samples[i] & metabolome_missing_samples[i] <= metabolome_cis[2,i]
+  }))
+  
+  proteome_coverage <- mean(sapply(1:length(proteome_missing), function(i) {
+    proteome_cis[1,i] <= proteome_missing_samples[i] & proteome_missing_samples[i] <= proteome_cis[2,i]
+  }))
+  
+  # Calculate the posterior mean of the imputed values
+  metabolome_impute_mean <- colMeans(metabolome_impute_burnin)
+  proteome_impute_mean <- colMeans(proteome_impute_burnin)
+  
+  # Calculate MSE with posterior mean and true observed values
+  metabolome_mse <- frob(metabolome_missing_samples - metabolome_impute_mean)/frob(metabolome_missing_samples)
+  proteome_mse <- frob(proteome_missing_samples - proteome_impute_mean)/frob(proteome_missing_samples)
+  
+  # Calculate the CI width
+  metabolome_ci_width <- mean(abs(metabolome_cis[2,] - metabolome_cis[1,]))
+  proteome_ci_width <- mean(abs(proteome_cis[2,] - proteome_cis[1,]))
+  
+  # Save the results
+  save(metabolome_coverage, proteome_coverage, 
+       metabolome_ci_width, proteome_ci_width, 
+       metabolome_mse, proteome_mse,
+       file = paste0("~/BayesianPMF/04DataApplication/BPMF/Imputation/Entrywise/", "FEV1pp_", prop_missing, "_Entrywise_Impute_", sim_iter, ".rda"))
+  
+  # Remove large matrices and clean
+  rm(bpmf_impute, metabolome_cis, proteome_cis)
+  gc()
+}
+
+
+
+
+
+
+
+
+
