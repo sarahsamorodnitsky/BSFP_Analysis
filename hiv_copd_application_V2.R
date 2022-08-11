@@ -516,80 +516,222 @@ dev.off()
 # Heatmaps on non-sparse model
 # -----------------------------------------------------------------------------
 
+# Save the ranks
+ranks <- fev1pp_training_fit_nonsparse$ranks
+joint_rank <- ranks[1]
+indiv_rank1 <- ranks[2]
+indiv_rank2 <- ranks[3]
+
 # Calculating the posterior mean of the joint structure (Biocrates)
-joint_biocrates_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse$U.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
-}))/length(thinned_iters_burnin)
+# joint_biocrates_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
+#   fev1pp_training_fit_nonsparse$U.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
+# }))/length(iters_burnin)
+# 
+# # Calculating the posterior mean of the joint structure (Somascan)
+# joint_somascan_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
+#   fev1pp_training_fit_nonsparse$U.draw[[iter]][[2,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
+# }))/length(iters_burnin)
+# 
+# # Calculating the posterior mean of the individual structure (Biocrates)
+# indiv_biocrates_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
+#   fev1pp_training_fit_nonsparse$W.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,1]])
+# }))/length(iters_burnin)
+# 
+# # Calculating the posterior mean of the individual structure (Somascan)
+# indiv_somascan_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
+#   fev1pp_training_fit_nonsparse$W.draw[[iter]][[2,2]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,2]])
+# }))/length(iters_burnin)
 
-# Calculating the posterior mean of the joint structure (Somascan)
-joint_somascan_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse$swapped_U.draw[[iter]][[2,1]] %*% t(fev1pp_training_fit_nonsparse$swapped_V.draw[[iter]][[1,1]])
-}))/length(thinned_iters_burnin)
+# Calculating the joint structure mean
+joint_structure_mean <- Reduce("+", lapply(1:burnin, function(iter) {
+  joint.loadings.final[[iter]] %*% t(joint.scores.final[[iter]])
+}))/burnin
 
-# Calculating the posterior mean of the individual structure (Biocrates)
-indiv_biocrates_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse$swapped_W.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse$swapped_Vs.draw[[iter]][[1,1]])
-}))/length(thinned_iters_burnin)
+metabolite_structure_mean <-  Reduce("+", lapply(1:burnin, function(iter) {
+  individual.loadings.final[[1]][[iter]] %*% t(individual.scores.final[[1]][[iter]])
+}))/burnin
 
-# Calculating the posterior mean of the individual structure (Somascan)
-indiv_somascan_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse$swapped_W.draw[[iter]][[2,2]] %*% t(fev1pp_training_fit_nonsparse$swapped_Vs.draw[[iter]][[1,2]])
-}))/length(thinned_iters_burnin)
+protein_structure_mean <-  Reduce("+", lapply(1:burnin, function(iter) {
+  individual.loadings.final[[2]][[iter]] %*% t(individual.scores.final[[2]][[iter]])
+}))/burnin
 
+# Calculating E(Y) for joint contribution
+EY_joint_mean <- Reduce("+", lapply(1:burnin, function(iter) {
+  joint.scores.final[[iter]] %*% joint.betas.final[[iter]]
+}))/burnin
+
+EY_indiv_mean <-lapply(1:q, function(s) {
+  Reduce("+", lapply(1:burnin, function(iter) {
+    individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]]
+  }))/burnin
+})
 
 # Reorganizing the results to fit the JIVE structure
-heatmap_ls_nonsparse_jive <- list(data = list(hiv_copd_data[[1,1]], hiv_copd_data[[2,1]]),
-                                  joint = list(joint_biocrates_ls_nonsparse_mean, joint_somascan_ls_nonsparse_mean),
-                                  individual = list(indiv_biocrates_ls_nonsparse_mean, indiv_somascan_ls_nonsparse_mean),
-                                  rankJ = joint_rank,
-                                  rankA = c(indiv_rank1, indiv_rank2))
+heatmap_nonsparse_jive <- list(data = list(hiv_copd_data[[1,1]], hiv_copd_data[[2,1]]),
+                              joint = list(joint_structure_mean[1:p.vec[1],,drop=FALSE], 
+                                           joint_structure_mean[(p.vec[1]+1):p,,drop=FALSE]),
+                              individual = list(metabolite_structure_mean, protein_structure_mean),
+                              rankJ = joint_rank,
+                              rankA = c(indiv_rank1, indiv_rank2))
 
 # Applying the showHeatmaps function (ordered by joint structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Joint.pdf"), width = 15)
-showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 0)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Joint.pdf"), width = 15)
+showHeatmaps(heatmap_nonsparse_jive, order_by = 0)
 dev.off()
 
 # Applying the showHeatmaps function (ordered by Biocrates structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Biocrates.pdf"), width = 15)
-showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 1)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Biocrates.pdf"), width = 15)
+showHeatmaps(heatmap_nonsparse_jive, order_by = 1)
 dev.off()
 
 # Applying the showHeatmaps function (ordered by Somascan structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Somascan.pdf"), width = 15)
-showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 2)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Somascan.pdf"), width = 15)
+showHeatmaps(heatmap_nonsparse_jive, order_by = 2)
+dev.off()
+
+# -----------------------------------------------------------------------------
+# Heatmaps using sup.r.jive
+# -----------------------------------------------------------------------------
+
+# Save the posterior mean of the joint scores
+S_J <- t(Reduce("+", joint.scores.final)/burnin)
+
+# Posterior mean of individual scores
+S_I <- lapply(1:q, function(s) t(Reduce("+", individual.scores.final[[s]])/burnin))
+
+# Posterior mean of joint loadings
+U_I_full <- Reduce("+", joint.loadings.final)/ burnin
+U_I <- list(U_I_full[1:p.vec[1],,drop=FALSE],
+            U_I_full[(p.vec[1]+1):p,,drop=FALSE])
+
+# Posterior mean of the individual loadings
+W_I <- lapply(1:q, function(s) Reduce("+", individual.loadings.final[[s]])/burnin)
+
+# Posterior mean of joint betas
+theta1 <- t(Reduce("+", joint.betas.final)/burnin)
+
+# Posterior mean of individual betas
+theta2 <- lapply(1:q, function(s) t(Reduce("+", individual.betas.final[[s]]))/burnin)
+
+# Combine into list
+hiv_copd_data_list_fev1pp <- list(X = list(hiv_copd_data_list[[1]], hiv_copd_data_list[[2]]), 
+                                  Y = unlist(fev1pp[[1,1]]))
+heatmap_sup.r.jive <- list(data = hiv_copd_data_list_fev1pp,
+                           S_J = S_J, S_I = S_I,
+                           U_I = U_I, W_I = W_I,
+                           theta1 = theta1, theta2 = theta2)
+
+png(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_FEV1pp_with_Outcome.png"), width = 800)
+plotHeatmap(heatmap_sup.r.jive, ylab = "FEV1pp", xlab = c("Metabolomics", "Proteomics"))
 dev.off()
 
 # -----------------------------------------------------------------------------
 # Credible Intervals for Coefficients Using Non-Sparse Model
 # -----------------------------------------------------------------------------
 
+# Load in the aligned factors
+load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda", verbose = TRUE)
+
 library(dplyr)
 
-# Examining joint factor 1 as an example
-joint.factor2.final <- do.call(cbind, lapply(1:burnin, function(iter) joint.loadings.final[[iter]][,2,drop=FALSE]))
+# Save the working directory where the summaries will go
+exploring_factors_wd <- "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/"
 
-# Calculating means and CIs for each loading
-joint.factor2.final.summary <- t(apply(joint.factor2.final, 1, function(load) {
-  c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
-}))
+# Save the joint and individual ranks
+ranks <- fev1pp_training_fit_nonsparse$ranks
 
-# Name the rows by the respective biomarker
-rownames(joint.factor2.final.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
+# Save the rank indices
+rank.inds <- lapply(1:(q+1), function(s) {
+  if (s == 1) {
+    1:ranks[s]
+  } else {
+    (cumsum(ranks[1:(s-1)])[s-1] + 1):cumsum(ranks[1:s])[s]
+  }
+})
 
-# Separate the loadings by metabolites and proteins
-joint.factor2.final.summary.metabolites <- joint.factor2.final.summary[1:p.vec[1],,drop=FALSE]
-joint.factor2.final.summary.proteins <- joint.factor2.final.summary[(p.vec[1]+1):p,,drop=FALSE]
-
-# Order the loadings within the metabolites and proteins by the posterior mean
-joint.factor2.final.summary.metabolites.order <- 
-  joint.factor2.final.summary.metabolites[order(joint.factor2.final.summary.metabolites[,1], decreasing = FALSE),]
-
-joint.factor2.final.summary.proteins.order <- 
-  joint.factor2.final.summary.proteins[order(joint.factor2.final.summary.proteins[,1], decreasing = FALSE),]
-
-# Save the results
-save(joint.factor2.final.summary, joint.factor2.final.summary.metabolites.order, joint.factor2.final.summary.proteins.order,
-     file = "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/Joint_Factor2_Aligned_Ordered_Summary.rda")
+# For each factor, 
+for (i in 1:sum(ranks)) {
+  
+  # Save the results for the given factor
+  if (i %in% rank.inds[[1]]) {
+    rank_index <- i
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) joint.loadings.final[[iter]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
+    
+    # Separate the loadings by metabolites and proteins
+    factor.final.summary.metabolites <- factor.final.summary[1:p.vec[1],,drop=FALSE]
+    factor.final.summary.proteins <- factor.final.summary[(p.vec[1]+1):p,,drop=FALSE]
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.metabolites.order <- 
+      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+    
+    factor.final.summary.proteins.order <- 
+      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+    
+    # Create the file name
+    file_name <- paste0(exploring_factors_wd, "Joint_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+  }
+  
+  if (i %in% rank.inds[[2]]) {
+    rank_index <- i - ranks[1]
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.loadings.final[[1]][[iter]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale))
+    
+    # Separate the loadings by metabolites and proteins (only metabolites here)
+    factor.final.summary.metabolites <- factor.final.summary
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.metabolites.order <- 
+      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+    
+    # Create a file name
+    file_name <- paste0(exploring_factors_wd, "Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    
+  }
+  
+  if (i %in% rank.inds[[3]]) {
+    rank_index <- i - cumsum(ranks[1:2])[2]
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.loadings.final[[2]][[iter]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
+    
+    # Separate the loadings by metabolites and proteins (only proteins here)
+    factor.final.summary.proteins <- factor.final.summary
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.proteins.order <- 
+      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+    
+    # Create the file name
+    file_name <- paste0(exploring_factors_wd, "Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    
+  }
+  
+  # Save the results
+  save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order,
+       file = file_name)
+}
 
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit
@@ -742,7 +884,7 @@ for (mod in models) {
     
     # Load in the results
     if (mod == "BPMF") {
-      load(paste0(results_wd, "BPMF/FEV1pp_CV_NonSparse_Pair", pair, ".rda"), verbose = TRUE)
+      load(paste0(results_wd, "BPMF/Cross_Validation/FEV1pp_CV_NonSparse_Pair", pair, ".rda"), verbose = TRUE)
     }
     if (mod == "BIDIFAC") {
       load(paste0(results_wd, "BIDIFAC/FEV1pp_CV_BIDIFAC_Pair_", pair, ".rda"), verbose = TRUE)
@@ -801,9 +943,14 @@ prop_missing <- 0.1
 nsim <- 100
 
 # For 100 replications:
-cl <- makeCluster(10)
+cl <- makeCluster(2)
 registerDoParallel(cl)
-hiv_copd_imputation <- foreach(sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
+# For running in parallel
+funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC",
+           "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+           "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
+hiv_copd_imputation <- foreach(sim_iter = c(4,9), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
   
   # Set a seed
   set.seed(sim_iter)
@@ -886,11 +1033,28 @@ hiv_copd_imputation <- foreach(sim_iter = 1:nsim, .packages = packs, .export = f
   gc()
 }
 
+# Load in the results so far
+entrywise_imputation_files <- list.files("~/BayesianPMF/04DataApplication/BPMF/Imputation/Entrywise")
 
+# Create a dataframe with the results
+entrywise_imputation_results <- matrix(nrow = 9, ncol = 6)
 
+# Iteratively load in each replication and add to table
+for (i in 1:length(entrywise_imputation_files)) {
+  # Load in the file
+  file <- entrywise_imputation_files[i]
+  load(file)
+  
+  # Add results to table
+  entrywise_imputation_results[i,] <- 
+    c(metabolome_coverage, metabolome_mse, metabolome_ci_width,
+      proteome_coverage, proteome_mse, proteome_ci_width)
+}
 
+# Add the column names
+colnames(entrywise_imputation_results) <-
+  c("Metabolome Coverage", "Metabolome MSE", "Metabolome CI Width",
+    "Proteome Coverage", "Proteome MSE", "Proteome CI Width")
 
-
-
-
-
+# Average the results
+colMeans(entrywise_imputation_results)
