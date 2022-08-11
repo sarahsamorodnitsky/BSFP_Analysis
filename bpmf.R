@@ -6686,10 +6686,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # library(MOFA2)
   library(doParallel)
   library(foreach)
-  # library(sup.r.jive)
+  library(sup.r.jive)
   # library(natural)
   # library(RSpectra)
-  library(BIPnet)
+  # library(BIPnet)
   
   # The model options
   models <- c("sJIVE", "BIDIFAC", "JIVE", "MOFA", "BPMF_Data_Mode", "BIP", "BPMF_test", "BPMF_test_scale")
