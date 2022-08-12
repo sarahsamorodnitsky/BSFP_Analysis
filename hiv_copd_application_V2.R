@@ -26,7 +26,7 @@ source(paste0(model_wd, "bpmf.R"))
 # Preparing the data
 # -----------------------------------------------------------------------------
 
-# Loading data in 
+# Loading data in (must load in separately on 22 server)
 load(paste0(data_wd, "BiocratesLavageProcessed.rda"))
 load(paste0(data_wd, "HIV_COPD_SomaScan_Normalized_Clean.rda"))
 
@@ -192,7 +192,7 @@ hiv_copd_data_list_bip <- lapply(hiv_copd_data_list, function(data) t(data))
 hiv_copd_data_list_bip[[3]] <- fev1pp[[1,1]]
 
 # Fitting the model
-BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = nsample, burnin = nsample/2, nbrcomp = 5)
+BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = nsample, burnin = nsample/2, nbrcomp = 1)
 
 # -----------------------------------------------------------------------------
 # Investigating training data fit results
