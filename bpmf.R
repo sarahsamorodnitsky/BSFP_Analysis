@@ -4773,7 +4773,7 @@ bpmf_predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
 # -----------------------------------------------------------------------------
 
 validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, center = FALSE, nninit, ranks, 
-                                  response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE) {
+                                  response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE, generate_test_data = FALSE) {
   
   # ---------------------------------------------------------------------------
   # Check availability of parameters
