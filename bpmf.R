@@ -4227,7 +4227,7 @@ bpmf_test_scale <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, 
 }
 
 # Function to impute new scores for test data given loadings estimated on training data
-bpmf_predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_params, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
+bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_params, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
   
@@ -4773,7 +4773,7 @@ bpmf_predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
 # -----------------------------------------------------------------------------
 
 validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, center = FALSE, nninit, ranks, 
-                                  response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE, generate_test_data = FALSE) {
+                                  response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE, predict_test_data = FALSE) {
   
   # ---------------------------------------------------------------------------
   # Check availability of parameters
@@ -4798,7 +4798,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     # Generating the data
     # -------------------------------------------------------------------------
     
-    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity)
+    sim_data <- bpmf_data(p.vec, 2*n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity)
     
     # Saving the data
     true_data <- sim_data$data
@@ -4829,12 +4829,58 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     r.vec <- ranks[-1]
     
     # -------------------------------------------------------------------------
+    # Separating training and test data
+    # -------------------------------------------------------------------------
+    
+    # Training data
+    training_data <- matrix(list(), nrow = q, ncol = 1)
+    joint.structure_train <- indiv.structure_train <- overall.structure_train <- matrix(list(), nrow = q, ncol = 1)
+    
+    # Test data
+    test_data <- matrix(list(), nrow = q, ncol = 1)
+    joint.structure_test <- indiv.structure_test <- overall.structure_test <- matrix(list(), nrow = q, ncol = 1)
+    
+    for (s in 1:q) {
+      training_data[[s,1]] <- true_data[[s,1]][,1:n]
+      
+      joint.structure_train[[s,1]] <- joint.structure[[s,1]][,1:n]
+      indiv.structure_train[[s,1]] <- indiv.structure[[s,1]][,1:n]
+      overall.structure_train[[s,1]] <- overall.structure[[s,1]][,1:n]
+      
+      test_data[[s,1]] <- true_data[[s,1]][,(n+1):(2*n)]
+      
+      joint.structure_test[[s,1]] <- joint.structure[[s,1]][,(n+1):(2*n)]
+      indiv.structure_test[[s,1]] <- indiv.structure[[s,1]][,(n+1):(2*n)]
+      overall.structure_test[[s,1]] <- overall.structure[[s,1]][,(n+1):(2*n)]
+    }
+    
+    # If there is a response
+    if (!is.null(response)) {
+      Y_train <- matrix(list(), nrow = 1, ncol = 1)
+      Y_train[[1,1]] <- Y[[1,1]][1:n,, drop = FALSE]
+      
+      EY_train <- matrix(list(), nrow = 1, ncol = 1)
+      EY_train[[1,1]] <- EY[[1,1]][1:n,, drop = FALSE]
+      
+      Y_test <- matrix(list(), nrow = 1, ncol = 1)
+      Y_test[[1,1]] <- Y[[1,1]][(n+1):(2*n),, drop = FALSE]
+      
+      EY_test <- matrix(list(), nrow = 1, ncol = 1)
+      EY_test[[1,1]] <- EY[[1,1]][(n+1):(2*n),, drop = FALSE]
+    }
+    
+    # If there isn't a response
+    if (is.null(response)) {
+      Y_train <- Y_test <- EY_train <- EY_test <- Y
+    }
+    
+    # -------------------------------------------------------------------------
     # Setting the proper variable names for the sampler
     # -------------------------------------------------------------------------
     
     if (is.null(missingness)) {
-      observed_data <- true_data
-      Y_observed <- Y
+      observed_data <- training_data
+      Y_observed <- Y_train
     }
     
     if (!is.null(missingness)) {
@@ -4844,7 +4890,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
       }
       
       if (missingness == "missingness_in_response") {
-        observed_data <- true_data
+        observed_data <- training_data
         Y_observed <- Y_missing
       }
       
@@ -4855,34 +4901,41 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     }
     
     # -------------------------------------------------------------------------
-    # Center the data
-    # -------------------------------------------------------------------------
-    
-    if (center) {
-      center_the_data <- center_data(data = observed_data, structure = structure)
-      
-      # Saving the centered data
-      observed_data <- center_the_data$data_centered
-      means_for_centering <- center_the_data$means_for_centering
-      structure_centered <- center_the_data$structure_centered
-    }
-    
-    # -------------------------------------------------------------------------
     # Running the Gibbs sampling algorithm
     # -------------------------------------------------------------------------
     
     # Gibbs sampling
     res <- bpmf_data_mode(data = observed_data, Y = Y_observed, nninit = nninit, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE)
     
+    # Generate test data if desired and generate new scores and predictions if desired
+    if (predict_test_data) {
+
+      # Predicting on test data
+      test.res <- bpmf.predict(bpmf.fit = res, test_data = test_data, Y_test = Y_test, nninit = FALSE,
+                               model_params = model_params, nsample = nsample, progress = TRUE)
+    }
+    
     # -------------------------------------------------------------------------
     # Extracting the results for each of decomposition matrices
     # -------------------------------------------------------------------------
-    U.draw <- res$U.draw
-    V.draw <- res$V.draw
-    W.draw <- res$W.draw
-    Vs.draw <- res$Vs.draw
-    beta.draw <- res$beta.draw
-    Z.draw <- res$Z.draw
+    
+    # If we only fit on the training data
+    if (!predict_test_data) {
+      J.draw <- res$J.draw
+      A.draw <- res$A.draw
+      S.draw <- res$S.draw
+      EY.draw <- res$EY.draw
+    }
+    
+    # If we fit on the test data
+    if (predict_test_data) {
+      J.draw <- test.res$J.draw
+      A.draw <- test.res$A.draw
+      S.draw <- test.res$S.draw
+      EY.draw <- test.res$EY.draw
+    }
+
+    # Results from the training data only
     tau2.draw <- res$tau2.draw
     Xm.draw <- res$Xm.draw
     Ym.draw <- res$Ym.draw
@@ -4892,34 +4945,13 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     # -------------------------------------------------------------------------
     burnin <- nsample/2
     
-    U.burnin <- U.draw[burnin:nsample]
-    V.burnin <- V.draw[burnin:nsample]
-    W.burnin <- W.draw[burnin:nsample]
-    Vs.burnin <- Vs.draw[burnin:nsample]
-    beta.burnin <- beta.draw[burnin:nsample]
-    Z.burnin <- Z.draw[burnin:nsample]
+    joint.structure.burnin <- J.draw[burnin:nsample]
+    indiv.structure.burnin <- A.draw[burnin:nsample]
+    overall.structure.burnin <- S.draw[burnin:nsample]
+    EY.burnin <- EY.draw[burnin:nsample]
     tau2.burnin <- tau2.draw[burnin:nsample]
     Xm.burnin <- Xm.draw[burnin:nsample]
     Ym.burnin <- Ym.draw[burnin:nsample]
-    
-    # -------------------------------------------------------------------------
-    # Computing the underlying structure for each Xs after burn-in from the sampler
-    # -------------------------------------------------------------------------
-    
-    joint.structure.burnin <- res$J.draw[burnin:nsample]
-    indiv.structure.burnin <- res$A.draw[burnin:nsample]
-    overall.structure.burnin <- res$S.draw[burnin:nsample]
-    
-    # -------------------------------------------------------------------------
-    # Calculating the estimate for E(Y) at each iteration
-    # -------------------------------------------------------------------------
-    if (is.null(response)) {
-      EY.burnin <- lapply(1:(burnin+1), function(res) matrix(list(), nrow = 1, ncol = 1))
-    }
-    
-    if (!is.null(response)) {
-      EY.burnin <- res$EY.draw[burnin:nsample]
-    }
     
     # -------------------------------------------------------------------------
     # Saving the results from the Gibbs sampler
@@ -4943,13 +4975,32 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     Xm <- return_missing(true_data, missing_obs)
     Ym <- return_missing(Y, missing_obs_Y)
     
-    truth <- list(joint.structure = joint.structure,
-                  indiv.structure = indiv.structure,
-                  overall.structure = overall.structure,
-                  EY = EY,
-                  tau2 = tau2,
-                  Xm = Xm,
-                  Ym = Ym)
+    # If we only fit on training data
+    if (!predict_test_data) {
+      
+      # Save the true values
+      truth <- list(joint.structure = joint.structure_train,
+                    indiv.structure = indiv.structure_train,
+                    overall.structure = overall.structure_train,
+                    EY = EY,
+                    tau2 = tau2,
+                    Xm = Xm,
+                    Ym = Ym)
+    }
+    
+    # If we fit on test data
+    if (predict_test_data) {
+      
+      # Save the true values
+      truth <- list(joint.structure = joint.structure_test,
+                    indiv.structure = indiv.structure_test,
+                    overall.structure = overall.structure_test,
+                    EY = EY_test,
+                    tau2 = tau2,
+                    Xm = Xm,
+                    Ym = Ym)
+      
+    }
     
     # -------------------------------------------------------------------------
     # Checking coverage, MSE, and CI width
