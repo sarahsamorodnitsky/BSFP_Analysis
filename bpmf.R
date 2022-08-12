@@ -6700,8 +6700,8 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "BIPnet")
-             # , "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
+  packs <- c("Matrix", "MASS", "truncnorm", "sup.r.jive")
+             # "BIPnet", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
     if (mod == "test") {
@@ -6873,11 +6873,17 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Fitting the model on test data
       mod.test <- stats::predict(mod.out, newdata = test_data_list)
+      
+      # Saving the joint rank
+      joint.rank <- mod.out$rankJ
+      
+      # Saving the individual ranks
+      indiv.rank <- mod.out$rankA
 
       # Saving the joint structure
       mod.joint <- lapply(1:q, function(s) {
-        training <- matrix(mod.out$U_I[[s]]) %*% mod.out$S_J
-        testing <-  matrix(mod.out$U_I[[s]]) %*% mod.test$Sj
+        training <- mod.out$U_I[[s]] %*% mod.out$S_J
+        testing <-  mod.out$U_I[[s]] %*% mod.test$Sj
         cbind(training, testing)
       })
       
@@ -6887,12 +6893,6 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
         testing <- mod.out$W_I[[s]] %*% mod.test$Si[[s]]
         cbind(training, testing)
       })
-      
-      # Saving the joint rank
-      joint.rank <- mod.out$rankJ
-      
-      # Saving the individual ranks
-      indiv.rank <- mod.out$rankA
       
       # Saving the joint scores
       if (joint.rank != 0) {
