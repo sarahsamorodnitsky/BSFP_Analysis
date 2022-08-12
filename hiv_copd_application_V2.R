@@ -26,7 +26,7 @@ source(paste0(model_wd, "bpmf.R"))
 # Preparing the data
 # -----------------------------------------------------------------------------
 
-# Loading data in 
+# Loading data in (must load in separately on 22 server)
 load(paste0(data_wd, "BiocratesLavageProcessed.rda"))
 load(paste0(data_wd, "HIV_COPD_SomaScan_Normalized_Clean.rda"))
 
