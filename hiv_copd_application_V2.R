@@ -203,7 +203,7 @@ BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), 
 # -------------------------------------
 
 # Assessing convergence for both model fits
-load(paste0(results_wd, "BPMF/training_data_fit.rda"), verbose = TRUE)
+load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit.rda"), verbose = TRUE)
 
 fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
   # Calculate the log-joint density at each thinned iterations
@@ -227,7 +227,7 @@ plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joi
 # -----------------------------------------------------------------------------
 
 # Loading in the full training data fit
-load(paste0(results_wd, "BPMF/training_data_fit.rda"), verbose = TRUE)
+load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit.rda"), verbose = TRUE)
 
 # Save the ranks
 ranks <- fev1pp_training_fit_nonsparse$ranks
@@ -629,8 +629,12 @@ dev.off()
 # Credible Intervals for Coefficients Using Non-Sparse Model
 # -----------------------------------------------------------------------------
 
+# -------------------------------------
+# Creating summaries for ALIGNED factors
+# -------------------------------------
+
 # Load in the aligned factors
-load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda", verbose = TRUE)
+load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda", verbose = TRUE)
 
 library(dplyr)
 
@@ -677,7 +681,7 @@ for (i in 1:sum(ranks)) {
       factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
     
     # Create the file name
-    file_name <- paste0(exploring_factors_wd, "Joint_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    file_name <- paste0(exploring_factors_wd, "Aligned/Joint_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
   }
   
   if (i %in% rank.inds[[2]]) {
@@ -694,13 +698,14 @@ for (i in 1:sum(ranks)) {
     
     # Separate the loadings by metabolites and proteins (only metabolites here)
     factor.final.summary.metabolites <- factor.final.summary
+    factor.final.summary.proteins <- NULL
     
     # Order the loadings within the metabolites and proteins by the posterior mean
     factor.final.summary.metabolites.order <- 
       factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
     
     # Create a file name
-    file_name <- paste0(exploring_factors_wd, "Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    file_name <- paste0(exploring_factors_wd, "Aligned/Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
     
   }
   
@@ -717,6 +722,7 @@ for (i in 1:sum(ranks)) {
     rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
     
     # Separate the loadings by metabolites and proteins (only proteins here)
+    factor.final.summary.metabolites <- NULL
     factor.final.summary.proteins <- factor.final.summary
     
     # Order the loadings within the metabolites and proteins by the posterior mean
@@ -724,7 +730,102 @@ for (i in 1:sum(ranks)) {
       factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
     
     # Create the file name
-    file_name <- paste0(exploring_factors_wd, "Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    file_name <- paste0(exploring_factors_wd, "Aligned/Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    
+  }
+  
+  # Save the results
+  save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order,
+       file = file_name)
+}
+
+# -------------------------------------
+# Creating summaries of the UNALIGNED factors
+# -------------------------------------
+
+# Adding a burnin
+U.draw.burnin <- fev1pp_training_fit_nonsparse$U.draw[(burnin+1):nsample]
+W.draw.burnin <- fev1pp_training_fit_nonsparse$W.draw[(burnin+1):nsample]
+
+# For each factor,
+for (i in 1:sum(ranks)) {
+  
+  # Save the results for the given factor
+  if (i %in% rank.inds[[1]]) {
+    rank_index <- i
+    factor.final.by.source <- lapply(1:q, function(s) do.call(cbind, lapply(1:burnin, function(iter) U.draw.burnin[[iter]][[s,1]][,rank_index,drop=FALSE])))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary.by.source <- lapply(1:q, function(s) t(apply(factor.final.by.source[[s]], 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    })))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary.by.source[[1]]) <- rownames(lavage_processed_no_info_log_scale)
+    rownames(factor.final.summary.by.source[[2]]) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
+    
+    # Separate the loadings by metabolites and proteins
+    factor.final.summary.metabolites <- factor.final.summary.by.source[[1]]
+    factor.final.summary.proteins <- factor.final.summary.by.source[[2]]
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.metabolites.order <- 
+      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+    
+    factor.final.summary.proteins.order <- 
+      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+    
+    # Create the file name
+    file_name <- paste0(exploring_factors_wd, "Unaligned/Joint_Factor", rank_index, "_Unaligned_Ordered_Summary.rda")
+  }
+  
+  if (i %in% rank.inds[[2]]) {
+    rank_index <- i - ranks[1]
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) W.draw.burnin[[iter]][[1,1]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale))
+    
+    # Separate the loadings by metabolites and proteins (only metabolites here)
+    factor.final.summary.metabolites <- factor.final.summary
+    factor.final.summary.proteins <- NULL
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.metabolites.order <- 
+      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+    
+    # Create a file name
+    file_name <- paste0(exploring_factors_wd, "Unaligned/Metabolite_Indiv_Factor", rank_index, "_Unaligned_Ordered_Summary.rda")
+    
+  }
+  
+  if (i %in% rank.inds[[3]]) {
+    rank_index <- i - cumsum(ranks[1:2])[2]
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) W.draw.burnin[[iter]][[2,2]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
+    
+    # Separate the loadings by metabolites and proteins (only proteins here)
+    factor.final.summary.metabolites.order <- NULL
+    factor.final.summary.proteins <- factor.final.summary
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.proteins.order <- 
+      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+    
+    # Create the file name
+    file_name <- paste0(exploring_factors_wd, "Unaligned/Protein_Indiv_Factor", rank_index, "_Unaligned_Ordered_Summary.rda")
     
   }
   
