@@ -4303,6 +4303,22 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
   }
   
   # ---------------------------------------------------------------------------
+  # Save the loadings, betas, and outcome variance estimated on the training data
+  # ---------------------------------------------------------------------------
+  
+  # Save the joint loadings
+  U.train <- bpmf.fit$U.draw
+  
+  # Save the individual loadings
+  W.train <- bpmf.fit$W.draw
+  
+  # Save the betas
+  beta.train <- bpmf.fit$beta.draw
+  
+  # Save the response variance
+  tau2.train <- bpmf.fit$tau2.draw
+  
+  # ---------------------------------------------------------------------------
   # Storing the posterior samples
   # ---------------------------------------------------------------------------
   
@@ -4369,22 +4385,6 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta.train[[1]][[1,1]], sd = 1))
 
   }
-  
-  # ---------------------------------------------------------------------------
-  # Save the loadings, betas, and outcome variance estimated on the training data
-  # ---------------------------------------------------------------------------
-  
-  # Save the joint loadings
-  U.train <- bpmf.fit$U.draw
-  
-  # Save the individual loadings
-  W.train <- bpmf.fit$W.draw
-  
-  # Save the betas
-  beta.train <- bpmf.fit$beta.draw
-  
-  # Save the response variance
-  tau2.train <- bpmf.fit$tau2.draw
   
   # ---------------------------------------------------------------------------
   # Storing the initial values 
@@ -4788,7 +4788,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
-             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum", "bpmf.predict")
   packs <- c("Matrix", "MASS", "truncnorm")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
     # for (sim_iter in 1:nsim) {
