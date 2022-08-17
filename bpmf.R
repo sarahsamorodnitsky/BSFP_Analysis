@@ -5429,7 +5429,7 @@ check_availability <- function(param, compare) {
 }
 
 # Generate fake data depending on conditions
-bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response, missingness, entrywise, prop_missing, sparsity, identically_zero = FALSE, num_in_spike = NULL) {
+bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response = NULL, missingness = NULL, missing_data_type = NULL, prop_missing = NULL, sparsity, identically_zero = FALSE, num_in_spike = NULL) {
   # Generates fake data depending on the dims provided in p.vec, n, and ranks
   # and the true parameters provided in `true_params`
   
@@ -5443,8 +5443,8 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   # s2nY = signal-to-noise ratio in the response (if continuous)
   # response = NULL if no response is desired, "continuous", or "binary" 
   # missingness = NULL, "missingness_in_data", "missingness_in_response"
-  # entrywise = NULL if missingness = NULL, TRUE if entrywise missingness, FALSE if columnwise missingness
-  # prop_missing = NULL if missingness = NULL, otherwise the proportion of entries missingness
+  # missing_data_type = NULL if missingness = NULL; otherwise, = entrywise if randomly sample across sources, = columnwise if randomly set samples to missing, = rowwise is randomly set features to missing
+  # prop_missing = NULL if missingness = NULL, otherwise the proportion of entries, columns, or rows missing
   # sparsity = TRUE if generate regression coefficients under spike-and-slab prior, FALSE otherwise
   # identically_zero = TRUE if generating response with sparsity and want spike coefficients to be exactly 0
   # num_in_spike (vec of ints) = number of coefficients to be generated from spike if generating response with sparsity.
@@ -5707,9 +5707,9 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
     
     if (missingness == "missingness_in_data" | missingness == "both") { # If missing in data
       
-      missing_obs <- missing_data <- missing_cols <- matrix(list(), nrow = q, ncol = 1)
+      missing_obs <- missing_data <- missing_cols <- missing_rows <- matrix(list(), nrow = q, ncol = 1)
       
-      if (entrywise) { # if removing observations entrywise
+      if (missing_data_type == "entrywise") { # if removing observations entrywise
         for (s in 1:q) {
           # these are counters going down the columns of R. So 9 would be the 9th entry counting down. 
           missing_obs[[s,1]] <- sort(sample(x = 1:length(data[[s,1]]), size = prop_missing*length(data[[s,1]]), replace = FALSE))
@@ -5718,11 +5718,13 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
           missing_data[[s,1]] <- data[[s,1]]
           missing_data[[s,1]][missing_obs[[s,1]]] <- NA
         }
-      } else { # if removing entire columns
+      } 
+      
+      if (missing_data_type == "columnwise") { # if removing entire columns
         # Gives the column indices to remove
         
         for (s in 1:q) {
-          # These are counters going down the columns of X. So 9 would be the 9th entry counting down. 
+          # These are counters going down the COLUMNS of X. So 9 would be the 9th column.
           missing_cols[[s,1]] <- sort(sample(x=1:n, size = n*prop_missing, replace = FALSE))
           
           if (s != 1) {
@@ -5733,6 +5735,18 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
           # Duplicate Xs so that I have one with the full data and one with the missing data
           missing_data[[s,1]] <- data[[s,1]]
           missing_data[[s,1]][,missing_cols[[s,1]]] <- NA
+          missing_obs[[s,1]] <- sort(which(is.na(missing_data[[s,1]])))
+        }
+      }
+      
+      if (missing_data_type == "rowwise") { # Restrict missing to within features
+        for (s in 1:q) {
+          # These are counters going down the ROWS of X. So 9 would be the 9th row missing in a given source. 
+          missing_rows[[s,1]] <- sort(sample(x=1:p.vec[s], size = p.vec[s]*prop_missing, replace = FALSE))
+          
+          # Duplicate Xs so that I have one with the full data and one with the missing data
+          missing_data[[s,1]] <- data[[s,1]]
+          missing_data[[s,1]][missing_rows[[s,1]],] <- NA
           missing_obs[[s,1]] <- sort(which(is.na(missing_data[[s,1]])))
         }
       }
