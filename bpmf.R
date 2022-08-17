@@ -4773,7 +4773,7 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
 # -----------------------------------------------------------------------------
 
 validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model_params, nsim = 1000, s2nX = NULL, s2nY = NULL, center = FALSE, nninit, ranks, 
-                                  response = NULL, missingness = NULL, prop_missing = NULL, entrywise = NULL, sparsity = FALSE, predict_test_data = FALSE) {
+                                  response = NULL, missingness = NULL, prop_missing = NULL, missing_data_type = NULL, sparsity = FALSE, predict_test_data = FALSE) {
   
   # ---------------------------------------------------------------------------
   # Check availability of parameters
@@ -4798,7 +4798,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     # Generating the data
     # -------------------------------------------------------------------------
     
-    sim_data <- bpmf_data(p.vec, 2*n, ranks, true_params, s2nX, s2nY, response, missingness, entrywise, prop_missing, sparsity)
+    sim_data <- bpmf_data(p.vec = p.vec, n = 2*n, ranks = ranks, true_params = true_params, s2nX = s2nX, s2nY = s2nY, response = response, missingness = missingness, missing_data_type = missing_data_type, prop_missing = prop_missing, sparsity = sparsity)
     
     # Saving the data
     true_data <- sim_data$data
@@ -6783,7 +6783,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # -------------------------------------------------------------------------
     
     # Generate 2*n samples to split into equally-sized training and test datasets
-    sim_data <- bpmf_data(p.vec, 2*n, ranks, true_params, s2nX, s2nY, response, missingness = NULL, entrywise = NULL, prop_missing = NULL, sparsity = sparsity)
+    sim_data <- bpmf_data(p.vec, 2*n, ranks, true_params, s2nX, s2nY, response, missingness = NULL, missing_data_type = NULL, prop_missing = NULL, sparsity = sparsity)
     
     # Saving the data
     true_data <- sim_data$data
