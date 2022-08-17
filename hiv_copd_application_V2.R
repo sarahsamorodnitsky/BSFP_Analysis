@@ -126,7 +126,7 @@ thinned_iters <- seq(1, nsample, by = 10)
 thinned_iters_burnin <- seq(burnin, nsample, by = 10)
 
 # -----------------------------------------------------------------------------
-# Training Data Model Fit
+# Training Data Model Fit (BPMF, BIDIFAC, sJIVE, MOFA, BIP)
 # -----------------------------------------------------------------------------
 
 # Fitting BPMF
@@ -195,12 +195,8 @@ hiv_copd_data_list_bip[[3]] <- fev1pp[[1,1]]
 BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = nsample, burnin = nsample/2, nbrcomp = 1)
 
 # -----------------------------------------------------------------------------
-# Investigating training data fit results
+# Assessing convergence of BPMF
 # -----------------------------------------------------------------------------
-
-# -------------------------------------
-# Convergence
-# -------------------------------------
 
 # Assessing convergence for both model fits
 load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit.rda"), verbose = TRUE)
@@ -223,7 +219,8 @@ fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
 plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Non-Sparse Model")
 
 # -----------------------------------------------------------------------------
-# Using the Poworoznek et al. solution to factor switching
+# Adjusting for factor switching
+# * Using the Poworoznek et al. (2021) solution 
 # -----------------------------------------------------------------------------
 
 # Loading in the full training data fit
@@ -406,7 +403,7 @@ save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.sco
      file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda")
 
 # -----------------------------------------------------------------------------
-# PCA-like plots using non-sparse model
+# Create PCA-like plots using ALIGNED factors from non-sparse model.
 # -----------------------------------------------------------------------------
 
 library(viridis)
@@ -509,12 +506,14 @@ for (rs1 in 1:indiv_rank2) {
 dev.off()
 
 # -----------------------------------------------------------------------------
-# Kernel density plots for particular factors
+# Heatmaps 
+# * Initially using JIVE heatmaps
+# * Later, switched to sJIVE heatmaps to include response
 # -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# Heatmaps on non-sparse model
-# -----------------------------------------------------------------------------
+# -------------------------------------
+# Heatmaps using r.jive package
+# -------------------------------------
 
 # Save the ranks
 ranks <- fev1pp_training_fit_nonsparse$ranks
@@ -589,9 +588,9 @@ pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Soma
 showHeatmaps(heatmap_nonsparse_jive, order_by = 2)
 dev.off()
 
-# -----------------------------------------------------------------------------
+# -------------------------------------
 # Heatmaps using sup.r.jive
-# -----------------------------------------------------------------------------
+# -------------------------------------
 
 # Save the posterior mean of the joint scores
 S_J <- t(Reduce("+", joint.scores.final)/burnin)
@@ -682,6 +681,9 @@ for (i in 1:sum(ranks)) {
     
     # Create the file name
     file_name <- paste0(exploring_factors_wd, "Aligned/Joint_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    
+    # Save the results
+    save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order, file = file_name)
   }
   
   if (i %in% rank.inds[[2]]) {
@@ -698,7 +700,7 @@ for (i in 1:sum(ranks)) {
     
     # Separate the loadings by metabolites and proteins (only metabolites here)
     factor.final.summary.metabolites <- factor.final.summary
-    factor.final.summary.proteins <- NULL
+    factor.final.summary.proteins <- NA
     
     # Order the loadings within the metabolites and proteins by the posterior mean
     factor.final.summary.metabolites.order <- 
@@ -707,6 +709,8 @@ for (i in 1:sum(ranks)) {
     # Create a file name
     file_name <- paste0(exploring_factors_wd, "Aligned/Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
     
+    # Save the results
+    save(factor.final.summary.metabolites.order, file = file_name)
   }
   
   if (i %in% rank.inds[[3]]) {
@@ -722,7 +726,7 @@ for (i in 1:sum(ranks)) {
     rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
     
     # Separate the loadings by metabolites and proteins (only proteins here)
-    factor.final.summary.metabolites <- NULL
+    factor.final.summary.metabolites <- NA
     factor.final.summary.proteins <- factor.final.summary
     
     # Order the loadings within the metabolites and proteins by the posterior mean
@@ -732,11 +736,10 @@ for (i in 1:sum(ranks)) {
     # Create the file name
     file_name <- paste0(exploring_factors_wd, "Aligned/Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
     
+    # Save the results
+    save(factor.final.summary.proteins.order, file = file_name)
   }
   
-  # Save the results
-  save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order,
-       file = file_name)
 }
 
 # -------------------------------------
