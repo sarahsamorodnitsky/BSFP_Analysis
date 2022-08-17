@@ -16,12 +16,6 @@ r.vec <- c(1, 1)
 ranks <- c(r, r.vec)
 q <- 2
 
-# -----------------------------------------------------------------------------
-# Coverage simulations - No response, no missingness
-# -----------------------------------------------------------------------------
-
-# No response, no missingness
-
 # Setting up the model parameters
 model_params <- true_params <- list(error_vars = c(1,1),
                                     joint_var = 1,
@@ -29,6 +23,11 @@ model_params <- true_params <- list(error_vars = c(1,1),
                                     beta_vars = c(1, 1, rep(1, q)), # Use the same variance for all the effects from each source
                                     response_vars = c(shape = 1, rate = 1))
 
+# -----------------------------------------------------------------------------
+# Coverage simulations - No response, no missingness
+# -----------------------------------------------------------------------------
+
+# No response, no missingness
 no_response_no_missing <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks)
 
 # -----------------------------------------------------------------------------
