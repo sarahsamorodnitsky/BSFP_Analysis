@@ -681,6 +681,9 @@ for (i in 1:sum(ranks)) {
     
     # Create the file name
     file_name <- paste0(exploring_factors_wd, "Aligned/Joint_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    
+    # Save the results
+    save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order, file = file_name)
   }
   
   if (i %in% rank.inds[[2]]) {
@@ -697,7 +700,7 @@ for (i in 1:sum(ranks)) {
     
     # Separate the loadings by metabolites and proteins (only metabolites here)
     factor.final.summary.metabolites <- factor.final.summary
-    factor.final.summary.proteins <- NULL
+    factor.final.summary.proteins <- NA
     
     # Order the loadings within the metabolites and proteins by the posterior mean
     factor.final.summary.metabolites.order <- 
@@ -706,6 +709,8 @@ for (i in 1:sum(ranks)) {
     # Create a file name
     file_name <- paste0(exploring_factors_wd, "Aligned/Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
     
+    # Save the results
+    save(factor.final.summary.metabolites.order, file = file_name)
   }
   
   if (i %in% rank.inds[[3]]) {
@@ -721,7 +726,7 @@ for (i in 1:sum(ranks)) {
     rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
     
     # Separate the loadings by metabolites and proteins (only proteins here)
-    factor.final.summary.metabolites <- NULL
+    factor.final.summary.metabolites <- NA
     factor.final.summary.proteins <- factor.final.summary
     
     # Order the loadings within the metabolites and proteins by the posterior mean
@@ -731,11 +736,10 @@ for (i in 1:sum(ranks)) {
     # Create the file name
     file_name <- paste0(exploring_factors_wd, "Aligned/Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
     
+    # Save the results
+    save(factor.final.summary.proteins.order, file = file_name)
   }
   
-  # Save the results
-  save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order,
-       file = file_name)
 }
 
 # -------------------------------------
