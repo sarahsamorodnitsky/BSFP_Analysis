@@ -101,6 +101,7 @@ response_continuous_missing0.9 <- validation_simulation(nsample = 2000, n_clust 
 
 no_response_test_data <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = NULL, missingness = NULL, predict_test_data = TRUE)
 continuous_response_test_data <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = NULL, predict_test_data = TRUE)
+binary_response_test_data <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = NULL, predict_test_data = TRUE)
 
 # -----------------------------------------------------------------------------
 # Save results
