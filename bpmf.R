@@ -2031,6 +2031,19 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   }
   
   # ---------------------------------------------------------------------------
+  # Scaling the imputed data back to the original data scale
+  # ---------------------------------------------------------------------------
+  
+  # If there is any missingness
+  if (missingness_in_data) {
+    for (iter in 1:nsample) {
+      for (s in 1:q) {
+        Xm.draw[[iter]][[s,1]] <- Xm.draw[[iter]][[s,1]] * sigma.mat[s,1]
+      }
+    }
+  }
+  
+  # ---------------------------------------------------------------------------
   # Calculating the joint and individual structure, scaled to the data
   # ---------------------------------------------------------------------------
   
