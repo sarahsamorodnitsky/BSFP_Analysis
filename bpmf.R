@@ -4832,6 +4832,19 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     # Separating training and test data
     # -------------------------------------------------------------------------
     
+    # Establishing the indices for the training and testing sets
+    train_inds_data <- test_inds_data <- matrix(list(), nrow = q, ncol = 1)
+    train_inds_Y <- test_inds_Y <- matrix(list(), nrow = 1, ncol = 1)
+    
+    # Iterating through the sources
+    for (s in 1:q) {
+      train_inds_data[[s,1]] <- 1:(n*p.vec[s])
+      test_inds_data[[s,1]] <- (n*p.vec[s] + 1):(2*n*p.vec[s])
+      
+      train_inds_Y[[1,1]] <- 1:n
+      test_inds_Y[[1,1]] <- (n+1):(2*n)
+    }
+    
     # Training data
     training_data <- matrix(list(), nrow = q, ncol = 1)
     joint.structure_train <- indiv.structure_train <- overall.structure_train <- matrix(list(), nrow = q, ncol = 1)
@@ -4855,23 +4868,49 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     }
     
     # If there is a response
+    Y_train <- Y_test <- EY_train <- EY_test <- Y_missing_train <- Y_missing_test <- missing_obs_Y_train <- missing_obs_Y_test <- matrix(list(), nrow = 1, ncol = 1)
+    
     if (!is.null(response)) {
-      Y_train <- matrix(list(), nrow = 1, ncol = 1)
-      Y_train[[1,1]] <- Y[[1,1]][1:n,, drop = FALSE]
       
-      EY_train <- matrix(list(), nrow = 1, ncol = 1)
+      # Training
+      Y_train[[1,1]] <- Y[[1,1]][1:n,, drop = FALSE]
       EY_train[[1,1]] <- EY[[1,1]][1:n,, drop = FALSE]
       
-      Y_test <- matrix(list(), nrow = 1, ncol = 1)
+      # Testing
       Y_test[[1,1]] <- Y[[1,1]][(n+1):(2*n),, drop = FALSE]
-      
-      EY_test <- matrix(list(), nrow = 1, ncol = 1)
       EY_test[[1,1]] <- EY[[1,1]][(n+1):(2*n),, drop = FALSE]
+      
+      if (!is.null(missingness)) {
+        if (missingness == "missingness_in_response" | missingness == "both") {
+          
+          # Missing observations in the training set
+          Y_missing_train[[1,1]] <- Y_missing[[1,1]][1:n,, drop = FALSE]
+          missing_obs_Y_train[[1,1]] <- missing_obs_Y[[1,1]][missing_obs_Y[[1,1]] %in% train_inds_Y[[1,1]]]
+          
+          # Missing observations in the test set
+          Y_missing_test[[1,1]] <- Y_missing[[1,1]][(n+1):(2*n),, drop = FALSE]
+          missing_obs_Y_test[[1,1]] <- missing_obs_Y[[1,1]][missing_obs_Y[[1,1]] %in% test_inds_Y[[1,1]]]
+        }
+      }
     }
     
-    # If there isn't a response
-    if (is.null(response)) {
-      Y_train <- Y_test <- EY_train <- EY_test <- Y
+    # If there is missingness in the observed data
+    missing_data_train <- missing_obs_train <- missing_data_test <- missing_obs_test <- matrix(list(), nrow = q, ncol = 1)
+    
+    if (!is.null(missingness)) {
+      if (missingness == "missingness_in_data" | missingness == "both") {
+        
+        for (s in 1:q) {
+          # Training
+          missing_data_train[[s,1]] <- missing_data[[s,1]][,1:n]
+          missing_obs_train[[s,1]] <- missing_obs[[s,1]][missing_obs[[s,1]] %in% train_inds_data[[s,1]]]
+          
+          # Testing
+          missing_data_test[[s,1]] <- missing_data[[s,1]][,(n+1):(2*n)]
+          missing_obs_test[[s,1]] <- missing_obs[[s,1]][missing_obs[[s,1]] %in% test_inds_data[[s,1]]]
+        }
+        
+      }
     }
     
     # -------------------------------------------------------------------------
@@ -4885,18 +4924,18 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     
     if (!is.null(missingness)) {
       if (missingness == "missingness_in_data") {
-        observed_data <- missing_data
-        Y_observed <- Y
+        observed_data <- missing_data_train
+        Y_observed <- Y_train
       }
       
       if (missingness == "missingness_in_response") {
         observed_data <- training_data
-        Y_observed <- Y_missing
+        Y_observed <- Y_missing_train
       }
       
       if (missingness == "both") {
-        observed_data <- missing_data
-        Y_observed <- Y_missing
+        observed_data <- missing_data_train
+        Y_observed <- Y_missing_train
       }
     }
     
@@ -4970,26 +5009,31 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     # Saving the truth together for comparison
     # -------------------------------------------------------------------------
     
-    # Returns the true values that were not observed in the data (X. and y)
-    # If no missing data, Xm <- Ym <- NULL
-    Xm <- return_missing(true_data, missing_obs)
-    Ym <- return_missing(Y, missing_obs_Y)
-    
     # If we only fit on training data
     if (!predict_test_data) {
+      
+      # Returns the true values that were not observed in the data (X. and y)
+      # If no missing data, Xm <- Ym <- NULL
+      Xm_train <- return_missing(true_data, missing_obs_train)
+      Ym_train <- return_missing(Y, missing_obs_Y_train)
       
       # Save the true values
       truth <- list(joint.structure = joint.structure_train,
                     indiv.structure = indiv.structure_train,
                     overall.structure = overall.structure_train,
-                    EY = EY,
+                    EY = EY_train,
                     tau2 = tau2,
-                    Xm = Xm,
-                    Ym = Ym)
+                    Xm = Xm_train,
+                    Ym = Ym_train)
     }
     
     # If we fit on test data
     if (predict_test_data) {
+      
+      # Returns the true values that were not observed in the data (X. and y)
+      # If no missing data, Xm <- Ym <- NULL
+      Xm_test <- return_missing(true_data, missing_obs_test)
+      Ym_test <- return_missing(Y, missing_obs_Y_test)
       
       # Save the true values
       truth <- list(joint.structure = joint.structure_test,
@@ -4997,8 +5041,8 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
                     overall.structure = overall.structure_test,
                     EY = EY_test,
                     tau2 = tau2,
-                    Xm = Xm,
-                    Ym = Ym)
+                    Xm = Xm_test,
+                    Ym = Ym_test)
       
     }
     
@@ -5006,15 +5050,28 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     # Checking coverage, MSE, and CI width
     # -------------------------------------------------------------------------
     
-    sim_iter_results <- get_results(truth, draws, burnin, results_available, missing_obs, missing_obs_Y)
+    if (!predict_test_data) {
+      sim_iter_results <- get_results(truth, draws, burnin, results_available, missing_obs_train, missing_obs_Y_train)
+    }
+    
+    if (predict_test_data) {
+      sim_iter_results <- get_results(truth, draws, burnin, results_available, missing_obs_test, missing_obs_Y_test)
+    }
     
     # ---------------------------------------------------------------------------
     # Returning the results at the end of the loop
     # ---------------------------------------------------------------------------
     
     # Add the indices for the missing values in this sim_iter
-    sim_iter_results$any_missing <- list(missing_obs = missing_obs,
-                                         missing_obs_Y = missing_obs_Y)
+    if (!predict_test_data) {
+      sim_iter_results$any_missing <- list(missing_obs = missing_obs_train,
+                                           missing_obs_Y = missing_obs_Y_train)
+    }
+    
+    if (predict_test_data) {
+      sim_iter_results$any_missing <- list(missing_obs = missing_obs_test,
+                                           missing_obs_Y = missing_obs_Y_test)
+    }
     
     # Share the ranks used
     sim_iter_results$ranks <- list(ranks = res$ranks)
