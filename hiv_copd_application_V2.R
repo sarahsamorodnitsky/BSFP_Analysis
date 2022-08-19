@@ -182,17 +182,19 @@ MOFA_training_fit <- run_mofa(MOFAobject)
 save(MOFA_training_fit, file = paste0(results_wd, "/MOFA/MOFA_training_data_fit.rda"))
 
 # Fitting BIP
-
 library(BIPnet)
 
 # Transposing the data matrices
 hiv_copd_data_list_bip <- lapply(hiv_copd_data_list, function(data) t(data))
 
+# Scaling the data to have sd 1
+hiv_copd_data_list_bip <- lapply(1:q, function(s) scale(hiv_copd_data_list_bip[[s]], center = FALSE, scale = TRUE))
+
 # Adding the response vector
 hiv_copd_data_list_bip[[3]] <- fev1pp[[1,1]]
 
 # Fitting the model
-BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = nsample, burnin = nsample/2, nbrcomp = 1)
+BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
 
 # -----------------------------------------------------------------------------
 # Assessing convergence of BPMF
