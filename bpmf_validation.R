@@ -95,12 +95,23 @@ response_continuous_missing0.7 <- validation_simulation(nsample = 2000, n_clust 
 response_continuous_missing0.9 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_data", missing_data_type = "entrywise", prop_missing = 0.5)
 
 # -----------------------------------------------------------------------------
-# Coverage simulation - validate prediction on a test dataset with NO response
+# Coverage simulation - validate prediction on a test dataset
 # -----------------------------------------------------------------------------
 
+# No response
 no_response_test_data <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = NULL, missingness = NULL, predict_test_data = TRUE)
+
+# Continuous response
 continuous_response_test_data <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = NULL, predict_test_data = TRUE)
+
+# Binary response
 binary_response_test_data <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p.vec, n = n, true_params = true_params, model_params = model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = NULL, predict_test_data = TRUE)
+
+# -----------------------------------------------------------------------------
+# Coverage for entirely missing features
+# -----------------------------------------------------------------------------
+
+rowwise_missing0.1 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", missing_data_type = "rowwise", prop_missing = 0.1)
 
 # -----------------------------------------------------------------------------
 # Save results
