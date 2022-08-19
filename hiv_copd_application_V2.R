@@ -1054,7 +1054,7 @@ funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC
            "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
            "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
 packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
-hiv_copd_imputation <- foreach(sim_iter = c(4,9), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
+hiv_copd_imputation <- foreach(sim_iter = 1:10, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
   
   # Set a seed
   set.seed(sim_iter)
@@ -1085,7 +1085,7 @@ hiv_copd_imputation <- foreach(sim_iter = c(4,9), .packages = packs, .export = f
   
   # Saving the imputed values for each source with burn-in
   metabolome_impute_burnin <- lapply(burnin:nsample, function(iter) {
-    matrix(bpmf_impute$Xm.draw[[iter]][[1,1]], nrow = 1)
+    matrix(bpmf_impute$Xm.draw[[iter]][[1,1]], nrow = 1) 
   })
   
   proteome_impute_burnin <- lapply(burnin:nsample, function(iter) {
@@ -1127,7 +1127,9 @@ hiv_copd_imputation <- foreach(sim_iter = c(4,9), .packages = packs, .export = f
   proteome_ci_width <- mean(abs(proteome_cis[2,] - proteome_cis[1,]))
   
   # Save the results
-  save(metabolome_coverage, proteome_coverage, 
+  save(metabolome_missing, proteome_missing,
+       metabolome_impute_mean, proteome_impute_mean,
+       metabolome_coverage, proteome_coverage, 
        metabolome_ci_width, proteome_ci_width, 
        metabolome_mse, proteome_mse,
        file = paste0("~/BayesianPMF/04DataApplication/BPMF/Imputation/Entrywise/", "FEV1pp_", prop_missing, "_Entrywise_Impute_", sim_iter, ".rda"))
