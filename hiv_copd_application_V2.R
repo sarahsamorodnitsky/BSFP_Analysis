@@ -1062,8 +1062,8 @@ hiv_copd_imputation <- foreach(sim_iter = 1:10, .packages = packs, .export = fun
   set.seed(sim_iter)
   
   # Randomly sample samples to remove from each source
-  metabolome_missing <- sample(1:length(hiv_copd_data[[1,1]]), size = prop_missing * length(hiv_copd_data[[1,1]]), replace = FALSE)
-  proteome_missing <- sample(1:length(hiv_copd_data[[2,1]]), size = prop_missing * length(hiv_copd_data[[2,1]]), replace = FALSE)
+  metabolome_missing <- sort(sample(1:length(hiv_copd_data[[1,1]]), size = prop_missing * length(hiv_copd_data[[1,1]]), replace = FALSE))
+  proteome_missing <- sort(sample(1:length(hiv_copd_data[[2,1]]), size = prop_missing * length(hiv_copd_data[[2,1]]), replace = FALSE))
   
   # Setting these samples to missing 
   hiv_copd_data_missing <- hiv_copd_data
@@ -1145,7 +1145,7 @@ hiv_copd_imputation <- foreach(sim_iter = 1:10, .packages = packs, .export = fun
 entrywise_imputation_files <- list.files("~/BayesianPMF/04DataApplication/BPMF/Imputation/Entrywise")
 
 # Create a dataframe with the results
-entrywise_imputation_results <- matrix(nrow = 9, ncol = 6)
+entrywise_imputation_results <- matrix(nrow = 10, ncol = 6)
 
 # Iteratively load in each replication and add to table
 for (i in 1:length(entrywise_imputation_files)) {
