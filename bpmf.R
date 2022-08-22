@@ -6821,10 +6821,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # library(MOFA2)
   library(doParallel)
   library(foreach)
-  library(sup.r.jive)
+  # library(sup.r.jive)
   # library(natural)
   # library(RSpectra)
-  # library(BIPnet)
+  library(BIPnet)
   
   # The model options
   models <- c("sJIVE", "BIDIFAC", "JIVE", "MOFA", "BPMF_Data_Mode", "BIP", "BPMF_test", "BPMF_test_scale")
@@ -6835,7 +6835,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "sup.r.jive")
+  packs <- c("Matrix", "MASS", "truncnorm", "BIPnet")
              # "BIPnet", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
@@ -7442,7 +7442,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       mod.out <- BIP(dataList = training_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = 5000, burnin = 2500, nbrcomp = bip_num_ranks)
       
       # Predicting on test data
-      mod.test <- BIPpredict(dataListNew = test_data_list_bip, Result = mod.out, meth = "BA")
+      mod.test <- BIPpredict(dataListNew = test_data_list_bip, Result = mod.out, meth = "BMA")
       
       # Saving the results
       bip.scores <- rbind(mod.out$EstU, mod.test$Upredtest)
