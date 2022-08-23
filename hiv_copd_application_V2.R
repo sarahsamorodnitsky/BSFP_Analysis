@@ -203,7 +203,7 @@ BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), 
 # Assessing convergence for both model fits
 load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit.rda"), verbose = TRUE)
 
-fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
+fev1pp_training_nonsparse_conv <- sapply(1:nsample, function(sim_iter) {
   # Calculate the log-joint density at each thinned iterations
   log_joint_density(data = hiv_copd_data, 
                     U.iter = fev1pp_training_fit_nonsparse$U.draw[[sim_iter]], 
@@ -217,8 +217,19 @@ fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
                     tau2.iter = fev1pp_training_fit_nonsparse$tau2.draw[[sim_iter]])
 })
 
+# Save the log-joint density 
+# save(fev1pp_training_nonsparse_conv, file = "~/BayesianPMF/04DataApplication/BPMF/Training_Fit/Log_Joint_Density_NonSparse.rda")
+
 # Plotting the log-joint densities
-plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Non-Sparse Model")
+load("~/BayesianPMF/04DataApplication/BPMF/Training_Fit/Log_Joint_Density_NonSparse.rda", verbose = TRUE)
+
+png("~/BayesianPMF/04DataApplication/BPMF/Training_Fit/log_joint_density_plot_all_iters.png")
+plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joint Density Across Gibbs Sampling Iterations")
+dev.off()
+
+png("~/BayesianPMF/04DataApplication/BPMF/Training_Fit/log_joint_density_plot_burnin.png")
+plot(fev1pp_training_nonsparse_conv[burnin:nsample], ylab = "Log Joint Density", main = "Log Joint Density After Burn-in")
+dev.off()
 
 # -----------------------------------------------------------------------------
 # Adjusting for factor switching
