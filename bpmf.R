@@ -8394,7 +8394,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   # For a given model, run cross validation in parallel
   #
   # Arguments:
-  # mod (character): in c(JIVE, BIDIFAC, MOFA)
+  # mod (character): in c(JIVE, BIDIFAC, MOFA, sJIVE, BIP)
   # hiv_copd_data (list): data for the model
   # outcome (double): response vector for Bayesian modeling
   # outcome_name (character): name of the outcome for saving files
@@ -8408,11 +8408,17 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive", "BIP")
   
   # Load in the full training data fit
   results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/", mod, "_training_data_fit.rda") 
-  out <- load(results_path, verbose = TRUE)
+  
+  # Check if the full training data fit is available and load in if so (since we don't have full training fit for BIP)
+  training_fit_avail <- paste0(mod, "_training_data_fit.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/", mod))
+  
+  if (training_fit_avail) {
+    out <- load(results_path, verbose = TRUE)
+  }
   
   # For JIVE
   if (mod == "JIVE") {
@@ -8555,36 +8561,81 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
     })
   }
   
-  # Combine the scores together
-  all.scores <- cbind(joint.scores, do.call(cbind, indiv.scores))
-  colnames(all.scores) <- c(rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
   
-  # Running in parallel
-  cl <- makeCluster(10)
-  registerDoParallel(cl)
-  fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
-    # Create a new vector of the outcome with the current pair set to NA
-    outcome_cv <- outcome
-    outcome_cv[[1,1]][pair:(pair+1),] <- NA
+  # For BIDIFAC, JIVE, and MOFA, which we use to estimate scores:
+  if (mod %in% c("JIVE", "BIDIFAC", "MOFA")) {
+    # Combine the scores together
+    all.scores <- cbind(joint.scores, do.call(cbind, indiv.scores))
+    colnames(all.scores) <- c(rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
     
-    # Fitting the Bayesian linear model
-    mod.bayes <- bpmf_data_mode(data = hiv_copd_data, Y = outcome_cv, nninit = FALSE, model_params = model_params, 
-                                ranks = c(joint.rank, indiv.rank), scores = all.scores, nsample = nsample)
-    
-    # Save the imputed outcomes
-    Ym.draw_pair <- mod.bayes$Ym.draw
-    
-    # Save just the relevant output
-    ranks <- c(joint.rank, indiv.rank)
-    save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
-    
-    # Remove large objects
-    rm(mod.bayes)
-    
-    # Garbage collection
-    gc()
+    # Running in parallel
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      # Create a new vector of the outcome with the current pair set to NA
+      outcome_cv <- outcome
+      outcome_cv[[1,1]][pair:(pair+1),] <- NA
+      
+      # Fitting the Bayesian linear model
+      mod.bayes <- bpmf_data_mode(data = hiv_copd_data, Y = outcome_cv, nninit = FALSE, model_params = model_params, 
+                                  ranks = c(joint.rank, indiv.rank), scores = all.scores, nsample = nsample)
+      
+      # Save the imputed outcomes
+      Ym.draw_pair <- mod.bayes$Ym.draw
+      
+      # Save just the relevant output
+      ranks <- c(joint.rank, indiv.rank)
+      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+      
+      # Remove large objects
+      rm(mod.bayes)
+      
+      # Garbage collection
+      gc()
+    }
+    stopCluster(cl)
   }
-  stopCluster(cl)
+  
+  # For sJIVE
+  if (mod == "sJIVE") {
+    
+  }
+  
+  # For BIP
+  if (mod == "BIP") {
+    
+    # Transposing the data matrices
+    q <- nrow(hiv_copd_data)
+    hiv_copd_data_list <- lapply(1:q, function(s) hiv_copd_data[[s,1]])
+    hiv_copd_data_list_bip <- lapply(hiv_copd_data_list, function(data) t(data))
+    
+    # Scaling the data to have sd 1
+    hiv_copd_data_list_bip <- lapply(1:q, function(s) scale(hiv_copd_data_list_bip[[s]], center = FALSE, scale = TRUE))
+    
+    # Adding the response vector
+    hiv_copd_data_list_bip[[3]] <- outcome[[1,1]]
+    
+    # In parallel, fit the model on all btu 1 case-control pair, then predict on the held-out pair
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      # Create a new version of the data with just the training data
+      hiv_copd_data_list_bip_training <- hiv_copd_data_list_bip
+      
+      # Remove the current pair of samples
+      hiv_copd_data_list_bip_training <- lapply(1:q, function(s) hiv_copd_data_list_bip[[s]][-c(pair:(pair+1)),])
+      
+      # Create a new vector of the outcome with the current pair set to NA
+      hiv_copd_data_list_bip_training[[3]] <- hiv_copd_data_list_bip[[3]][-c(pair:(pair+1)),,drop=FALSE]
+      
+      # Fitting BIP on the training data
+      burnin <- nsample/2
+      BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip_training, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
+      # Garbage collection
+      gc()
+    }
+    stopCluster(cl)
+  }
   
 }
 
