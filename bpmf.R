@@ -10731,7 +10731,7 @@ jointRot_multi <- function(lambda, eta, var_betas = NULL) {
   
   # Create a pivot for the betas based on the Varimax-BIDIFAC solution and posterior mean for betas
   if (!is.null(var_betas)) {
-    X <- rotfact[[1]] # Saving the Varimax-rotated scores at the BIDIFAC solutio
+    X <- rotfact[[1]] # Saving the Varimax-rotated scores at the BIDIFAC solution
     pivot.betas <- solve(t(X) %*% X + solve(var_betas)) %*% (t(X) %&% y[[1,1]])
     
     # Combine the pivots together to create a fully joint pivot
@@ -10820,9 +10820,6 @@ match_align_bpmf <- function(BPMF.fit, y, model_params, p.vec) {
           BPMF.fit$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
   }))
   individual.scores <- lapply(1:q, function(s) lapply(1:nsample, function(iter) BPMF.fit$Vs.draw[[iter]][[1,s]]))
-  
-  # Saving the Varimax-rotated BIDIFAC solution for the data which serves as the pivot
-  individual.pivot.data <- lapply(1:q, function(s) individual.loadings[[s]]$lambda[[1]][1:p.vec[s],])
   
   # Save the prior variance on the betas for the individual factors
   indiv_var_betas <- lapply(1:q, function(s) diag(rep(model_params$beta_vars[s+2], ranks[s+1])))
