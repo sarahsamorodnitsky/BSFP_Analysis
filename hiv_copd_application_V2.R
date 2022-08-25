@@ -1067,7 +1067,7 @@ funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC
            "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
            "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
 packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
-hiv_copd_imputation <- foreach(sim_iter = 1:10, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
+hiv_copd_imputation <- foreach(sim_iter = 13:20, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
   
   # Set a seed
   set.seed(sim_iter)
