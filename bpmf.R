@@ -8674,7 +8674,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       
       # Fitting BIP on the training data
       burnin <- nsample/2
-      mot.out <- BIP(dataList = hiv_copd_data_list_bip_training, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
+      mod.out <- BIP(dataList = hiv_copd_data_list_bip_training, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
       
       # Predicting on test data
       mod.test <- BIPpredict(dataListNew = hiv_copd_data_list_bip_test, Result = mod.out, meth = "BMA")
@@ -8723,8 +8723,11 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       })
       
       # Save the predicted Y
-      comp.inc.y <- sapply(mod.out$CompoSelMean[q+1,], function(comp) comp > 0.5)
-      Ym.draw_pair <- mod.out$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE] # Note: this includes mod.test$ypredict, check: all(mod.test$ypredict == EY.fit[31:60,])
+      # comp.inc.y <- sapply(mod.out$CompoSelMean[q+1,], function(comp) comp > 0.5)
+      # bip.scores <- rbind(mod.test$Upredtest, mod.out$EstU)
+      # bip.loadings <- mod.out$EstLoad
+      # Ym.draw_pair <- mod.out$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE] # Note: this includes mod.test$ypredict, check: all(mod.test$ypredict == EY.fit[31:60,])
+      Ym.draw_pair <- mod.test$ypredict
       
       # Save the results
       ranks <- c(joint.rank, indiv.rank)
