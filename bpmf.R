@@ -8561,7 +8561,6 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
     })
   }
   
-  
   # For BIDIFAC, JIVE, and MOFA, which we use to estimate scores:
   if (mod %in% c("JIVE", "BIDIFAC", "MOFA")) {
     # Combine the scores together
@@ -8599,6 +8598,47 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   # For sJIVE
   if (mod == "sJIVE") {
     
+    # Creating a list for the data
+    q <- nrow(hiv_copd_data)
+    hiv_copd_data_list <- lapply(1:q, function(s) hiv_copd_data[[s,1]])
+    
+    # In parallel, fit each model on n-2 samples, predict on the held-out pair
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Vector of possible penalty parameters
+      eta <- c(0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99)
+      
+      # Create a new version of the data with just the training samples
+      hiv_copd_data_list_training <- hiv_copd_data_list
+      
+      # Remove the current pair of samples
+      hiv_copd_data_list_training <- lapply(1:q, function(s) hiv_copd_data_list[[s]][,-c(pair:(pair+1))])
+      
+      # Remove the pair from the outcome vector
+      outcome_train <- outcome
+      outcome_train[[1,1]] <- outcome[[1,1]][-c(pair:(pair+1)),,drop=FALSE]
+      
+      # Create the test dataset
+      hiv_copd_data_list_test <- hiv_copd_data_list
+      hiv_copd_data_list_test <- lapply(1:q, function(s) hiv_copd_data_list[[s]][,c(pair:(pair+1))])
+      
+      outcome_test <- outcome
+      outcome_test[[1,1]] <- outcome[[1,1]][c(pair:(pair+1)),,drop=FALSE]
+      
+      # Fit on the training data
+      mod.out <- sJIVE(X = hiv_copd_data_list_training, Y = c(outcome_train[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, 
+                                  method = "permute", threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+      
+      # Fitting the model on test data
+      mod.test <- stats::predict(mod.out, newdata = hiv_copd_data_list_test)
+      Ym.draw_pair <- mod.test$Ypred
+      
+      # Save the results
+      ranks <- c(mod.out$rankJ, mod.out$rankA)
+      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+    }
   }
   
   # For BIP
@@ -8628,9 +8668,68 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       # Create a new vector of the outcome with the current pair set to NA
       hiv_copd_data_list_bip_training[[3]] <- hiv_copd_data_list_bip[[3]][-c(pair:(pair+1)),,drop=FALSE]
       
+      # Create test dataset
+      hiv_copd_data_list_bip_test <- lapply(1:q, function(s) hiv_copd_data_list_bip[[s]][c(pair:(pair+1)),])
+      hiv_copd_data_list_bip_test[[3]] <- hiv_copd_data_list_bip[[3]][c(pair:(pair+1)),,drop=FALSE]
+      
       # Fitting BIP on the training data
       burnin <- nsample/2
-      BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip_training, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
+      mot.out <- BIP(dataList = hiv_copd_data_list_bip_training, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
+      
+      # Predicting on test data
+      mod.test <- BIPpredict(dataListNew = hiv_copd_data_list_bip_test, Result = mod.out, meth = "BMA")
+      
+      # Save the component selection
+      factor_mpp_by_source <- mod.out$CompoSelMean[1:q,]
+      factor_mpp_by_source_list <- split(factor_mpp_by_source, rep(1:ncol(factor_mpp_by_source), each = nrow(factor_mpp_by_source)))
+      bip.joint.individual <- lapply(factor_mpp_by_source_list, function(comp) {
+        # Save lowest MPP
+        ind.min <- which.min(comp)
+        
+        # Save the highest MPP
+        ind.max <- which.max(comp)
+        
+        # If the smallest MPP is still greater than 0.5 then it is joint
+        if (comp[ind.min] >= 0.5) {
+          1:q
+        } 
+        
+        # If the smallest MPP is less than 0.5, check the max
+        else if (comp[ind.min] < 0.5) {
+          if (comp[ind.max] > 0.5) {
+            ind.max
+          } 
+        }
+      })
+      
+      # Save the joint factor indices
+      joint.factors <- sapply(bip.joint.individual, function(comp) {
+        length(comp) == q
+      })
+      
+      # Save the individual factor indices
+      indiv.factors <- lapply(1:q, function(s) {
+        sapply(bip.joint.individual, function(comp) {
+          all(comp %in% s) & length(comp) > 0
+        })
+      })
+      
+      # Save the joint rank
+      joint.rank <- sum(joint.factors)
+      
+      # Save the individual rank
+      indiv.rank <- sapply(1:q, function(s) {
+        sum(indiv.factors[[s]])
+      })
+      
+      # Save the predicted Y
+      comp.inc.y <- sapply(mod.out$CompoSelMean[q+1,], function(comp) comp > 0.5)
+      Ym.draw_pair <- mod.out$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE] # Note: this includes mod.test$ypredict, check: all(mod.test$ypredict == EY.fit[31:60,])
+      
+      # Save the results
+      ranks <- c(joint.rank, indiv.rank)
+      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+      
       # Garbage collection
       gc()
     }
