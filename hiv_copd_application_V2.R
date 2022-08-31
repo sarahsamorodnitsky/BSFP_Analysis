@@ -194,7 +194,7 @@ hiv_copd_data_list_bip <- lapply(1:q, function(s) scale(hiv_copd_data_list_bip[[
 hiv_copd_data_list_bip[[3]] <- fev1pp[[1,1]]
 
 # Fitting the model
-BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
+BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 35)
 
 # -----------------------------------------------------------------------------
 # Assessing convergence of BPMF
