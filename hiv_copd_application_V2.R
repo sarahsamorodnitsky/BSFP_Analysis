@@ -1059,7 +1059,7 @@ prop_missing <- 0.1
 # Save the number of replications
 nsim <- 100
 
-# For 100 replications:
+# For 100 replications of entrywise missingness:
 cl <- makeCluster(2)
 registerDoParallel(cl)
 # For running in parallel
@@ -1156,7 +1156,7 @@ hiv_copd_imputation <- foreach(sim_iter = 13:20, .packages = packs, .export = fu
 entrywise_imputation_files <- list.files("~/BayesianPMF/04DataApplication/BPMF/Imputation/Entrywise")
 
 # Create a dataframe with the results
-entrywise_imputation_results <- matrix(nrow = 10, ncol = 6)
+entrywise_imputation_results <- matrix(nrow = 20, ncol = 6)
 
 # Iteratively load in each replication and add to table
 for (i in 1:length(entrywise_imputation_files)) {
@@ -1177,3 +1177,130 @@ colnames(entrywise_imputation_results) <-
 
 # Average the results
 colMeans(entrywise_imputation_results)
+
+# For 100 replications of COLUMNWISE missingness:
+cl <- makeCluster(2)
+registerDoParallel(cl)
+# For running in parallel
+funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC",
+           "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+           "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
+hiv_copd_imputation <- foreach(sim_iter = 1:20, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
+  
+  # Set a seed
+  set.seed(sim_iter)
+  
+  # Randomly sample samples to remove from each source
+  metabolome_obs_missing <- sort(sample(1:n, size = prop_missing * n, replace = FALSE))
+  
+  # To prevent the same sample missing from both sources
+  avail_obs <- c(1:n)[!(c(1:n) %in% metabolome_obs_missing)]
+  
+  proteome_obs_missing <- sort(sample(avail_obs, size = prop_missing * n, replace = FALSE))
+  
+  # Setting these samples to missing 
+  hiv_copd_data_missing <- hiv_copd_data
+  hiv_copd_data_missing[[1,1]][,metabolome_obs_missing] <- NA
+  hiv_copd_data_missing[[2,1]][,proteome_obs_missing] <- NA
+  
+  # Save the entries that are NA
+  metabolome_missing <- which(is.na(hiv_copd_data_missing[[1,1]]))
+  proteome_missing <- which(is.na(hiv_copd_data_missing[[2,1]]))
+  
+  # Save the missing samples
+  metabolome_missing_samples <- hiv_copd_data[[1,1]][metabolome_missing]
+  proteome_missing_samples <- hiv_copd_data[[2,1]][proteome_missing]
+  
+  # Running the model
+  bpmf_impute <- bpmf_data_mode(
+    data = hiv_copd_data_missing,
+    Y = fev1pp,
+    nninit = TRUE,
+    model_params = model_params,
+    sparsity = FALSE,
+    nsample = nsample,
+    progress = TRUE
+  )
+  
+  # Saving the imputed values for each source with burn-in
+  metabolome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+    matrix(bpmf_impute$Xm.draw[[iter]][[1,1]], nrow = 1) 
+  })
+  
+  proteome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+    matrix(bpmf_impute$Xm.draw[[iter]][[2,1]], nrow = 1)
+  })
+  
+  # Create a matrix of imputed values
+  metabolome_impute_burnin <- do.call(rbind, metabolome_impute_burnin)
+  proteome_impute_burnin <- do.call(rbind, proteome_impute_burnin)
+  
+  # Calculate credible intervals for each imputed values
+  metabolome_cis <- apply(metabolome_impute_burnin, 2, function(row) {
+    c(quantile(row, 0.025), quantile(row, 0.975))
+  })
+  
+  proteome_cis <- apply(proteome_impute_burnin, 2, function(row) {
+    c(quantile(row, 0.025), quantile(row, 0.975))
+  })
+  
+  # Calculate coverage
+  metabolome_coverage <- mean(sapply(1:length(metabolome_missing), function(i) {
+    metabolome_cis[1,i] <= metabolome_missing_samples[i] & metabolome_missing_samples[i] <= metabolome_cis[2,i]
+  }))
+  
+  proteome_coverage <- mean(sapply(1:length(proteome_missing), function(i) {
+    proteome_cis[1,i] <= proteome_missing_samples[i] & proteome_missing_samples[i] <= proteome_cis[2,i]
+  }))
+  
+  # Calculate the posterior mean of the imputed values
+  metabolome_impute_mean <- colMeans(metabolome_impute_burnin)
+  proteome_impute_mean <- colMeans(proteome_impute_burnin)
+  
+  # Calculate MSE with posterior mean and true observed values
+  metabolome_mse <- frob(metabolome_missing_samples - metabolome_impute_mean)/frob(metabolome_missing_samples)
+  proteome_mse <- frob(proteome_missing_samples - proteome_impute_mean)/frob(proteome_missing_samples)
+  
+  # Calculate the CI width
+  metabolome_ci_width <- mean(abs(metabolome_cis[2,] - metabolome_cis[1,]))
+  proteome_ci_width <- mean(abs(proteome_cis[2,] - proteome_cis[1,]))
+  
+  # Save the results
+  save(metabolome_missing, proteome_missing,
+       metabolome_impute_mean, proteome_impute_mean,
+       metabolome_coverage, proteome_coverage, 
+       metabolome_ci_width, proteome_ci_width, 
+       metabolome_mse, proteome_mse,
+       file = paste0("~/BayesianPMF/04DataApplication/BPMF/Imputation/Columnwise/", "FEV1pp_", prop_missing, "_Columnwise_Impute_", sim_iter, ".rda"))
+  
+  # Remove large matrices and clean
+  rm(bpmf_impute, metabolome_cis, proteome_cis)
+  gc()
+}
+
+# Load in the results so far
+columnwise_imputation_files <- list.files("~/BayesianPMF/04DataApplication/BPMF/Imputation/Columnwise")
+
+# Create a dataframe with the results
+columnwise_imputation_results <- matrix(nrow = 20, ncol = 6)
+
+# Iteratively load in each replication and add to table
+for (i in 1:length(columnwise_imputation_files)) {
+  # Load in the file
+  file <- columnwise_imputation_files[i]
+  load(file)
+  
+  # Add results to table
+  columnwise_imputation_results[i,] <- 
+    c(metabolome_coverage, metabolome_mse, metabolome_ci_width,
+      proteome_coverage, proteome_mse, proteome_ci_width)
+}
+
+# Add the column names
+colnames(columnwise_imputation_results) <-
+  c("Metabolome Coverage", "Metabolome MSE", "Metabolome CI Width",
+    "Proteome Coverage", "Proteome MSE", "Proteome CI Width")
+
+# Average the results
+colMeans(columnwise_imputation_results)
