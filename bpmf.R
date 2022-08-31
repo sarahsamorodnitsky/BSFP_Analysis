@@ -7442,7 +7442,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       mod.out <- BIP(dataList = training_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = 5000, burnin = 2500, nbrcomp = bip_num_ranks)
       
       # Predicting on test data
-      mod.test <- BIPpredict(dataListNew = test_data_list_bip, Result = mod.out, meth = "BMA")
+      mod.test <- BIPpredict(dataListNew = test_data_list_bip, Result = mod.out, meth = "noBMA")
       
       # Saving the results
       bip.scores <- rbind(mod.out$EstU, mod.test$Upredtest)
@@ -8677,7 +8677,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       mod.out <- BIP(dataList = hiv_copd_data_list_bip_training, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
       
       # Predicting on test data
-      mod.test <- BIPpredict(dataListNew = hiv_copd_data_list_bip_test, Result = mod.out, meth = "BMA")
+      mod.test <- BIPpredict(dataListNew = hiv_copd_data_list_bip_test, Result = mod.out, meth = "noBMA")
       
       # Save the component selection
       factor_mpp_by_source <- mod.out$CompoSelMean[1:q,]
@@ -8723,10 +8723,6 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       })
       
       # Save the predicted Y
-      # comp.inc.y <- sapply(mod.out$CompoSelMean[q+1,], function(comp) comp > 0.5)
-      # bip.scores <- rbind(mod.test$Upredtest, mod.out$EstU)
-      # bip.loadings <- mod.out$EstLoad
-      # Ym.draw_pair <- mod.out$EstIntcp + bip.scores[,comp.inc.y,drop=FALSE] %*% bip.loadings[[q+1]][comp.inc.y,,drop=FALSE] # Note: this includes mod.test$ypredict, check: all(mod.test$ypredict == EY.fit[31:60,])
       Ym.draw_pair <- mod.test$ypredict
       
       # Save the results
