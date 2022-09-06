@@ -2,6 +2,8 @@
 # Applying the BPMF model to the HIV-COPD BALF Biocrates and Somascan data. 
 # Comparing the model application when there is no sparsity vs. when
 # there is sparsity. 
+# * Note on V2: This is called V2 because I wanted to start a clean version of 
+#   HIV-COPD application script. 
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
@@ -24,7 +26,7 @@ source(paste0(model_wd, "bpmf.R"))
 # Preparing the data
 # -----------------------------------------------------------------------------
 
-# Loading data in 
+# Loading data in (must load in separately on 22 server)
 load(paste0(data_wd, "BiocratesLavageProcessed.rda"))
 load(paste0(data_wd, "HIV_COPD_SomaScan_Normalized_Clean.rda"))
 
@@ -119,15 +121,16 @@ model_params <- list(error_vars = c(sigma21, sigma22),
 # Gibbs sampler parameters
 nsample <- 5000
 burnin <- nsample/2
+iters_burnin <- seq(burnin+1, nsample)
 thinned_iters <- seq(1, nsample, by = 10)
 thinned_iters_burnin <- seq(burnin, nsample, by = 10)
 
 # -----------------------------------------------------------------------------
-# Training Data Model Fit
+# Training Data Model Fit (BPMF, BIDIFAC, sJIVE, MOFA, BIP)
 # -----------------------------------------------------------------------------
 
 # Fitting BPMF
-fev1pp_training_fit_nonsparse <- bpmf(
+fev1pp_training_fit_nonsparse <- bpmf_data_mode(
   data = hiv_copd_data,
   Y = fev1pp,
   nninit = TRUE,
@@ -138,7 +141,7 @@ fev1pp_training_fit_nonsparse <- bpmf(
 )
 
 # Save the results
-# save(fev1pp_training_fit_nonsparse, fev1pp_training_fit_sparse, file = paste0(results_wd, "training_data_fit.rda"))
+save(fev1pp_training_fit_nonsparse, file = paste0(results_wd, "BPMF/Training_Fit/training_data_fit.rda"))
 
 # Fitting BIDIFAC
 BIDIFAC_training_fit <- BIDIFAC(hiv_copd_data, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
@@ -179,30 +182,29 @@ MOFA_training_fit <- run_mofa(MOFAobject)
 save(MOFA_training_fit, file = paste0(results_wd, "/MOFA/MOFA_training_data_fit.rda"))
 
 # Fitting BIP
-
 library(BIPnet)
 
 # Transposing the data matrices
 hiv_copd_data_list_bip <- lapply(hiv_copd_data_list, function(data) t(data))
 
+# Scaling the data to have sd 1
+hiv_copd_data_list_bip <- lapply(1:q, function(s) scale(hiv_copd_data_list_bip[[s]], center = FALSE, scale = TRUE))
+
 # Adding the response vector
 hiv_copd_data_list_bip[[3]] <- fev1pp[[1,1]]
 
 # Fitting the model
-BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = nsample, burnin = nsample/2, nbrcomp = 5)
+BIP_training_fit <- BIP(dataList = hiv_copd_data_list_bip, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 35)
 
 # -----------------------------------------------------------------------------
-# Investigating training data fit results
+# Assessing convergence of BPMF
 # -----------------------------------------------------------------------------
-
-# -------------------------------------
-# Convergence
-# -------------------------------------
 
 # Assessing convergence for both model fits
-load(paste0(results_wd, "BPMF/training_data_fit.rda"), verbose = TRUE)
+load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit.rda"), verbose = TRUE)
+load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit_V2.rda"), verbose = TRUE)
 
-fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
+fev1pp_training_nonsparse_conv <- sapply(1:nsample, function(sim_iter) {
   # Calculate the log-joint density at each thinned iterations
   log_joint_density(data = hiv_copd_data, 
                     U.iter = fev1pp_training_fit_nonsparse$U.draw[[sim_iter]], 
@@ -216,181 +218,206 @@ fev1pp_training_nonsparse_conv <- sapply(thinned_iters, function(sim_iter) {
                     tau2.iter = fev1pp_training_fit_nonsparse$tau2.draw[[sim_iter]])
 })
 
-fev1pp_training_sparse_conv <- sapply(thinned_iters, function(sim_iter) {
-  # Calculate the log-joint density at each thinned iterations
-  log_joint_density(data = hiv_copd_data, 
-                    U.iter = fev1pp_training_fit_sparse$U.draw[[sim_iter]], 
-                    V.iter = fev1pp_training_fit_sparse$V.draw[[sim_iter]], 
-                    W.iter = fev1pp_training_fit_sparse$W.draw[[sim_iter]], 
-                    Vs.iter = fev1pp_training_fit_sparse$Vs.draw[[sim_iter]],
-                    model_params = model_params,
-                    ranks = fev1pp_training_fit_sparse$ranks,
-                    Y = fev1pp,
-                    beta.iter = fev1pp_training_fit_sparse$beta.draw[[sim_iter]],
-                    tau2.iter = fev1pp_training_fit_sparse$tau2.draw[[sim_iter]])
-})
+# Save the log-joint density 
+# save(fev1pp_training_nonsparse_conv, file = "~/BayesianPMF/04DataApplication/BPMF/Training_Fit/Log_Joint_Density_NonSparse.rda")
 
 # Plotting the log-joint densities
-plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Non-Sparse Model")
-plot(fev1pp_training_sparse_conv, ylab = "Log Joint Density", main = "Log Joint Density for Sparse Model")
+load("~/BayesianPMF/04DataApplication/BPMF/Training_Fit/Log_Joint_Density_NonSparse.rda", verbose = TRUE)
 
-# -------------------------------------
-# Applying our label switching algorithm
-# to the results
-# -------------------------------------
+png("~/BayesianPMF/04DataApplication/BPMF/Training_Fit/log_joint_density_plot_all_iters.png")
+plot(fev1pp_training_nonsparse_conv, ylab = "Log Joint Density", main = "Log Joint Density Across Gibbs Sampling Iterations")
+dev.off()
 
-# Applying the label switching algorithm to the training data fits
-fev1pp_training_fit_sparse_ls <- label_switching(U.draw = fev1pp_training_fit_sparse$U.draw,
-                                                 V.draw = fev1pp_training_fit_sparse$V.draw,
-                                                 W.draw = fev1pp_training_fit_sparse$W.draw,
-                                                 Vs.draw = fev1pp_training_fit_sparse$Vs.draw,
-                                                 betas = fev1pp_training_fit_sparse$beta.draw,
-                                                 gammas = fev1pp_training_fit_sparse$gamma.draw,
-                                                 r = fev1pp_training_fit_sparse$ranks[1],
-                                                 r.vec = fev1pp_training_fit_sparse$ranks[-1],
-                                                 nsample = nsample,
-                                                 thinned_iters_burnin = thinned_iters_burnin)
-
-fev1pp_training_fit_nonsparse_ls <- label_switching(U.draw = fev1pp_training_fit_nonsparse$U.draw,
-                                                    V.draw = fev1pp_training_fit_nonsparse$V.draw,
-                                                    W.draw = fev1pp_training_fit_nonsparse$W.draw,
-                                                    Vs.draw = fev1pp_training_fit_nonsparse$Vs.draw,
-                                                    betas = fev1pp_training_fit_nonsparse$beta.draw,
-                                                    gammas = NULL,
-                                                    r = fev1pp_training_fit_nonsparse$ranks[1],
-                                                    r.vec = fev1pp_training_fit_nonsparse$ranks[-1],
-                                                    nsample = nsample,
-                                                    thinned_iters_burnin = thinned_iters_burnin,
-                                                    nninit = TRUE)
-
-# Check that label switching correctly swapped the columns
-correct_swaps_structure <- correct_swaps_lm <- c()
-for (iter in 1:nsample) {
-  correct_swaps_structure_s <- correct_swaps_lm_s <- c()
-  for (s in 1:q) {
-    # Checking the structure
-    before_ls <- fev1pp_training_fit_sparse$U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_sparse$V.draw[[iter]][[1,1]]) +
-      fev1pp_training_fit_sparse$W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_sparse$Vs.draw[[iter]][[1,s]])
-    
-    after_ls <- fev1pp_training_fit_sparse_ls$swapped_U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_sparse_ls$swapped_V.draw[[iter]][[1,1]]) +
-      fev1pp_training_fit_sparse_ls$swapped_W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_sparse_ls$swapped_Vs.draw[[iter]][[1,s]])
-    
-   # Checking the gammas * betas
-   before_ls_lm <- t(fev1pp_training_fit_sparse$gamma.draw[[iter]][[1,1]]) %*% abs(fev1pp_training_fit_sparse$beta.draw[[iter]][[1,1]])
-   
-   after_ls_lm <- t(fev1pp_training_fit_sparse_ls$swapped_gammas[[iter]][[1,1]]) %*% abs(fev1pp_training_fit_sparse_ls$swapped_betas[[iter]][[1,1]])
-   
-   # Checking that everything matched
-   correct_swaps_structure_s[s] <- all.equal(before_ls, after_ls)
-   correct_swaps_lm_s[s] <- all.equal(before_ls_lm, after_ls_lm)
-  }
-  # Add the results from both sources
-  correct_swaps_structure[iter] <- all(correct_swaps_structure_s)
-  correct_swaps_lm[iter] <- all(correct_swaps_lm_s)
-}
-all(correct_swaps_structure)
-all(correct_swaps_lm)
-
-correct_swaps_structure <- correct_swaps_lm <- c()
-for (iter in 1:nsample) {
-  correct_swaps_structure_s <- correct_swaps_lm_s <- c()
-  for (s in 1:q) {
-    # Checking the structure
-    before_ls <- fev1pp_training_fit_nonsparse$U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]]) +
-      fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]])
-    
-    after_ls <- fev1pp_training_fit_nonsparse_ls$swapped_U.draw[[iter]][[s,1]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]]) +
-      fev1pp_training_fit_nonsparse_ls$swapped_W.draw[[iter]][[s,s]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]][[1,s]])
-    
-    # Checking the VStar * betas
-    before.VStar.iter <- cbind(1, fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]], do.call(cbind, fev1pp_training_fit_nonsparse$Vs.draw[[iter]]))
-    before_ls_lm <- before.VStar.iter %*% (fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]])
-    
-    after.VStar.iter <- cbind(1, fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]], do.call(cbind, fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]]))
-    after_ls_lm <- after.VStar.iter %*% (fev1pp_training_fit_nonsparse_ls$swapped_betas[[iter]][[1,1]])
-    
-    # Checking that everything matched
-    correct_swaps_structure_s[s] <- all.equal(before_ls, after_ls)
-    correct_swaps_lm_s[s] <- all.equal(before_ls_lm, after_ls_lm)
-  }
-  # Add the results from both sources
-  correct_swaps_structure[iter] <- all(correct_swaps_structure_s)
-  correct_swaps_lm[iter] <- all(correct_swaps_lm_s)
-}
-all(correct_swaps_structure)
-all(correct_swaps_lm)
-
-
-# -------------------------------------
-# Calculation of variance explained in data and response
-# -------------------------------------
-
-# Save the parameters each ordered by variance explained
-ranks <- fev1pp_training_fit_nonsparse$ranks
-betas_ls <- fev1pp_training_fit_nonsparse_ls$betas.mean.reorder
-V_ls <- fev1pp_training_fit_nonsparse_ls$V.mean.reorder
-U_ls <- fev1pp_training_fit_nonsparse_ls$U.mean.reorder
-Vs_ls <- fev1pp_training_fit_nonsparse_ls$Vs.mean.reorder
-W_ls <- fev1pp_training_fit_nonsparse_ls$W.mean.reorder
-
-# -----------------
-# Variance exp in X
-# -----------------
-
-# Calculate the Frobenius norm of each data source
-ss_biocrates <- frob(hiv_copd_data[[1,1]])
-ss_somascan <- frob(hiv_copd_data[[2,1]])
-
-# Calculate the contribution of joint structure for Biocrates
-ss_biocrates_joint <- frob(U_ls[[1,1]] %*% t(V_ls[[1,1]]))
-
-# Calculate the contribution of joint structure for Somascan
-ss_somascan_joint <- frob(U_ls[[2,1]] %*% t(V_ls[[1,1]]))
-
-# Calculate the contribution of individual structure for Biocrates
-ss_biocrates_indiv <- frob(W_ls[[1,1]] %*% t(Vs_ls[[1,1]]))
-
-# Calculate the contribution of individual structure for Somascan
-ss_somascan_indiv <- frob(W_ls[[2,2]] %*% t(Vs_ls[[1,2]]))
-
-# Calculate the variance explained
-prop_var_exp_biocrates_joint <- ss_biocrates_joint/ss_biocrates # Joint Biocrates
-prop_var_exp_somascan_joint <- ss_somascan_joint/ss_somascan # Joint Somascan
-prop_var_exp_biocrates_indiv <- ss_biocrates_indiv/ss_biocrates
-prop_var_exp_somascan_indiv <- ss_somascan_indiv/ss_somascan
-
-# -----------------
-# Variance exp in Y
-# -----------------
-
-# Calculate the sum of squared Ys
-ssY <- sum(fev1pp[[1,1]])
-
-# Calculate the contribution from joint prediction
-ss_joint_Y <- sum((V_ls[[1,1]] %*% betas_ls[2:(1+ranks[1]),,drop = FALSE])^2)
-ss_biocrates_Y <- sum((Vs_ls[[1,1]] %*% betas_ls[(2+ranks[1]):(1+ranks[1]+ranks[2]),,drop = FALSE])^2)
-ss_somascan_Y <- sum((Vs_ls[[1,2]] %*% betas_ls[(2+ranks[1]+ranks[2]):(1+sum(ranks)),,drop = FALSE])^2)
-
-# Calculate proportion variance explained
-var_exp_Y_joint <- ss_joint_Y/ssY
-var_exp_Y_biocrates <- ss_biocrates_Y/ssY
-var_exp_Y_somascan <- ss_somascan_Y/ssY
-
-# Creating table
-library(xtable)
-var_exp_df <- data.frame(Source = c("Metabolite", "Protein", "FEV1pp"),
-                         Joint = numeric(3),
-                         Indiv.Metab = numeric(3),
-                         Indiv.Protein = numeric(3))
-var_exp_df[1,2:4] <- c(prop_var_exp_biocrates_joint, prop_var_exp_biocrates_indiv, 0) # 0 because Somascan does not explain var in Biocrates
-var_exp_df[2,2:4] <- c(prop_var_exp_somascan_joint, 0, prop_var_exp_somascan_indiv) # 0 because Biocrates does not explain var in Somascan
-var_exp_df[3,2:4] <- c(var_exp_Y_joint, var_exp_Y_biocrates, var_exp_Y_somascan)
-
-# Print table
-print(xtable(var_exp_df, digits = 4), include.rownames = FALSE)
+png("~/BayesianPMF/04DataApplication/BPMF/Training_Fit/log_joint_density_plot_burnin.png")
+plot(fev1pp_training_nonsparse_conv[burnin:nsample], ylab = "Log Joint Density", main = "Log Joint Density After Burn-in")
+dev.off()
 
 # -----------------------------------------------------------------------------
-# PCA-like plots using non-sparse model
+# Adjusting for factor switching
+# * Using the Poworoznek et al. (2021) solution 
+# -----------------------------------------------------------------------------
+
+# Loading in the full training data fit
+load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit.rda"), verbose = TRUE)
+
+# Save the ranks
+ranks <- fev1pp_training_fit_nonsparse$ranks
+joint.rank <- fev1pp_training_fit_nonsparse$ranks[1]
+indiv.ranks <- fev1pp_training_fit_nonsparse$ranks[-1]
+
+# Applying the Match Align algorithm to undo rotational invariance in the results
+fev1pp_training_fit_nonsparse_aligned <- match_align_bpmf(fev1pp_training_fit_nonsparse, y = fev1pp,
+                                                          model_params = model_params, p.vec = p.vec)
+
+# Save the results from the label switching algorithm
+joint.scores.aligned <- fev1pp_training_fit_nonsparse_aligned$joint.scores.final
+joint.loadings.aligned <- fev1pp_training_fit_nonsparse_aligned$joint.loadings.final
+joint.betas.aligned <- fev1pp_training_fit_nonsparse_aligned$joint.betas.final
+
+individual.scores.aligned <- fev1pp_training_fit_nonsparse_aligned$individual.scores.final
+individual.loadings.aligned <- fev1pp_training_fit_nonsparse_aligned$individual.loadings.final
+individual.betas.aligned <- fev1pp_training_fit_nonsparse_aligned$individual.betas.final
+
+# Order the components by squared Frobenius-norm of the corresponding rank-1 structure after burn-in --
+
+# Save the aligned components after burn-in
+joint.scores.aligned.burnin <- joint.scores.aligned[iters_burnin]
+joint.loadings.aligned.burnin <- joint.loadings.aligned[iters_burnin]
+joint.betas.aligned.burnin <- joint.betas.aligned[iters_burnin]
+
+# For each component, calculate the posterior mean of the corresponding rank-1 structure
+joint.rank1.structure <- lapply(1:joint.rank, function(r) {
+  # Calculate the rank-1 structure for the given component at each iteration
+  factor_r_structure <- lapply(1:burnin, function(iter) {
+    rbind(joint.loadings.aligned.burnin[[iter]][,r,drop=FALSE], t(joint.betas.aligned.burnin[[iter]][r,,drop=FALSE])) %*% 
+      t(joint.scores.aligned.burnin[[iter]][,r,drop=FALSE])
+  })
+  
+  # Calculate the posterior mean
+  Reduce("+", factor_r_structure)/length(factor_r_structure)
+})
+
+# Calculate the norm of each rank-1 structure
+joint.structure.norm <- sapply(joint.rank1.structure, function(str) frob(str))
+
+# Order the factors
+joint.factor.order <- order(joint.structure.norm, decreasing = TRUE)
+
+# Reorder the joint scores, loadings, and betas after burn-in
+joint.scores.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+  joint.scores.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
+})
+joint.loadings.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+  joint.loadings.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
+})
+joint.betas.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+  joint.betas.aligned.burnin[[iter]][joint.factor.order,,drop=FALSE]
+})
+
+# Order the factors in each individual structure by the Frobenius norm of their corresponding rank-1 structure --
+
+# Save the aligned components after burn-in
+individual.scores.aligned.burnin <- lapply(1:q, function(s) individual.scores.aligned[[s]][iters_burnin])
+individual.loadings.aligned.burnin <- lapply(1:q, function(s) individual.loadings.aligned[[s]][iters_burnin])
+individual.betas.aligned.burnin <- lapply(1:q, function(s) individual.betas.aligned[[s]][iters_burnin])
+
+# For each source and each component, calculate the posterior mean of the corresponding rank-1 structure
+individual.rank1.structure <- lapply(1:q, function(s) {
+  lapply(1:indiv.ranks[s], function(r) {
+    # Calculate the rank-1 structure for the given component at each iteration
+    factor_r_structure <- lapply(1:burnin, function(iter) {
+      rbind(individual.loadings.aligned.burnin[[s]][[iter]][,r,drop=FALSE], t(individual.betas.aligned.burnin[[s]][[iter]][r,,drop=FALSE])) %*% 
+        t(individual.scores.aligned.burnin[[s]][[iter]][,r,drop=FALSE])
+    })
+    
+    # Calculate the posterior mean
+    Reduce("+", factor_r_structure)/length(factor_r_structure)
+  })
+})
+
+# Calculate the norm of each rank-1 structure for each source
+individual.structure.norm <- lapply(1:q, function(s) {
+  sapply(individual.rank1.structure[[s]], function(str) frob(str))
+})
+
+# Order the factors
+individual.factor.order <- lapply(1:q, function(s) {
+  order(individual.structure.norm[[s]], decreasing = TRUE)
+})
+
+# Reorder the individual scores, loadings, and betas after burn-in
+individual.scores.aligned.burnin.order <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    individual.scores.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+  })
+})
+individual.loadings.aligned.burnin.order <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    individual.loadings.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+  })
+})
+individual.betas.aligned.burnin.order <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    individual.betas.aligned.burnin[[s]][[iter]][individual.factor.order[[s]],,drop=FALSE]
+  })
+})
+
+# Check the joint structure after the algorithm matches the original structure --
+
+# Create a vector for the indices of each rank
+beta.ind <- lapply(1:length(ranks), function(i) {
+  if (i == 1) { 
+    (1:ranks[i]) + 1
+  } else {
+    ((sum(ranks[1:(i-1)])+1):sum(ranks[1:i])) + 1
+  }
+})
+
+# Save the joint loadings
+joint.loadings <- lapply(iters_burnin, function(iter) {
+  rbind(do.call(rbind, fev1pp_training_fit_nonsparse$U.draw[[iter]]), # Joint loadings  
+        t(fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[1]],])) # Joint regression coefficients
+})
+
+# Save joint scores
+joint.scores <- lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
+
+# Save the original joint structure
+joint.structure.original <- lapply(1:burnin, function(iter) {
+  joint.loadings[[iter]] %*% t(joint.scores[[iter]])
+})
+
+# Calculate the new structure
+joint.structure.new <- lapply(1:burnin, function(iter) {
+  rbind(joint.loadings.aligned.burnin.order[[iter]], t(joint.betas.aligned.burnin.order[[iter]])) %*%
+    t(joint.scores.aligned.burnin.order[[iter]])
+})
+
+# Check
+all.equal(joint.structure.original, joint.structure.new) # TRUE!
+
+# Check the individual structure after the algorithm matches the original structure --
+
+# Combine the individual loadings and betas
+individual.loadings <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) {
+  rbind(fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]], 
+        fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
+}))
+individual.scores <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]]))
+
+# Calculate the original structure
+individual.structure.original <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    individual.loadings[[s]][[iter]] %*% t(individual.scores[[s]][[iter]])
+  })
+})
+
+# Calculate the new structure
+individual.structure.new <- lapply(1:q, function(s) {
+  lapply(1:burnin, function(iter) {
+    rbind(individual.loadings.aligned.burnin.order[[s]][[iter]], t(individual.betas.aligned.burnin.order[[s]][[iter]])) %*%
+      t(individual.scores.aligned.burnin.order[[s]][[iter]])
+  })
+})
+
+# Check
+lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]])) # TRUE TRUE!
+
+# Rename
+joint.scores.final <- joint.scores.aligned.burnin.order
+joint.loadings.final <- joint.loadings.aligned.burnin.order
+joint.betas.final <- joint.betas.aligned.burnin.order
+
+individual.scores.final <- individual.scores.aligned.burnin.order
+individual.loadings.final <- individual.loadings.aligned.burnin.order
+individual.betas.final <- individual.betas.aligned.burnin.order
+
+# Save the results
+save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
+     file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda")
+
+# -----------------------------------------------------------------------------
+# Create PCA-like plots using ALIGNED factors from non-sparse model.
 # -----------------------------------------------------------------------------
 
 library(viridis)
@@ -405,29 +432,32 @@ cluster_colors <- viridis(3)[1:2][clusters.soma]
 # Creating shapes
 cluster_shapes <- c(3,4)[clusters.soma]
 
+# Load in the aligned factors
+load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda", verbose = TRUE)
+
 # -------------------------------------
 # Joint structure
 # -------------------------------------
 
-# Saving the posterior mean of the joint structure, ordered by variance explained 
-V_ls_nonsparse_mean_ordered <- fev1pp_training_fit_nonsparse_ls$V.mean.reorder[[1,1]]
+# Calculate the posterior mean of the joint scores
+joint.scores.final.mean <- Reduce("+", lapply(1:burnin, function(iter) joint.scores.final[[iter]]))/(nsample/2)
 
 # Plot subjects against every combination of PCs
 joint_rank <- fev1pp_training_fit_nonsparse$ranks[1]
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Joint_Structure_PCA_Plot.pdf"), width = 15)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Joint_Structure_Aligned_Ordered_PCA_Plot.pdf"), width = 15)
 for (rs1 in 1:joint_rank) {
  for (rs2 in 1:joint_rank) {
-   if (rs1 != rs2) {
+   if (rs2 > rs1) {
      par(mfrow = c(1,2), mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
      # Plot with case-control label as colors
-     plot(V_ls_nonsparse_mean_ordered[,rs1], V_ls_nonsparse_mean_ordered[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
+     plot(joint.scores.final.mean[,rs1], joint.scores.final.mean[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
           ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
-          col = ccstat_colors)
+          col = ccstat_colors, lwd = 3)
      
      # Plot with stand-out subjects as colors
-     plot(V_ls_nonsparse_mean_ordered[,rs1], V_ls_nonsparse_mean_ordered[,rs2], xlab = paste0("Joint Factor ", rs1),
+     plot(joint.scores.final.mean[,rs1], joint.scores.final.mean[,rs2], xlab = paste0("Joint Factor ", rs1),
           ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
-          col = cluster_colors, pch = cluster_shapes)
+          col = cluster_colors, pch = cluster_shapes, lwd = 3)
      legend("topleft", col = c("#440154FF", "#21908CFF"), pch = c(3,4),
             legend = c("Cluster 1", "Cluster 2"))
      par(mfrow = c(1,1))
@@ -441,24 +471,24 @@ dev.off()
 # -------------------------------------
 
 # Saving the reordered individual factors, ordered by variance explained in each source
-Vs_ls_nonsparse_mean_ordered <- fev1pp_training_fit_nonsparse_ls$Vs.mean.reorder
+individual.scores.final.mean <- lapply(1:q, function(s) Reduce("+", lapply(1:burnin, function(iter) individual.scores.final[[s]][[iter]]))/(nsample/2))
 
 # Plot subjects against every combination of PCs for Biocrates
 indiv_rank1 <- fev1pp_training_fit_nonsparse$ranks[2]
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Individual_Structure_Biocrates_PCA_Plot.pdf"), width = 15)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Individual_Structure_Biocrates_Aligned_Ordered_PCA_Plot.pdf"), width = 15)
 for (rs1 in 1:indiv_rank1) {
   for (rs2 in 1:indiv_rank1) {
-    if (rs1 != rs2) {
+    if (rs2 > rs1) {
       par(mfrow = c(1,2))
       # Plot with case-control label as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,1]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,1]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+      plot(individual.scores.final.mean[[1]][,rs1], individual.scores.final.mean[[1]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Metabolomic ", rs1, " vs ", rs2),
            col = ccstat_colors)
       
       # Plot with stand-out subjects as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,1]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,1]][,rs2], xlab = paste0("Individual Factor ", rs1),
+      plot(individual.scores.final.mean[[1]][,rs1], individual.scores.final.mean[[1]][,rs2], xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Metabolomic ", rs1, " vs ", rs2),
-           col = cluster_colors, pch = cluster_shapes)
+           col = cluster_colors, pch = cluster_shapes, lwd = 3)
       legend("bottomleft", col = c("#440154FF", "#21908CFF"), pch = c(3,4),
              legend = c("Cluster 1", "Cluster 2"))
       par(mfrow = c(1,1))
@@ -469,20 +499,20 @@ dev.off()
 
 # Plot subjects against every combination of PCs for Somascan
 indiv_rank2 <- fev1pp_training_fit_nonsparse$ranks[3]
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Individual_Structure_Somascan_PCA_Plot.pdf"), width = 15)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Individual_Structure_Somascan_Aligned_Ordered_PCA_Plot.pdf"), width = 15)
 for (rs1 in 1:indiv_rank2) {
   for (rs2 in 1:indiv_rank2) {
-    if (rs1 != rs2) {
+    if (rs2 > rs1) {
       par(mfrow = c(1,2))
       # Plot with case-control label as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,2]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,2]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
+      plot(individual.scores.final.mean[[2]][,rs1], individual.scores.final.mean[[2]][,rs2], pch = 16, xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Proteomic ", rs1, " vs ", rs2),
            col = ccstat_colors)
       
       # Plot with stand-out subjects as colors
-      plot(Vs_ls_nonsparse_mean_ordered[[1,2]][,rs1], Vs_ls_nonsparse_mean_ordered[[1,2]][,rs2], xlab = paste0("Individual Factor ", rs1),
+      plot(individual.scores.final.mean[[2]][,rs1], individual.scores.final.mean[[2]][,rs2], xlab = paste0("Individual Factor ", rs1),
            ylab = paste0("Individual Factor ", rs2), main = paste0("Individual Factors Proteomic ", rs1, " vs ", rs2),
-           col = cluster_colors, pch = cluster_shapes)
+           col = cluster_colors, pch = cluster_shapes, lwd = 3)
       par(mfrow = c(1,1))
     }
   } 
@@ -490,255 +520,336 @@ for (rs1 in 1:indiv_rank2) {
 dev.off()
 
 # -----------------------------------------------------------------------------
-# Kernel density plots for particular factors
+# Heatmaps 
+# * Initially using JIVE heatmaps
+# * Later, switched to sJIVE heatmaps to include response
 # -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# Heatmaps on non-sparse model
-# -----------------------------------------------------------------------------
+# -------------------------------------
+# Heatmaps using r.jive package
+# -------------------------------------
+
+# Save the ranks
+ranks <- fev1pp_training_fit_nonsparse$ranks
+joint_rank <- ranks[1]
+indiv_rank1 <- ranks[2]
+indiv_rank2 <- ranks[3]
 
 # Calculating the posterior mean of the joint structure (Biocrates)
-joint_biocrates_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse_ls$swapped_U.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]])
-}))/length(thinned_iters_burnin)
+# joint_biocrates_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
+#   fev1pp_training_fit_nonsparse$U.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
+# }))/length(iters_burnin)
+# 
+# # Calculating the posterior mean of the joint structure (Somascan)
+# joint_somascan_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
+#   fev1pp_training_fit_nonsparse$U.draw[[iter]][[2,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
+# }))/length(iters_burnin)
+# 
+# # Calculating the posterior mean of the individual structure (Biocrates)
+# indiv_biocrates_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
+#   fev1pp_training_fit_nonsparse$W.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,1]])
+# }))/length(iters_burnin)
+# 
+# # Calculating the posterior mean of the individual structure (Somascan)
+# indiv_somascan_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
+#   fev1pp_training_fit_nonsparse$W.draw[[iter]][[2,2]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,2]])
+# }))/length(iters_burnin)
 
-# Calculating the posterior mean of the joint structure (Somascan)
-joint_somascan_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse_ls$swapped_U.draw[[iter]][[2,1]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_V.draw[[iter]][[1,1]])
-}))/length(thinned_iters_burnin)
+# Calculating the joint structure mean
+joint_structure_mean <- Reduce("+", lapply(1:burnin, function(iter) {
+  joint.loadings.final[[iter]] %*% t(joint.scores.final[[iter]])
+}))/burnin
 
-# Calculating the posterior mean of the individual structure (Biocrates)
-indiv_biocrates_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse_ls$swapped_W.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]][[1,1]])
-}))/length(thinned_iters_burnin)
+metabolite_structure_mean <-  Reduce("+", lapply(1:burnin, function(iter) {
+  individual.loadings.final[[1]][[iter]] %*% t(individual.scores.final[[1]][[iter]])
+}))/burnin
 
-# Calculating the posterior mean of the individual structure (Somascan)
-indiv_somascan_ls_nonsparse_mean <- Reduce("+", lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse_ls$swapped_W.draw[[iter]][[2,2]] %*% t(fev1pp_training_fit_nonsparse_ls$swapped_Vs.draw[[iter]][[1,2]])
-}))/length(thinned_iters_burnin)
+protein_structure_mean <-  Reduce("+", lapply(1:burnin, function(iter) {
+  individual.loadings.final[[2]][[iter]] %*% t(individual.scores.final[[2]][[iter]])
+}))/burnin
 
+# Calculating E(Y) for joint contribution
+EY_joint_mean <- Reduce("+", lapply(1:burnin, function(iter) {
+  joint.scores.final[[iter]] %*% joint.betas.final[[iter]]
+}))/burnin
+
+EY_indiv_mean <-lapply(1:q, function(s) {
+  Reduce("+", lapply(1:burnin, function(iter) {
+    individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]]
+  }))/burnin
+})
 
 # Reorganizing the results to fit the JIVE structure
-heatmap_ls_nonsparse_jive <- list(data = list(hiv_copd_data[[1,1]], hiv_copd_data[[2,1]]),
-                                  joint = list(joint_biocrates_ls_nonsparse_mean, joint_somascan_ls_nonsparse_mean),
-                                  individual = list(indiv_biocrates_ls_nonsparse_mean, indiv_somascan_ls_nonsparse_mean),
-                                  rankJ = joint_rank,
-                                  rankA = c(indiv_rank1, indiv_rank2))
+heatmap_nonsparse_jive <- list(data = list(hiv_copd_data[[1,1]], hiv_copd_data[[2,1]]),
+                              joint = list(joint_structure_mean[1:p.vec[1],,drop=FALSE], 
+                                           joint_structure_mean[(p.vec[1]+1):p,,drop=FALSE]),
+                              individual = list(metabolite_structure_mean, protein_structure_mean),
+                              rankJ = joint_rank,
+                              rankA = c(indiv_rank1, indiv_rank2))
 
 # Applying the showHeatmaps function (ordered by joint structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Joint.pdf"), width = 15)
-showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 0)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Joint.pdf"), width = 15)
+showHeatmaps(heatmap_nonsparse_jive, order_by = 0)
 dev.off()
 
 # Applying the showHeatmaps function (ordered by Biocrates structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Biocrates.pdf"), width = 15)
-showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 1)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Biocrates.pdf"), width = 15)
+showHeatmaps(heatmap_nonsparse_jive, order_by = 1)
 dev.off()
 
 # Applying the showHeatmaps function (ordered by Somascan structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/Figures/Heatmap_Ordered_by_Somascan.pdf"), width = 15)
-showHeatmaps(heatmap_ls_nonsparse_jive, order_by = 2)
+pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Somascan.pdf"), width = 15)
+showHeatmaps(heatmap_nonsparse_jive, order_by = 2)
+dev.off()
+
+# -------------------------------------
+# Heatmaps using sup.r.jive
+# -------------------------------------
+
+# Save the posterior mean of the joint scores
+S_J <- t(Reduce("+", joint.scores.final)/burnin)
+
+# Posterior mean of individual scores
+S_I <- lapply(1:q, function(s) t(Reduce("+", individual.scores.final[[s]])/burnin))
+
+# Posterior mean of joint loadings
+U_I_full <- Reduce("+", joint.loadings.final)/ burnin
+U_I <- list(U_I_full[1:p.vec[1],,drop=FALSE],
+            U_I_full[(p.vec[1]+1):p,,drop=FALSE])
+
+# Posterior mean of the individual loadings
+W_I <- lapply(1:q, function(s) Reduce("+", individual.loadings.final[[s]])/burnin)
+
+# Posterior mean of joint betas
+theta1 <- t(Reduce("+", joint.betas.final)/burnin)
+
+# Posterior mean of individual betas
+theta2 <- lapply(1:q, function(s) t(Reduce("+", individual.betas.final[[s]]))/burnin)
+
+# Combine into list
+hiv_copd_data_list_fev1pp <- list(X = list(hiv_copd_data_list[[1]], hiv_copd_data_list[[2]]), 
+                                  Y = unlist(fev1pp[[1,1]]))
+heatmap_sup.r.jive <- list(data = hiv_copd_data_list_fev1pp,
+                           S_J = S_J, S_I = S_I,
+                           U_I = U_I, W_I = W_I,
+                           theta1 = theta1, theta2 = theta2)
+
+png(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_FEV1pp_with_Outcome.png"), width = 800)
+plotHeatmap(heatmap_sup.r.jive, ylab = "FEV1pp", xlab = c("Metabolomics", "Proteomics"))
 dev.off()
 
 # -----------------------------------------------------------------------------
 # Credible Intervals for Coefficients Using Non-Sparse Model
 # -----------------------------------------------------------------------------
 
-# Creating a matrix with the posterior samples for the betas after burnin and thinning
-betas_ls_nonsparse_mat <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse_ls$swapped_betas[[iter]][[1,1]]
-}))
+# -------------------------------------
+# Creating summaries for ALIGNED factors
+# -------------------------------------
 
-# Calculate the mean and CIs
-betas_ls_nonsparse_mat_results <- t(apply(betas_ls_nonsparse_mat, 1, function(beta) {
-  c(mean(beta), quantile(beta, 0.025), quantile(beta, 0.975))
-}))
+# Load in the aligned factors
+load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered.rda", verbose = TRUE)
 
-# Add factor labels
-betas_ls_nonsparse_mat_results <- as.data.frame(betas_ls_nonsparse_mat_results)
-betas_ls_nonsparse_mat_results <- cbind.data.frame(0:(nrow(betas_ls_nonsparse_mat_results)-1),
-                                                   betas_ls_nonsparse_mat_results)
-colnames(betas_ls_nonsparse_mat_results) <- c("Factor", "Posterior Mean", "Lower (2.5%)", "Upper (97.5%)")
-betas_ls_nonsparse_mat_results <- betas_ls_nonsparse_mat_results[-1,] # Remove intercept
+library(dplyr)
 
-# Create plot
-library(plotrix)
-plotCI(x = betas_ls_nonsparse_mat_results$Factor,               # plotrix plot with confidence intervals
-       y = betas_ls_nonsparse_mat_results$`Posterior Mean`,
-       li = betas_ls_nonsparse_mat_results$`Lower (2.5%)`,
-       ui = betas_ls_nonsparse_mat_results$`Upper (97.5%)`,
-       main = "95% Credible Intervals for Factor Effects \n on FEV1pp (Non-Sparse)",
-       xlab = "Factor", ylab = "Posterior Mean",
-       scol = c(rep(1, joint_rank), rep(2, indiv_rank1), rep(3, indiv_rank2)))
+# Save the working directory where the summaries will go
+exploring_factors_wd <- "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/"
 
-
-# -----------------------------------------------------------------------------
-# Credible Intervals for Coefficients Using Sparse Model
-# -----------------------------------------------------------------------------
-
-# Creating a matrix with the posterior samples for the betas after burnin and thinning
-betas_ls_sparse_mat <- do.call(cbind, lapply(thinned_iters_burnin, function(iter) {
-  fev1pp_training_fit_sparse_ls$swapped_betas[[iter]][[1,1]]
-}))
-
-# Calculate the mean and CIs
-betas_ls_sparse_mat_results <- t(apply(betas_ls_sparse_mat, 1, function(beta) {
-  c(mean(beta), quantile(beta, 0.025), quantile(beta, 0.975))
-}))
-
-# Add factor labels
-betas_ls_sparse_mat_results <- as.data.frame(betas_ls_sparse_mat_results)
-betas_ls_sparse_mat_results <- cbind.data.frame(0:(nrow(betas_ls_sparse_mat_results)-1),
-                                                   betas_ls_sparse_mat_results)
-colnames(betas_ls_sparse_mat_results) <- c("Factor", "Posterior Mean", "Lower (2.5%)", "Upper (97.5%)")
-betas_ls_sparse_mat_results <- betas_ls_sparse_mat_results[-1,] # Remove intercept
-
-# Create plot
-library(plotrix)
-plotCI(x = betas_ls_sparse_mat_results$Factor,               # plotrix plot with confidence intervals
-       y = betas_ls_sparse_mat_results$`Posterior Mean`,
-       li = betas_ls_sparse_mat_results$`Lower (2.5%)`,
-       ui = betas_ls_sparse_mat_results$`Upper (97.5%)`,
-       main = "95% Credible Intervals for Factor Effects \n on FEV1pp (Sparse)",
-       xlab = "Factor", ylab = "Posterior Mean",
-       scol = c(rep(1, joint_rank), rep(2, indiv_rank1), rep(3, indiv_rank2)))
-
-# -----------------------------------------------------------------------------
-# Using the Poworoznek et al. solution to factor switching
-# -----------------------------------------------------------------------------
-
-# Assessing convergence for both model fits
-load(paste0(results_wd, "BPMF/training_data_fit.rda"), verbose = TRUE)
-
-# Loading in the library for factor switching
-library(infinitefactor)
-
-jointRot_V2 <- function(lambda, eta, piv) {
-  vari = lapply(lambda, varimax)
-  loads = lapply(vari, `[[`, 1)
-  rots = lapply(vari, `[[`, 2)
-  rotfact = mapply(`%*%`, eta, rots, SIMPLIFY = FALSE)
-  norms = sapply(loads, norm, "2")
-  matches = lapply(loads, msfOUT, piv)
-  lamout = mapply(aplr, loads, matches, SIMPLIFY = FALSE)
-  etaout = mapply(aplr, rotfact, matches, SIMPLIFY = FALSE)
-  return(list(lambda = lamout, eta = etaout))
-}
-
-# Save the ranks from the model fit
+# Save the joint and individual ranks
 ranks <- fev1pp_training_fit_nonsparse$ranks
 
-# Create a vector for the indices of each rank
-beta.ind <- lapply(1:length(ranks), function(i) {
-  if (i == 1) { 
-    (1:ranks[i]) + 1
+# Save the rank indices
+rank.inds <- lapply(1:(q+1), function(s) {
+  if (s == 1) {
+    1:ranks[s]
   } else {
-    ((sum(ranks[1:(i-1)])+1):sum(ranks[1:i])) + 1
+    (cumsum(ranks[1:(s-1)])[s-1] + 1):cumsum(ranks[1:s])[s]
   }
 })
 
-# Joint structure (plus joint regression coefficients) --
-joint.loadings <- lapply(1:nsample, function(iter) {
-  rbind(do.call(rbind, fev1pp_training_fit_nonsparse$U.draw[[iter]]), # Joint loadings  
-        t(fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[1]],])) # Joint regression coefficients
-})
-joint.scores <- lapply(1:nsample, function(iter) fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
+# For each factor, 
+for (i in 1:sum(ranks)) {
+  
+  # Save the results for the given factor
+  if (i %in% rank.inds[[1]]) {
+    rank_index <- i
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) joint.loadings.final[[iter]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
+    
+    # Separate the loadings by metabolites and proteins
+    factor.final.summary.metabolites <- factor.final.summary[1:p.vec[1],,drop=FALSE]
+    factor.final.summary.proteins <- factor.final.summary[(p.vec[1]+1):p,,drop=FALSE]
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.metabolites.order <- 
+      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+    
+    factor.final.summary.proteins.order <- 
+      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+    
+    # Create the file name
+    file_name <- paste0(exploring_factors_wd, "Aligned/Joint_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    
+    # Save the results
+    save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order, file = file_name)
+  }
+  
+  if (i %in% rank.inds[[2]]) {
+    rank_index <- i - ranks[1]
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.loadings.final[[1]][[iter]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale))
+    
+    # Separate the loadings by metabolites and proteins (only metabolites here)
+    factor.final.summary.metabolites <- factor.final.summary
+    factor.final.summary.proteins <- NA
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.metabolites.order <- 
+      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+    
+    # Create a file name
+    file_name <- paste0(exploring_factors_wd, "Aligned/Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    
+    # Save the results
+    save(factor.final.summary.metabolites.order, file = file_name)
+  }
+  
+  if (i %in% rank.inds[[3]]) {
+    rank_index <- i - cumsum(ranks[1:2])[2]
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.loadings.final[[2]][[iter]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
+    
+    # Separate the loadings by metabolites and proteins (only proteins here)
+    factor.final.summary.metabolites <- NA
+    factor.final.summary.proteins <- factor.final.summary
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.proteins.order <- 
+      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+    
+    # Create the file name
+    file_name <- paste0(exploring_factors_wd, "Aligned/Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
+    
+    # Save the results
+    save(factor.final.summary.proteins.order, file = file_name)
+  }
+  
+}
 
-# Create a pivot based on the initial value for the data
-joint.pivot.data <- joint.results.varimax$lambda[[1]][1:p,] # The rotated BIDIFAC solution
+# -------------------------------------
+# Creating summaries of the UNALIGNED factors
+# -------------------------------------
 
-# Create a pivot for the betas based on the Varimax-BIDIFAC solution and posterior mean for betas
-X <- joint.results.varimax$eta[[1]] # Saving the Varimax-rotated scores at the BIDIFAC solution
-joint_var_betas <- diag(rep(model_params$beta_vars[2], ranks[1]))
-joint.pivot.betas <- solve(t(X) %*% X + solve(joint_var_betas)) %*% (t(X) %&% fev1pp[[1,1]])
+# Adding a burnin
+U.draw.burnin <- fev1pp_training_fit_nonsparse$U.draw[(burnin+1):nsample]
+W.draw.burnin <- fev1pp_training_fit_nonsparse$W.draw[(burnin+1):nsample]
 
-# Combine the pivots together to create a fully joint pivot
-joint.pivot <- rbind(joint.pivot.data, t(as.matrix(joint.pivot.betas)))
-
-# -------------
-# Trying out a different way
-joint.results.rotate <- jointRot_V2(joint.loadings, joint.scores, piv = joint.pivot)
-
-# Check the joint structure after the algorithm matches the original structure
-
-joint.structure.original <- lapply(1:nsample, function(iter) {
-  joint.loadings[[iter]] %*% t(joint.scores[[iter]])
-})
-
-joint.structure.new <- lapply(1:nsample, function(iter) {
-  joint.results.rotate$lambda[[iter]] %*% t(joint.results.rotate$eta[[iter]])
-})
-
-# Check
-all.equal(joint.structure.original, joint.structure.new)
-
-# Separate the joint loadings from the joint scores
-joint.loadings.final <- lapply(joint.results.rotate$lambda, function(iter) iter[1:p,])
-joint.betas.final <- lapply(joint.results.rotate$lambda, function(iter) t(iter[p+1,,drop=FALSE]))
-
-# Applying the permutation and sign switching to the scores
-joint.scores.final <- joint.results.rotate$eta
-
-# -------------
-
-# Individual structure (plus individual regression coefficients) --
-individual.loadings <- lapply(1:q, function(s) lapply(1:nsample, function(iter) {
-  rbind(fev1pp_training_fit_nonsparse$W.draw[[iter]][[s,s]], 
-        fev1pp_training_fit_nonsparse$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
-}))
-individual.scores <- lapply(1:q, function(s) lapply(1:nsample, function(iter) fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,s]]))
-
-# Saving the Varimax-rotated BIDIFAC solution for the data which serves as the pivot
-individual.pivot.data <- lapply(1:q, function(s) individual.results.varimax[[s]]$lambda[[1]][1:p.vec[s],]) # lapply(1:q, function(s) fev1pp_training_fit_nonsparse$W.draw[[1]][[s,s]]) # The rotated BIDIFAC solution
-
-# Create a pivot for the betas based on the Varimax-BIDIFAC solution and posterior mean for betas
-X.indiv <- lapply(1:q, function(s) individual.results.varimax[[s]]$eta[[1]]) # Saving the Varimax-rotated scores at the BIDIFAC solution
-indiv_var_betas <- lapply(1:q, function(s) diag(rep(model_params$beta_vars[s+2], ranks[s+1])))
-indiv.pivot.betas <- lapply(1:q, function(s) solve(t(X.indiv[[s]]) %*% X.indiv[[s]] + solve(indiv_var_betas[[s]])) %*% (t(X.indiv[[s]]) %*% fev1pp[[1,1]]))
-
-# Combine the pivots together to create a fully joint pivot
-individual.pivot <- lapply(1:q, function(s) rbind(individual.pivot.data[[s]], t(as.matrix(indiv.pivot.betas[[s]]))))
-
-# Trying it a different way
-individual.results.rotate <- lapply(1:q, function(s) {
-  jointRot_V2(individual.loadings[[s]], individual.scores[[s]], piv = individual.pivot[[s]])
-})
-
-# Save the final individual loadings and betas
-individual.loadings.final <- lapply(1:q, function(s) lapply(individual.results.rotate[[s]]$lambda, function(iter) iter[1:p.vec[s],,drop=FALSE]))
-individual.betas.final <- lapply(1:q, function(s) lapply(individual.results.rotate[[s]]$lambda, function(iter) t(iter[p.vec[s]+1,,drop=FALSE])))
-
-# Applying the permutation and sign switching to the scores
-individual.scores.final <- lapply(1:q, function(s) individual.results.rotate[[s]]$eta)
-
-# Save the results from the label switching algorithm
-save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
-     file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching.rda")
-
-# Check the individual structure after the algorithm matches the original structure
-
-# Calculate the original structure
-individual.structure.original <- lapply(1:q, function(s) {
-  lapply(1:nsample, function(iter) {
-    individual.loadings[[s]][[iter]] %*% t(individual.scores[[s]][[iter]])
-  })
-})
-
-# Calculate the new structure
-individual.structure.new <- lapply(1:q, function(s) {
-  lapply(1:nsample, function(iter) {
-    individual.results.rotate[[s]]$lambda[[iter]] %*% t(individual.results.rotate[[s]]$eta[[iter]])
-  })
-})
-
-# Check
-lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]]))
-
-# -------------
-
-# Save the results from the label switching algorithm
-save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
-     file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/FEV1pp_Joint_Individual_Structures_Factor_Switching.rda")
+# For each factor,
+for (i in 1:sum(ranks)) {
+  
+  # Save the results for the given factor
+  if (i %in% rank.inds[[1]]) {
+    rank_index <- i
+    factor.final.by.source <- lapply(1:q, function(s) do.call(cbind, lapply(1:burnin, function(iter) U.draw.burnin[[iter]][[s,1]][,rank_index,drop=FALSE])))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary.by.source <- lapply(1:q, function(s) t(apply(factor.final.by.source[[s]], 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    })))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary.by.source[[1]]) <- rownames(lavage_processed_no_info_log_scale)
+    rownames(factor.final.summary.by.source[[2]]) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
+    
+    # Separate the loadings by metabolites and proteins
+    factor.final.summary.metabolites <- factor.final.summary.by.source[[1]]
+    factor.final.summary.proteins <- factor.final.summary.by.source[[2]]
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.metabolites.order <- 
+      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+    
+    factor.final.summary.proteins.order <- 
+      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+    
+    # Create the file name
+    file_name <- paste0(exploring_factors_wd, "Unaligned/Joint_Factor", rank_index, "_Unaligned_Ordered_Summary.rda")
+  }
+  
+  if (i %in% rank.inds[[2]]) {
+    rank_index <- i - ranks[1]
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) W.draw.burnin[[iter]][[1,1]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale))
+    
+    # Separate the loadings by metabolites and proteins (only metabolites here)
+    factor.final.summary.metabolites <- factor.final.summary
+    factor.final.summary.proteins <- NULL
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.metabolites.order <- 
+      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+    
+    # Create a file name
+    file_name <- paste0(exploring_factors_wd, "Unaligned/Metabolite_Indiv_Factor", rank_index, "_Unaligned_Ordered_Summary.rda")
+    
+  }
+  
+  if (i %in% rank.inds[[3]]) {
+    rank_index <- i - cumsum(ranks[1:2])[2]
+    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) W.draw.burnin[[iter]][[2,2]][,rank_index,drop=FALSE]))
+    
+    # Calculating means and CIs for each loading
+    factor.final.summary <- t(apply(factor.final, 1, function(load) {
+      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+    }))
+    
+    # Name the rows by the respective biomarker
+    rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
+    
+    # Separate the loadings by metabolites and proteins (only proteins here)
+    factor.final.summary.metabolites.order <- NULL
+    factor.final.summary.proteins <- factor.final.summary
+    
+    # Order the loadings within the metabolites and proteins by the posterior mean
+    factor.final.summary.proteins.order <- 
+      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+    
+    # Create the file name
+    file_name <- paste0(exploring_factors_wd, "Unaligned/Protein_Indiv_Factor", rank_index, "_Unaligned_Ordered_Summary.rda")
+    
+  }
+  
+  # Save the results
+  save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order,
+       file = file_name)
+}
 
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit
@@ -891,7 +1002,7 @@ for (mod in models) {
     
     # Load in the results
     if (mod == "BPMF") {
-      load(paste0(results_wd, "BPMF/FEV1pp_CV_NonSparse_Pair", pair, ".rda"), verbose = TRUE)
+      load(paste0(results_wd, "BPMF/Cross_Validation/FEV1pp_CV_NonSparse_Pair", pair, ".rda"), verbose = TRUE)
     }
     if (mod == "BIDIFAC") {
       load(paste0(results_wd, "BIDIFAC/FEV1pp_CV_BIDIFAC_Pair_", pair, ".rda"), verbose = TRUE)
@@ -937,3 +1048,177 @@ mean(sapply(1:n, function(i) fev1pp_cv_ci$BPMF[i,1] <= fev1pp[[1,1]][i] & fev1pp
 mean(sapply(1:n, function(i) fev1pp_cv_ci$BIDIFAC[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$BIDIFAC[i,2])) # BIDIFAC
 mean(sapply(1:n, function(i) fev1pp_cv_ci$JIVE[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$JIVE[i,2])) # JIVE
 mean(sapply(1:n, function(i) fev1pp_cv_ci$MOFA[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$MOFA[i,2])) # MOFA
+
+
+# -----------------------------------------------------------------------------
+# Missing data imputation using BPMF
+# -----------------------------------------------------------------------------
+
+# Setting the proportion of missing values (columns) in each dataset
+prop_missing <- 0.1
+
+# Save the number of replications
+nsim <- 20
+
+# Load in the results so far
+entrywise_imputation_files <- list.files("~/BayesianPMF/04DataApplication/BPMF/Imputation/Entrywise")
+
+# Create a dataframe with the results
+entrywise_imputation_results <- matrix(nrow = 20, ncol = 6)
+
+# Iteratively load in each replication and add to table
+setwd("~/BayesianPMF/04DataApplication/BPMF/Imputation/Entrywise")
+for (i in 1:length(entrywise_imputation_files)) {
+  # Load in the file
+  file <- entrywise_imputation_files[i]
+  load(file)
+  
+  # Add results to table
+  entrywise_imputation_results[i,] <- 
+    c(metabolome_coverage, metabolome_mse, metabolome_ci_width,
+      proteome_coverage, proteome_mse, proteome_ci_width)
+}
+
+# Add the column names
+colnames(entrywise_imputation_results) <-
+  c("Metabolome Coverage", "Metabolome MSE", "Metabolome CI Width",
+    "Proteome Coverage", "Proteome MSE", "Proteome CI Width")
+
+# Average the results
+colMeans(entrywise_imputation_results)
+
+# For 100 replications of COLUMNWISE missingness:
+cl <- makeCluster(2)
+registerDoParallel(cl)
+# For running in parallel
+funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC",
+           "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+           "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
+hiv_copd_imputation <- foreach(sim_iter = 1:20, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
+  
+  # Set a seed
+  set.seed(sim_iter)
+  
+  # Randomly sample samples to remove from each source
+  metabolome_obs_missing <- sort(sample(1:n, size = prop_missing * n, replace = FALSE))
+  
+  # To prevent the same sample missing from both sources
+  avail_obs <- c(1:n)[!(c(1:n) %in% metabolome_obs_missing)]
+  
+  proteome_obs_missing <- sort(sample(avail_obs, size = prop_missing * n, replace = FALSE))
+  
+  # Setting these samples to missing 
+  hiv_copd_data_missing <- hiv_copd_data
+  hiv_copd_data_missing[[1,1]][,metabolome_obs_missing] <- NA
+  hiv_copd_data_missing[[2,1]][,proteome_obs_missing] <- NA
+  
+  # Save the entries that are NA
+  metabolome_missing <- which(is.na(hiv_copd_data_missing[[1,1]]))
+  proteome_missing <- which(is.na(hiv_copd_data_missing[[2,1]]))
+  
+  # Save the missing samples
+  metabolome_missing_samples <- hiv_copd_data[[1,1]][metabolome_missing]
+  proteome_missing_samples <- hiv_copd_data[[2,1]][proteome_missing]
+  
+  # Running the model
+  bpmf_impute <- bpmf_data_mode(
+    data = hiv_copd_data_missing,
+    Y = fev1pp,
+    nninit = TRUE,
+    model_params = model_params,
+    sparsity = FALSE,
+    nsample = nsample,
+    progress = TRUE
+  )
+  
+  # Saving the imputed values for each source with burn-in
+  metabolome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+    matrix(bpmf_impute$Xm.draw[[iter]][[1,1]], nrow = 1) 
+  })
+  
+  proteome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+    matrix(bpmf_impute$Xm.draw[[iter]][[2,1]], nrow = 1)
+  })
+  
+  # Create a matrix of imputed values
+  metabolome_impute_burnin <- do.call(rbind, metabolome_impute_burnin)
+  proteome_impute_burnin <- do.call(rbind, proteome_impute_burnin)
+  
+  # Calculate credible intervals for each imputed values
+  metabolome_cis <- apply(metabolome_impute_burnin, 2, function(row) {
+    c(quantile(row, 0.025), quantile(row, 0.975))
+  })
+  
+  proteome_cis <- apply(proteome_impute_burnin, 2, function(row) {
+    c(quantile(row, 0.025), quantile(row, 0.975))
+  })
+  
+  # Calculate coverage
+  metabolome_coverage <- mean(sapply(1:length(metabolome_missing), function(i) {
+    metabolome_cis[1,i] <= metabolome_missing_samples[i] & metabolome_missing_samples[i] <= metabolome_cis[2,i]
+  }))
+  
+  proteome_coverage <- mean(sapply(1:length(proteome_missing), function(i) {
+    proteome_cis[1,i] <= proteome_missing_samples[i] & proteome_missing_samples[i] <= proteome_cis[2,i]
+  }))
+  
+  # Calculate the posterior mean of the imputed values
+  metabolome_impute_mean <- colMeans(metabolome_impute_burnin)
+  proteome_impute_mean <- colMeans(proteome_impute_burnin)
+  
+  # Calculate MSE with posterior mean and true observed values
+  metabolome_mse <- frob(metabolome_missing_samples - metabolome_impute_mean)/frob(metabolome_missing_samples)
+  proteome_mse <- frob(proteome_missing_samples - proteome_impute_mean)/frob(proteome_missing_samples)
+  
+  # Calculate the CI width
+  metabolome_ci_width <- mean(abs(metabolome_cis[2,] - metabolome_cis[1,]))
+  proteome_ci_width <- mean(abs(proteome_cis[2,] - proteome_cis[1,]))
+  
+  # Save the results
+  save(metabolome_missing, proteome_missing,
+       metabolome_impute_mean, proteome_impute_mean,
+       metabolome_coverage, proteome_coverage, 
+       metabolome_ci_width, proteome_ci_width, 
+       metabolome_mse, proteome_mse,
+       file = paste0("~/BayesianPMF/04DataApplication/BPMF/Imputation/Columnwise/", "FEV1pp_", prop_missing, "_Columnwise_Impute_", sim_iter, ".rda"))
+  
+  # Remove large matrices and clean
+  rm(bpmf_impute, metabolome_cis, proteome_cis)
+  gc()
+}
+
+# Load in the results so far
+columnwise_imputation_files <- list.files("~/BayesianPMF/04DataApplication/BPMF/Imputation/Columnwise")
+
+# Create a dataframe with the results
+columnwise_imputation_results <- matrix(nrow = 20, ncol = 6)
+
+# Iteratively load in each replication and add to table
+for (i in 1:length(columnwise_imputation_files)) {
+  # Load in the file
+  file <- columnwise_imputation_files[i]
+  load(file)
+  
+  # Add results to table
+  columnwise_imputation_results[i,] <- 
+    c(metabolome_coverage, metabolome_mse, metabolome_ci_width,
+      proteome_coverage, proteome_mse, proteome_ci_width)
+}
+
+# Add the column names
+colnames(columnwise_imputation_results) <-
+  c("Metabolome Coverage", "Metabolome MSE", "Metabolome CI Width",
+    "Proteome Coverage", "Proteome MSE", "Proteome CI Width")
+
+# Average the results
+colMeans(columnwise_imputation_results)
+
+# -----------------------------------------------------------------------------
+# Missing data imputation using BIDIFAC
+# -----------------------------------------------------------------------------
+
+# Running BIDIFAC with entrywise missing data
+hive_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
+                                                 outcome = fev1pp, outcome_name = "fev1pp",
+                                                 nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
