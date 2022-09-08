@@ -5340,6 +5340,97 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
               sigma.mat=sigma.mat, n.vec=nvec,m.vec=mvec))
 }
 
+impute.BIDIFAC=function(data, 
+                        rmt=T, sigma=NULL,
+                        pbar=TRUE,
+                        start=NULL, max.iter.impute=20, 
+                        eps.impute=1e-3,...){
+  dim.data=dim(data)
+  p=dim.data[1]; q=dim.data[2]
+  
+  dim.list=do.call(cbind,lapply(data, dim))
+  mvec=apply(matrix(dim.list[1,],p),1,unique)
+  nvec=apply(matrix(dim.list[2,],p),2,unique)
+  if (class(mvec)=="list" ) stop("the number of rows do not match")
+  if (class(nvec)=="list" ) stop("the number of columns do not match")
+  
+  impute.index=matrix(list(), nrow = p, ncol=q)
+  if (is.null(sigma)) sigma=matrix(1,p,q)
+  
+  for (i in 1:p){
+    for (j in 1:q){
+      fillmat=fill.matrix(data[[i,j]])
+      impute.index[[i,j]]=fillmat$na.ind
+      if (rmt) sigma[i,j]=sigma.rmt(fillmat$X.fill)
+      data[[i,j]]=fillmat$X.fill/sigma[i,j]
+    }
+  }
+  
+  bool2=TRUE
+  count2=1; impute.vec=0
+  if (pbar) pb = txtProgressBar(min = 0, max=max.iter.impute, initial=0, char="-", style = 3)
+  while (bool2){
+    if (pbar){  setTxtProgressBar(pb, count2)  }
+    impute.vec.old=impute.vec
+    fit=BIDIFAC(data, rmt=F, sigma=matrix(1,p,q),start=start, pbar = F, ...)
+    
+    start=list(
+      data.rearrange(fit$G)$out, data.rearrange(fit$R)$out,
+      data.rearrange(fit$C)$out, data.rearrange(fit$I)$out)
+    
+    impute.vec=NULL
+    for (i in 1:p){
+      for (j in 1:q){
+        imp=fit$S[[i,j]][impute.index[[i,j]]]
+        data[[i,j]][impute.index[[i,j]]]=imp
+        impute.vec=c(impute.vec,imp)
+      }
+    }
+    
+    crit2=frob(impute.vec.old-impute.vec)/length(impute.vec)
+    if (crit2<eps.impute){ bool2=FALSE }
+    else if (count2==max.iter.impute){ 
+      bool2=FALSE 
+      cat("\n The algorithm did not converge. \n")
+      cat("Try to increase max.iter.impute or relax eps/eps.impute.")
+    }
+    else{ count2=count2+1 }
+  }
+  
+  for (i in 1:p){
+    for (j in 1:q){
+      fit$X[[i,j]]=fit$X[[i,j]]*sigma[i,j]
+      fit$S[[i,j]]=fit$S[[i,j]]*sigma[i,j]
+      fit$G[[i,j]]=fit$G[[i,j]]*sigma[i,j]
+      fit$R[[i,j]]=fit$R[[i,j]]*sigma[i,j]
+      fit$C[[i,j]]=fit$C[[i,j]]*sigma[i,j]
+      fit$I[[i,j]]=fit$I[[i,j]]*sigma[i,j]
+    }
+  }
+  fit$sigma.mat=sigma
+  
+  return(fit)
+}
+
+fill.matrix=function(X){
+  na.ind.original=na.ind=which(is.na(X),arr.ind = T)
+  bool=T
+  while (bool){
+    impute.X=rep(NA, nrow(na.ind))
+    for (j in 1:nrow(na.ind)){
+      colmean=mean(X[,na.ind[j,2]], na.rm=T)
+      rowmean=mean(X[na.ind[j,1],], na.rm=T)
+      impute.X[j]=mean(c(colmean,rowmean), na.rm=T)
+    }
+    X[na.ind]=impute.X
+    
+    na.ind=which(is.na(X),arr.ind = T)
+    if (length(na.ind)==0) bool=F
+  }
+  
+  return(list(X.fill=X, na.ind=na.ind.original))
+}
+
 bidifac.plus.given <- function(X0,p.ind,n.ind,p.ind.list,n.ind.list, S = list(), pen=c(), given.inits = FALSE,max.iter=500,conv.thresh=0.001){
   library(RSpectra)
   
@@ -8388,6 +8479,7 @@ create_simulation_table <- function(simulation_results, mod.list, path.list, s2n
 # Functions for data application
 # -----------------------------------------------------------------------------
 
+# Running each model with cross validation
 run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_pairs, model_params, nsample, results_wd = "~/BayesianPMF/04DataApplication/") {
   
   # ---------------------------------------------------------------------------
@@ -8736,6 +8828,278 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   }
   
 }
+
+# Imputing missing data 
+model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_params = NULL, nsample = NULL, nsim, prop_missing, entrywise = TRUE, ranks = NULL, p.vec = NULL, results_wd = "~/BayesianPMF/04DataApplication/") {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  #
+  # mod (chr): character naming the model for imputation %in% c("BPMF", "BIDIFAC", "JIVE", "BPCA)
+  # hiv_copd_data (list): data for the model
+  # outcome (double): response vector for Bayesian modeling
+  # outcome_name (character): name of the outcome for saving files
+  # model_params (list): model parameters for the Bayesian model for BPMF. Otherwise NULL.
+  # nsample (int): how many Gibbs samples to generate for BPMF. Otherwise NULL.
+  # nsim (int): number of replications to run 
+  # prop_missing (dbl): proportion of observations or samples to remove
+  # entrywise (Boolean): entrywise missingness or columnwise? Default is TRUE
+  # ranks (vec of 3): estimated ranks for joint and individual structures from BPMF to be used in BPCA
+  # p.vec (vec of 2): number of features in each source (only needed for Bayesian PCA)
+  # results_wd (chr): pathway string for where to save results
+  # ---------------------------------------------------------------------------
+  
+  # Save the number of sources
+  q <- nrow(hiv_copd_data)
+  
+  # For nsim replications:
+  cl <- makeCluster(2)
+  registerDoParallel(cl)
+  funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC", "impute.BIDIFAC", "fill.matrix",
+             "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
+  packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix", "monomvn", "r.jive", "pcaMethods")
+  hiv_copd_imputation <- foreach(sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
+    
+    q <- nrow(hiv_copd_data)
+    
+    # Set a seed
+    set.seed(sim_iter)
+    
+    # Indices for the features in each source
+    p.ind <- lapply(1:q, function(s) {
+      if (s == 1) {
+        1:p.vec[s]
+      } else {
+        (p.vec[s-1]+1):(cumsum(p.vec)[s])
+      } 
+    })
+    
+    # Randomly sample samples to remove from each source
+    if (entrywise) { # Entrywise missingness
+      metabolome_missing <- sort(sample(1:length(hiv_copd_data[[1,1]]), size = prop_missing * length(hiv_copd_data[[1,1]]), replace = FALSE))
+      proteome_missing <- sort(sample(1:length(hiv_copd_data[[2,1]]), size = prop_missing * length(hiv_copd_data[[2,1]]), replace = FALSE))
+      
+      # Setting these samples to missing 
+      hiv_copd_data_missing <- hiv_copd_data
+      hiv_copd_data_missing[[1,1]][metabolome_missing] <- NA
+      hiv_copd_data_missing[[2,1]][proteome_missing] <- NA
+    }
+    
+    if (!entrywise) { # Columnwise missingness
+      
+      # Randomly sample samples to remove from each source
+      metabolome_obs_missing <- sort(sample(1:n, size = prop_missing * n, replace = FALSE))
+      
+      # To prevent the same sample missing from both sources
+      avail_obs <- c(1:n)[!(c(1:n) %in% metabolome_obs_missing)]
+      
+      proteome_obs_missing <- sort(sample(avail_obs, size = prop_missing * n, replace = FALSE))
+      
+      # Setting these samples to missing 
+      hiv_copd_data_missing <- hiv_copd_data
+      hiv_copd_data_missing[[1,1]][,metabolome_obs_missing] <- NA
+      hiv_copd_data_missing[[2,1]][,proteome_obs_missing] <- NA
+    }
+    
+    # Save the missing samples
+    metabolome_missing_samples <- hiv_copd_data[[1,1]][metabolome_missing]
+    proteome_missing_samples <- hiv_copd_data[[2,1]][proteome_missing]
+    
+    # Running the chosen model --
+    
+    if (mod == "BPMF") {
+      mod.impute <- bpmf_data_mode(
+        data = hiv_copd_data_missing,
+        Y = fev1pp,
+        nninit = TRUE,
+        model_params = model_params,
+        sparsity = FALSE,
+        nsample = nsample,
+        progress = TRUE
+      )
+      
+      # Saving the imputed values for each source with burn-in
+      metabolome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+        matrix(mod.impute$Xm.draw[[iter]][[1,1]], nrow = 1) 
+      })
+      
+      proteome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+        matrix(mod.impute$Xm.draw[[iter]][[2,1]], nrow = 1)
+      })
+      
+      # Create a matrix of imputed values
+      metabolome_impute_burnin <- do.call(rbind, metabolome_impute_burnin)
+      proteome_impute_burnin <- do.call(rbind, proteome_impute_burnin)
+      
+      # Calculate credible intervals for each imputed values
+      metabolome_cis <- apply(metabolome_impute_burnin, 2, function(row) {
+        c(quantile(row, 0.025), quantile(row, 0.975))
+      })
+      
+      proteome_cis <- apply(proteome_impute_burnin, 2, function(row) {
+        c(quantile(row, 0.025), quantile(row, 0.975))
+      })
+      
+      # Calculate coverage
+      metabolome_coverage <- mean(sapply(1:length(metabolome_missing), function(i) {
+        metabolome_cis[1,i] <= metabolome_missing_samples[i] & metabolome_missing_samples[i] <= metabolome_cis[2,i]
+      }))
+      
+      proteome_coverage <- mean(sapply(1:length(proteome_missing), function(i) {
+        proteome_cis[1,i] <= proteome_missing_samples[i] & proteome_missing_samples[i] <= proteome_cis[2,i]
+      }))
+      
+      # Calculate the posterior mean of the imputed values
+      metabolome_impute <- colMeans(metabolome_impute_burnin)
+      proteome_impute <- colMeans(proteome_impute_burnin)
+      
+      # Calculate the CI width
+      metabolome_ci_width <- mean(abs(metabolome_cis[2,] - metabolome_cis[1,]))
+      proteome_ci_width <- mean(abs(proteome_cis[2,] - proteome_cis[1,]))
+    }
+    
+    if (mod == "BIDIFAC") {
+      
+      # Running the BIDIFAC model
+      mod.impute <- impute.BIDIFAC(data = hiv_copd_data_missing)
+      
+      # Create a matrix of imputed values
+      metabolome_impute <- mod.impute$X[[1,1]][metabolome_missing]
+      proteome_impute <- mod.impute$X[[2,1]][proteome_missing]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+    }
+    
+    if (mod == "JIVE") {
+      
+      # Create a list for the data
+      hiv_copd_data_missing_list <- lapply(1:q, function(s) hiv_copd_data_missing[[s,1]])
+      
+      # Fit JIVE on missing data
+      mod.impute <- jive(hiv_copd_data_missing_list, center = FALSE, scale = TRUE, method = "perm")
+      
+      # Save the imputed results
+      metabolome_impute <- mod.impute$data[[1]][metabolome_missing] * mod.impute$scale$`Scale Values`[1]
+      proteome_impute <- mod.impute$data[[1]][proteome_missing] * mod.impute$scale$`Scale Values`[2]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+    }
+    
+    if (mod == "BPCA - Combined Sources") {
+      
+      # Concatenate the two sources of data together
+      hiv_copd_data_missing_cat <- t(do.call(rbind, lapply(1:q, function(s) hiv_copd_data_missing[[s,1]])))
+      
+      # Impute missing values using full ranks from Bayesian PMF
+      mod.pca <- pca(hiv_copd_data_missing_cat, method="bpca", nPcs = sum(ranks))
+      mod.impute <- t(completeObs(mod.pca))
+      
+      # Save the imputed results
+      metabolome_impute <- mod.impute[p.ind[[1]],][metabolome_missing]
+      proteome_impute <- mod.impute[p.ind[[2]],][proteome_missing]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+      
+    }
+    
+    if (mod == "BPCA - Separate Sources") {
+      
+      # Impute missing values using full ranks from Bayesian PMF
+      mod.pca <- lapply(1:q, function(s) {
+        pca(t(hiv_copd_data_missing[[s]]), method="bpca", nPcs = ranks[1] + ranks[s])
+      })
+      mod.impute <- lapply(1:q, function(s) t(completeObs(mod.pca[[s]])))
+      
+      # Save the imputed results
+      metabolome_impute <- mod.impute[[1]][metabolome_missing]
+      proteome_impute <- mod.impute[[2]][proteome_missing]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+      
+    }
+    
+    # Calculate MSE with posterior mean and true observed values
+    metabolome_mse <- frob(metabolome_missing_samples - metabolome_impute)/frob(metabolome_missing_samples)
+    proteome_mse <- frob(proteome_missing_samples - proteome_impute)/frob(proteome_missing_samples)
+    
+    # Save the results
+    if (entrywise) {
+      file_name <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Imputation/Entrywise/", "FEV1pp_", prop_missing, "_Entrywise_Impute_", sim_iter, ".rda")
+    }
+    
+    if (!entrywise) {
+      file_name <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Imputation/Columnwise/", "FEV1pp_", prop_missing, "_Columnwise_Impute_", sim_iter, ".rda")
+    }
+    
+    
+    save(metabolome_missing, proteome_missing,
+         metabolome_impute, proteome_impute,
+         metabolome_coverage, proteome_coverage, 
+         metabolome_ci_width, proteome_ci_width, 
+         metabolome_mse, proteome_mse,
+         file = file_name)
+    
+    # Remove large matrices and clean
+    if (mod == "BPMF") {
+      rm(hiv_copd_data_missing, bpmf_impute, metabolome_cis, proteome_cis)
+    }
+    
+    if (mod == "BIDIFAC") {
+      rm(mod.impute, hiv_copd_data_missing)
+    }
+    
+    gc()
+    
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Summarize the results
+  # ---------------------------------------------------------------------------
+  
+  # Save the pathway to the results
+  if (entrywise) {
+    imputation_pathway <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Imputation/Entrywise/")
+  }
+  
+  if (!entrywise) {
+    imputation_pathway <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Imputation/Columnwise/")
+  }
+  
+  imputation_files <- list.files(imputation_pathway)
+  
+  # Create a dataframe with the results
+  imputation_results <- matrix(nrow = nsim, ncol = 6)
+  
+  # Iteratively load in each replication and add to table
+  setwd(imputation_pathway)
+  for (i in 1:length(imputation_files)) {
+    # Load in the file
+    file <- imputation_files[i]
+    load(file)
+    
+    # Add results to table
+    imputation_results[i,] <- 
+      c(metabolome_coverage, metabolome_mse, metabolome_ci_width,
+        proteome_coverage, proteome_mse, proteome_ci_width)
+  }
+  
+  # Add the column names
+  colnames(imputation_results) <-
+    c("Metabolome Coverage", "Metabolome MSE", "Metabolome CI Width",
+      "Proteome Coverage", "Proteome MSE", "Proteome CI Width")
+  
+  # Calculate the mean
+  mean_imputation_results <- colMeans(imputation_results)
+  
+  # Return the results
+  list(imputation_results = imputation_results, mean_imputation_results = mean_imputation_results)
+}
+
 
 # -----------------------------------------------------------------------------
 # Addressing the factor switching problem
@@ -10849,7 +11213,7 @@ factor_switching_permutation_plus_rotation <- function(U.draw, V.draw, W.draw, V
 }
 
 # Edit the jointRot function from the infinite factor package to use the Varimax-rotated BIDIFAC solutions 
-jointRot_multi <- function(lambda, eta, var_betas = NULL) {
+jointRot_multi <- function(lambda, eta, y = NULL, var_betas = NULL) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -10881,7 +11245,7 @@ jointRot_multi <- function(lambda, eta, var_betas = NULL) {
   # Create a pivot for the betas based on the Varimax-BIDIFAC solution and posterior mean for betas
   if (!is.null(var_betas)) {
     X <- rotfact[[1]] # Saving the Varimax-rotated scores at the BIDIFAC solution
-    pivot.betas <- solve(t(X) %*% X + solve(var_betas)) %*% (t(X) %&% y[[1,1]])
+    pivot.betas <- solve(t(X) %*% X + solve(var_betas)) %*% (t(X) %*% y[[1,1]])
     
     # Combine the pivots together to create a fully joint pivot
     piv <- rbind(pivot.data, t(as.matrix(pivot.betas)))
@@ -10952,7 +11316,7 @@ match_align_bpmf <- function(BPMF.fit, y, model_params, p.vec) {
   joint_var_betas <- diag(rep(model_params$beta_vars[2], ranks[1]))
   
   # Apply the factor switching method to the joint structure
-  joint.results.rotate <- jointRot_multi(joint.loadings, joint.scores, var_betas = joint_var_betas)
+  joint.results.rotate <- jointRot_multi(joint.loadings, joint.scores, y = y, var_betas = joint_var_betas)
   
   # Separate the joint loadings from the joint scores
   joint.loadings.final <- lapply(joint.results.rotate$lambda, function(iter) iter[1:p,])
@@ -10975,7 +11339,7 @@ match_align_bpmf <- function(BPMF.fit, y, model_params, p.vec) {
   
   # Trying it a different way
   individual.results.rotate <- lapply(1:q, function(s) {
-    jointRot_multi(individual.loadings[[s]], individual.scores[[s]], var_betas = indiv_var_betas[[s]])
+    jointRot_multi(individual.loadings[[s]], individual.scores[[s]], y = y, var_betas = indiv_var_betas[[s]])
   })
   
   # Save the final individual loadings and betas
@@ -11023,5 +11387,14 @@ match_align_bpmf <- function(BPMF.fit, y, model_params, p.vec) {
   # 
   # # Check
   # lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]]))
-  
 }
+
+
+
+
+
+
+
+
+
+
