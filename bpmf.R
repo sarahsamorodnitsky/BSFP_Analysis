@@ -8853,7 +8853,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
   q <- nrow(hiv_copd_data)
   
   # For nsim replications:
-  cl <- makeCluster(2)
+  cl <- makeCluster(5)
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC", "impute.BIDIFAC", "fill.matrix",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
@@ -8996,7 +8996,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       # Impute missing values using full ranks from Bayesian PMF
       mod.pca <- pca(hiv_copd_data_missing_cat, method="bpca", nPcs = sum(ranks))
       mod.impute <- t(completeObs(mod.pca))
-      
+
       # Save the imputed results
       metabolome_impute <- mod.impute[p.ind[[1]],][metabolome_missing]
       proteome_impute <- mod.impute[p.ind[[2]],][proteome_missing]
@@ -9013,7 +9013,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
         pca(t(hiv_copd_data_missing[[s]]), method="bpca", nPcs = ranks[1] + ranks[s])
       })
       mod.impute <- lapply(1:q, function(s) t(completeObs(mod.pca[[s]])))
-      
+
       # Save the imputed results
       metabolome_impute <- mod.impute[[1]][metabolome_missing]
       proteome_impute <- mod.impute[[2]][proteome_missing]
