@@ -8889,6 +8889,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     if (!entrywise) { # Columnwise missingness
       
       # Randomly sample samples to remove from each source
+      n <- ncol(hiv_copd_data[[1,1]])
       metabolome_obs_missing <- sort(sample(1:n, size = prop_missing * n, replace = FALSE))
       
       # To prevent the same sample missing from both sources
@@ -8900,6 +8901,10 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       hiv_copd_data_missing <- hiv_copd_data
       hiv_copd_data_missing[[1,1]][,metabolome_obs_missing] <- NA
       hiv_copd_data_missing[[2,1]][,proteome_obs_missing] <- NA
+      
+      # Save the missing entries
+      metabolome_missing <- which(is.na(hiv_copd_data_missing[[1,1]]))
+      proteome_missing <- which(is.na(hiv_copd_data_missing[[2,1]]))
     }
     
     # Save the missing samples
@@ -9056,6 +9061,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     gc()
     
   }
+  stopCluster(cl)
   
   # ---------------------------------------------------------------------------
   # Summarize the results
