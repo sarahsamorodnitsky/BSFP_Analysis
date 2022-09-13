@@ -1220,5 +1220,129 @@ colMeans(columnwise_imputation_results)
 
 # Running BIDIFAC with entrywise missing data
 hive_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
-                                                 outcome = fev1pp, outcome_name = "fev1pp",
+                                                 outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                                  nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+
+# Running BIDIFAC with columnwise missing data
+hive_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
+                                                 outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                                 nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+
+# -----------------------------------------------------------------------------
+# Missing data imputation using JIVE
+# -----------------------------------------------------------------------------
+
+# Running BIDIFAC with entrywise missing data
+hive_copd_jive_imputation <- model_imputation(mod = "JIVE", hiv_copd_data = hiv_copd_data,
+                                                 outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                                 nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+
+# Running BIDIFAC with columnwise missing data
+hive_copd_jive_imputation <- model_imputation(mod = "JIVE", hiv_copd_data = hiv_copd_data,
+                                                 outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                                 nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+
+# -----------------------------------------------------------------------------
+# Missing data imputation using Bayesian PCA
+# -----------------------------------------------------------------------------
+
+# Running BIDIFAC with entrywise missing data
+hive_copd_bpca_imputation <- model_imputation(mod = "BPCA - Combined Sources", hiv_copd_data = hiv_copd_data,
+                                              outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                              nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+
+# Running BIDIFAC with columnwise missing data
+hive_copd_bpca_imputation <- model_imputation(mod = "BPCA - Combined Sources", hiv_copd_data = hiv_copd_data,
+                                              outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                              nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+
+# -----------------------------------------------------------------------------
+# Preparing a table with the results from imputation
+# -----------------------------------------------------------------------------
+
+# Initialize table with results
+hiv_copd_imputation_results <- data.frame(Model = character(), 
+                                          Missingness = character(),
+                                          Metabolome_MSE = character(),
+                                          Proteome_MSE = character(),
+                                          Metabolome_Coverage = character(),
+                                          Proteome_Coverage = character(),
+                                          Metabolome_CI_Width = character(),
+                                          Proteome_CI_Width = character())
+
+# For each model
+mods <- c("BPMF", "BIDIFAC", "JIVE")
+
+for (mod in mods) {
+  
+  # List the results for the ENTRYWISE imputations
+  entrywise_files <- list.files(paste0("~/BayesianPMF/04DataApplication/", mod,"/Imputation/Entrywise/"))
+  columnwise_files <- list.files(paste0("~/BayesianPMF/04DataApplication/", mod,"/Imputation/Columnwise/"))
+  nsim <- length(entrywise_files)
+  
+  # Initialize a data.frame for the interim results
+  current_mod_entrywise_results <- current_mod_columnwise_results <-
+    data.frame(Metabolome_MSE = numeric(),
+               Proteome_MSE = numeric(),
+               Metabolome_Coverage = numeric(),
+               Proteome_Coverage = numeric(),
+               Metabolome_CI_Width = numeric(),
+               Proteome_CI_Width = numeric())
+  
+  # Iterate through the results and load in
+  for (i in 1:nsim) {
+    
+    # Load in ith entrywise result
+    entrywise_out <- load(paste0("~/BayesianPMF/04DataApplication/", mod,"/Imputation/Entrywise/", entrywise_files[i]))
+    
+    # Save entrywise result
+    current_mod_entrywise_results[i,] <- c(metabolome_mse, proteome_mse, metabolome_coverage,
+                                           proteome_coverage, metabolome_ci_width, proteome_ci_width)
+    
+    # Avoid confusion
+    rm(entrywise_out)
+    
+    # If there are columnwise results
+    if (length(columnwise_files) > 0) {
+      # Load in ith columnwise result
+      columnwise_out <- load(paste0("~/BayesianPMF/04DataApplication/", mod,"/Imputation/Columnwise/", columnwise_files[i]))
+      
+      # Save columnwise result
+      current_mod_columnwise_results[i,] <- c(metabolome_mse, proteome_mse, metabolome_coverage,
+                                              proteome_coverage, metabolome_ci_width, proteome_ci_width)
+      
+      # Avoid confusion
+      rm(columnwise_out)
+    } 
+  }
+  
+  # Calculate the mean for entrywise and columnwise results
+  current_mod_entrywise_mean <- colMeans(current_mod_entrywise_results)
+  current_mod_columnwise_mean <- colMeans(current_mod_columnwise_results)
+  
+  current_mod_entrywise_sd <- apply(current_mod_entrywise_results, 2, sd)
+  current_mod_columnwise_sd <- apply(current_mod_columnwise_results, 2, sd)
+  
+  # Construct vector to save results
+  entrywise_vec <- c(mod, "Entrywise", paste0(round(current_mod_entrywise_mean, 3), " (", round(current_mod_entrywise_sd, 3), ")"))
+  columnwise_vec <- c(mod, "Columnwise", paste0(round(current_mod_columnwise_mean, 3), " (", round(current_mod_columnwise_sd, 3), ")"))
+  
+  # Save
+  hiv_copd_imputation_results <- rbind.data.frame(hiv_copd_imputation_results, entrywise_vec)
+  hiv_copd_imputation_results <- rbind.data.frame(hiv_copd_imputation_results, columnwise_vec)
+  
+}
+
+# Adjust the column names
+colnames(hiv_copd_imputation_results) <- c("Model", "Missingness", "Metabolome_MSE",
+                                           "Proteome_MSE", "Metabolome_Coverage", "Metabolome_Coverage",
+                                           "Metabolome_CI_Width", "Proteome_CI_Width")
+
+
+
+
+
+
+
+
+
