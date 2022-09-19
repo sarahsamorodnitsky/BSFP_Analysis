@@ -688,14 +688,21 @@ for (i in 1:sum(ranks)) {
   if (i %in% rank.inds[[1]]) {
     rank_index <- i
     factor.final <- do.call(cbind, lapply(1:burnin, function(iter) joint.loadings.final[[iter]][,rank_index,drop=FALSE]))
+    scores.final <- do.call(cbind, lapply(1:burnin, function(iter) joint.scores.final[[iter]][,rank_index,drop=FALSE]))
     
     # Calculating means and CIs for each loading
     factor.final.summary <- t(apply(factor.final, 1, function(load) {
       c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
     }))
+    scores.final.summary <- t(apply(scores.final, 1, function(score) {
+      c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
+    }))
     
     # Name the rows by the respective biomarker
     rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
+    
+    # Name the rows by the subject ID
+    rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
     
     # Separate the loadings by metabolites and proteins
     factor.final.summary.metabolites <- factor.final.summary[1:p.vec[1],,drop=FALSE]
@@ -712,20 +719,27 @@ for (i in 1:sum(ranks)) {
     file_name <- paste0(exploring_factors_wd, "Aligned/Joint_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
     
     # Save the results
-    save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order, file = file_name)
+    save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order, scores.final.summary, file = file_name)
   }
   
   if (i %in% rank.inds[[2]]) {
     rank_index <- i - ranks[1]
     factor.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.loadings.final[[1]][[iter]][,rank_index,drop=FALSE]))
+    scores.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.scores.final[[1]][[iter]][,rank_index,drop=FALSE]))
     
     # Calculating means and CIs for each loading
     factor.final.summary <- t(apply(factor.final, 1, function(load) {
       c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
     }))
+    scores.final.summary <- t(apply(scores.final, 1, function(score) {
+      c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
+    }))
     
     # Name the rows by the respective biomarker
     rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale))
+    
+    # Name the rows by the subject ID
+    rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
     
     # Separate the loadings by metabolites and proteins (only metabolites here)
     factor.final.summary.metabolites <- factor.final.summary
@@ -739,20 +753,27 @@ for (i in 1:sum(ranks)) {
     file_name <- paste0(exploring_factors_wd, "Aligned/Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
     
     # Save the results
-    save(factor.final.summary.metabolites.order, file = file_name)
+    save(factor.final.summary.metabolites.order, scores.final.summary, file = file_name)
   }
   
   if (i %in% rank.inds[[3]]) {
     rank_index <- i - cumsum(ranks[1:2])[2]
     factor.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.loadings.final[[2]][[iter]][,rank_index,drop=FALSE]))
+    scores.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.scores.final[[2]][[iter]][,rank_index,drop=FALSE]))
     
     # Calculating means and CIs for each loading
     factor.final.summary <- t(apply(factor.final, 1, function(load) {
       c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
     }))
+    scores.final.summary <- t(apply(scores.final, 1, function(score) {
+      c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
+    }))
     
     # Name the rows by the respective biomarker
     rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
+    
+    # Name the rows by the subject ID
+    rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
     
     # Separate the loadings by metabolites and proteins (only proteins here)
     factor.final.summary.metabolites <- NA
@@ -766,7 +787,7 @@ for (i in 1:sum(ranks)) {
     file_name <- paste0(exploring_factors_wd, "Aligned/Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary.rda")
     
     # Save the results
-    save(factor.final.summary.proteins.order, file = file_name)
+    save(factor.final.summary.proteins.order, scores.final.summary, file = file_name)
   }
   
 }
