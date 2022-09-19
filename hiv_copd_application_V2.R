@@ -1125,12 +1125,22 @@ hive_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data 
 # Missing data imputation using SVD
 # -----------------------------------------------------------------------------
 
-# Running BIDIFAC with entrywise missing data
-hive_copd_jive_imputation <- model_imputation(mod = "JIVE", hiv_copd_data = hiv_copd_data,
+# Running SVDmiss with entrywise missing data, combined sources
+hive_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
                                               outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                               nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
 
-# Running BIDIFAC with columnwise missing data
-hive_copd_jive_imputation <- model_imputation(mod = "JIVE", hiv_copd_data = hiv_copd_data,
+# Running SVDmiss with entrywise missing data, separate sources
+hive_copd_svdmiss_imputation <- model_imputation(mod = "SVD_Separate_Sources", hiv_copd_data = hiv_copd_data,
                                               outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                              nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+                                              nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+
+# Running SVDmiss with columnwise missing data, combined sources
+hive_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
+                                             outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                             nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+
+# Running SVDmiss with columnwise missing data, separate sources - Unable to complete matrix, too much missing data
+hive_copd_svdmiss_imputation <- model_imputation(mod = "SVD_Separate_Sources", hiv_copd_data = hiv_copd_data,
+                                                 outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                                 nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
