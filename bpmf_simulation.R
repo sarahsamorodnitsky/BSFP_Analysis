@@ -36,7 +36,7 @@ nsample <- 2000
 nsim <- 100
 
 # Signal-to-noise ratios to consider
-s2nX.list <- s2nY.list <- c(00.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75)
+s2nX.list <- s2nY.list <- c(0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75)
 # s2nX.list <- s2nY.list <- c(0.99/0.01, 0.5/0.5, 0.01/0.99)
 
 # The parameters for the Bayesian model
