@@ -538,83 +538,6 @@ dev.off()
 # -----------------------------------------------------------------------------
 
 # -------------------------------------
-# Heatmaps using r.jive package
-# -------------------------------------
-
-# Save the ranks
-ranks <- fev1pp_training_fit_nonsparse_V2$ranks
-joint_rank <- ranks[1]
-indiv_rank1 <- ranks[2]
-indiv_rank2 <- ranks[3]
-
-# Calculating the posterior mean of the joint structure (Biocrates)
-# joint_biocrates_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
-#   fev1pp_training_fit_nonsparse$U.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
-# }))/length(iters_burnin)
-# 
-# # Calculating the posterior mean of the joint structure (Somascan)
-# joint_somascan_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
-#   fev1pp_training_fit_nonsparse$U.draw[[iter]][[2,1]] %*% t(fev1pp_training_fit_nonsparse$V.draw[[iter]][[1,1]])
-# }))/length(iters_burnin)
-# 
-# # Calculating the posterior mean of the individual structure (Biocrates)
-# indiv_biocrates_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
-#   fev1pp_training_fit_nonsparse$W.draw[[iter]][[1,1]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,1]])
-# }))/length(iters_burnin)
-# 
-# # Calculating the posterior mean of the individual structure (Somascan)
-# indiv_somascan_mean <- Reduce("+", lapply(iters_burnin, function(iter) {
-#   fev1pp_training_fit_nonsparse$W.draw[[iter]][[2,2]] %*% t(fev1pp_training_fit_nonsparse$Vs.draw[[iter]][[1,2]])
-# }))/length(iters_burnin)
-
-# Calculating the joint structure mean
-joint_structure_mean <- Reduce("+", lapply(1:burnin, function(iter) {
-  joint.loadings.final[[iter]] %*% t(joint.scores.final[[iter]])
-}))/burnin
-
-metabolite_structure_mean <-  Reduce("+", lapply(1:burnin, function(iter) {
-  individual.loadings.final[[1]][[iter]] %*% t(individual.scores.final[[1]][[iter]])
-}))/burnin
-
-protein_structure_mean <-  Reduce("+", lapply(1:burnin, function(iter) {
-  individual.loadings.final[[2]][[iter]] %*% t(individual.scores.final[[2]][[iter]])
-}))/burnin
-
-# Calculating E(Y) for joint contribution
-EY_joint_mean <- Reduce("+", lapply(1:burnin, function(iter) {
-  joint.scores.final[[iter]] %*% joint.betas.final[[iter]]
-}))/burnin
-
-EY_indiv_mean <-lapply(1:q, function(s) {
-  Reduce("+", lapply(1:burnin, function(iter) {
-    individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]]
-  }))/burnin
-})
-
-# Reorganizing the results to fit the JIVE structure
-heatmap_nonsparse_jive <- list(data = list(hiv_copd_data[[1,1]], hiv_copd_data[[2,1]]),
-                              joint = list(joint_structure_mean[1:p.vec[1],,drop=FALSE], 
-                                           joint_structure_mean[(p.vec[1]+1):p,,drop=FALSE]),
-                              individual = list(metabolite_structure_mean, protein_structure_mean),
-                              rankJ = joint_rank,
-                              rankA = c(indiv_rank1, indiv_rank2))
-
-# Applying the showHeatmaps function (ordered by joint structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Joint.pdf"), width = 15)
-plotHeatmap(heatmap_nonsparse_jive, order_by = 0)
-dev.off()
-
-# Applying the showHeatmaps function (ordered by Biocrates structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Biocrates.pdf"), width = 15)
-showHeatmaps(heatmap_nonsparse_jive, order_by = 1)
-dev.off()
-
-# Applying the showHeatmaps function (ordered by Somascan structure)
-pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Heatmap_Ordered_by_Somascan.pdf"), width = 15)
-showHeatmaps(heatmap_nonsparse_jive, order_by = 2)
-dev.off()
-
-# -------------------------------------
 # Heatmaps using sup.r.jive
 # -------------------------------------
 
@@ -910,6 +833,33 @@ for (i in 1:sum(ranks)) {
 }
 
 # -----------------------------------------------------------------------------
+# Contributions of each factor (joint, individual) to predicting Y
+# * Calculating a sum of squares for each factor in prediction
+# -----------------------------------------------------------------------------
+
+# Calculating the contribution of the joint factors to predicting FEV1pp
+joint_contribution_to_fev1pp <- sapply(1:burnin, function(iter) {
+  frob(joint.scores.final[[iter]] %*% joint.betas.final[[iter]])/frob(fev1pp[[1,1]])
+})
+
+# Calculating the contribution of the individual factors to predicting FEV1pp
+individual_contribution_to_fev1pp <- lapply(1:q, function(s) {
+  sapply(1:burnin, function(iter) {
+    frob(individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]])/frob(fev1pp[[1,1]])
+  })
+})
+
+# Overall of Joint 
+mean(joint_contribution_to_fev1pp)
+c(quantile(joint_contribution_to_fev1pp, 0.025), quantile(joint_contribution_to_fev1pp, 0.975))
+
+# Overall contribution of Indiviudal
+sapply(individual_contribution_to_fev1pp, mean)
+sapply(individual_contribution_to_fev1pp, function(indiv) {
+  c(quantile(indiv, 0.025), quantile(indiv, 0.975))
+})
+
+# -----------------------------------------------------------------------------
 # Cross-Validated Model Fit
 # -----------------------------------------------------------------------------
 
@@ -1063,13 +1013,13 @@ for (mod in models) {
       load(paste0(results_wd, "BPMF/Cross_Validation/FEV1pp_CV_NonSparse_Pair", pair, ".rda"), verbose = TRUE)
     }
     if (mod == "BIDIFAC") {
-      load(paste0(results_wd, "BIDIFAC/FEV1pp_CV_BIDIFAC_Pair_", pair, ".rda"), verbose = TRUE)
+      load(paste0(results_wd, "BIDIFAC/Cross_Validation/FEV1pp_CV_BIDIFAC_Pair_", pair, ".rda"), verbose = TRUE)
     }
     if (mod == "JIVE") {
-      load(paste0(results_wd, "JIVE/FEV1pp_CV_JIVE_Pair_", pair, ".rda"), verbose = TRUE)
+      load(paste0(results_wd, "JIVE/Cross_Validation/FEV1pp_CV_JIVE_Pair_", pair, ".rda"), verbose = TRUE)
     }
     if (mod == "MOFA") {
-      load(paste0(results_wd, "MOFA/FEV1pp_CV_MOFA_Pair_", pair, ".rda"), verbose = TRUE)
+      load(paste0(results_wd, "MOFA/Cross_Validation/FEV1pp_CV_MOFA_Pair_", pair, ".rda"), verbose = TRUE)
     }
     
     # Combine the samples
@@ -1107,6 +1057,11 @@ mean(sapply(1:n, function(i) fev1pp_cv_ci$BIDIFAC[i,1] <= fev1pp[[1,1]][i] & fev
 mean(sapply(1:n, function(i) fev1pp_cv_ci$JIVE[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$JIVE[i,2])) # JIVE
 mean(sapply(1:n, function(i) fev1pp_cv_ci$MOFA[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$MOFA[i,2])) # MOFA
 
+# Create a table with the results
+fev1pp_cv_table <- data.frame(BSFP = numeric(),
+                              UNIFAC = numeric(),
+                              JIVE = numeric(),
+                              MOFA = numeric())
 
 # -----------------------------------------------------------------------------
 # Missing data imputation using BPMF
@@ -1119,12 +1074,12 @@ prop_missing <- 0.1
 nsim <- 20
 
 # Running BPMF with entrywise missing data
-hive_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_copd_data,
+hiv_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_copd_data,
                                               outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                               nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
 
 # Running BPMF with columnwise missing data
-hive_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_copd_data,
+hiv_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_copd_data,
                                               outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                               nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
@@ -1133,12 +1088,12 @@ hive_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_
 # -----------------------------------------------------------------------------
 
 # Running BIDIFAC with entrywise missing data
-hive_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
+hiv_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
                                                  outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                                  nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
 
 # Running BIDIFAC with columnwise missing data
-hive_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
+hiv_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
                                                  outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                                  nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
@@ -1147,21 +1102,103 @@ hive_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data 
 # -----------------------------------------------------------------------------
 
 # Running SVDmiss with entrywise missing data, combined sources
-hive_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
+hiv_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
                                               outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                               nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
 
 # Running SVDmiss with entrywise missing data, separate sources
-hive_copd_svdmiss_imputation <- model_imputation(mod = "SVD_Separate_Sources", hiv_copd_data = hiv_copd_data,
+hiv_copd_svdmiss_imputation <- model_imputation(mod = "SVD_Separate_Sources", hiv_copd_data = hiv_copd_data,
                                               outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                               nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
 
 # Running SVDmiss with columnwise missing data, combined sources
-hive_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
+hiv_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
                                              outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                              nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
 # Running SVDmiss with columnwise missing data, separate sources - Unable to complete matrix, too much missing data
-hive_copd_svdmiss_imputation <- model_imputation(mod = "SVD_Separate_Sources", hiv_copd_data = hiv_copd_data,
+hiv_copd_svdmiss_imputation <- model_imputation(mod = "SVD_Separate_Sources", hiv_copd_data = hiv_copd_data,
                                                  outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                                  nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+
+# -------------------------------------
+# Tabulating the results
+# -------------------------------------
+
+# Initialize table with results
+hiv_copd_imputation_results <- data.frame(Model = character(), 
+                                          Missingness = character(),
+                                          Metabolome_MSE = character(),
+                                          Proteome_MSE = character(),
+                                          Metabolome_Coverage = character(),
+                                          Proteome_Coverage = character(),
+                                          Metabolome_CI_Width = character(),
+                                          Proteome_CI_Width = character())
+
+# For each model
+mods <- c("BPMF", "BIDIFAC", "SVD_Combined_Sources", "SVD_Separate_Sources")
+
+for (mod in mods) {
+  
+  # List the results for the ENTRYWISE imputations
+  entrywise_files <- list.files(paste0("~/BayesianPMF/04DataApplication/", mod,"/Imputation/Entrywise/"))
+  columnwise_files <- list.files(paste0("~/BayesianPMF/04DataApplication/", mod,"/Imputation/Columnwise/"))
+  nsim <- length(entrywise_files)
+  
+  # Initialize a data.frame for the interim results
+  current_mod_entrywise_results <- current_mod_columnwise_results <-
+    data.frame(Metabolome_MSE = numeric(),
+               Proteome_MSE = numeric(),
+               Metabolome_Coverage = numeric(),
+               Proteome_Coverage = numeric(),
+               Metabolome_CI_Width = numeric(),
+               Proteome_CI_Width = numeric())
+  
+  # Iterate through the results and load in
+  for (i in 1:nsim) {
+    
+    # Load in ith entrywise result
+    entrywise_out <- load(paste0("~/BayesianPMF/04DataApplication/", mod,"/Imputation/Entrywise/", entrywise_files[i]))
+    
+    # Save entrywise result
+    current_mod_entrywise_results[i,] <- c(metabolome_mse, proteome_mse, metabolome_coverage,
+                                           proteome_coverage, metabolome_ci_width, proteome_ci_width)
+    
+    # Avoid confusion
+    rm(entrywise_out)
+    
+    # If there are columnwise results
+    if (length(columnwise_files) > 0) {
+      # Load in ith columnwise result
+      columnwise_out <- load(paste0("~/BayesianPMF/04DataApplication/", mod,"/Imputation/Columnwise/", columnwise_files[i]))
+      
+      # Save columnwise result
+      current_mod_columnwise_results[i,] <- c(metabolome_mse, proteome_mse, metabolome_coverage,
+                                              proteome_coverage, metabolome_ci_width, proteome_ci_width)
+      
+      # Avoid confusion
+      rm(columnwise_out)
+    } 
+  }
+  
+  # Calculate the mean for entrywise and columnwise results
+  current_mod_entrywise_mean <- colMeans(current_mod_entrywise_results)
+  current_mod_columnwise_mean <- colMeans(current_mod_columnwise_results)
+  
+  current_mod_entrywise_sd <- apply(current_mod_entrywise_results, 2, sd)
+  current_mod_columnwise_sd <- apply(current_mod_columnwise_results, 2, sd)
+  
+  # Construct vector to save results
+  entrywise_vec <- c(mod, "Entrywise", paste0(round(current_mod_entrywise_mean, 3), " (", round(current_mod_entrywise_sd, 3), ")"))
+  columnwise_vec <- c(mod, "Columnwise", paste0(round(current_mod_columnwise_mean, 3), " (", round(current_mod_columnwise_sd, 3), ")"))
+  
+  # Save
+  hiv_copd_imputation_results <- rbind.data.frame(hiv_copd_imputation_results, entrywise_vec)
+  hiv_copd_imputation_results <- rbind.data.frame(hiv_copd_imputation_results, columnwise_vec)
+  
+}
+
+# Adjust the column names
+colnames(hiv_copd_imputation_results) <- c("Model", "Missingness", "Metabolome_MSE",
+                                           "Proteome_MSE", "Metabolome_Coverage", "Proteome_Coverage",
+                                           "Metabolome_CI_Width", "Proteome_CI_Width")
