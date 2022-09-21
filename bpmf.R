@@ -8730,6 +8730,9 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       # Save the results
       ranks <- c(mod.out$rankJ, mod.out$rankA)
       save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/Cross_Validation/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+      
+      # Remove large objects
+      rm(mod.out, hiv_copd_data_list_training, hiv_copd_data_list_test)
     }
   }
 }
