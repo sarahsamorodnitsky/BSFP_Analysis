@@ -8506,7 +8506,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/", mod, "_training_data_fit.rda") 
   
   # Check if the full training data fit is available and load in if so (since we don't have full training fit for BIP)
-  training_fit_avail <- paste0(mod, "_training_data_fit.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/", mod))
+  training_fit_avail <- paste0(mod, "_training_data_fit.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/Training_Fit/", mod))
   
   if (training_fit_avail) {
     out <- load(results_path, verbose = TRUE)
@@ -8676,7 +8676,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       
       # Save just the relevant output
       ranks <- c(joint.rank, indiv.rank)
-      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/Cross_Validation/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
       
       # Remove large objects
       rm(mod.bayes)
@@ -8729,104 +8729,9 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       
       # Save the results
       ranks <- c(mod.out$rankJ, mod.out$rankA)
-      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/Cross_Validation/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
     }
   }
-  
-  # For BIP
-  if (mod == "BIP") {
-    
-    # Transposing the data matrices
-    q <- nrow(hiv_copd_data)
-    hiv_copd_data_list <- lapply(1:q, function(s) hiv_copd_data[[s,1]])
-    hiv_copd_data_list_bip <- lapply(hiv_copd_data_list, function(data) t(data))
-    
-    # Scaling the data to have sd 1
-    hiv_copd_data_list_bip <- lapply(1:q, function(s) scale(hiv_copd_data_list_bip[[s]], center = FALSE, scale = TRUE))
-    
-    # Adding the response vector
-    hiv_copd_data_list_bip[[3]] <- outcome[[1,1]]
-    
-    # In parallel, fit the model on all btu 1 case-control pair, then predict on the held-out pair
-    cl <- makeCluster(10)
-    registerDoParallel(cl)
-    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
-      # Create a new version of the data with just the training data
-      hiv_copd_data_list_bip_training <- hiv_copd_data_list_bip
-      
-      # Remove the current pair of samples
-      hiv_copd_data_list_bip_training <- lapply(1:q, function(s) hiv_copd_data_list_bip[[s]][-c(pair:(pair+1)),])
-      
-      # Create a new vector of the outcome with the current pair set to NA
-      hiv_copd_data_list_bip_training[[3]] <- hiv_copd_data_list_bip[[3]][-c(pair:(pair+1)),,drop=FALSE]
-      
-      # Create test dataset
-      hiv_copd_data_list_bip_test <- lapply(1:q, function(s) hiv_copd_data_list_bip[[s]][c(pair:(pair+1)),])
-      hiv_copd_data_list_bip_test[[3]] <- hiv_copd_data_list_bip[[3]][c(pair:(pair+1)),,drop=FALSE]
-      
-      # Fitting BIP on the training data
-      burnin <- nsample/2
-      mod.out <- BIP(dataList = hiv_copd_data_list_bip_training, IndicVar = c(0,0,1), Method = "BIP", sample = burnin, burnin = burnin-1, nbrcomp = 50)
-      
-      # Predicting on test data
-      mod.test <- BIPpredict(dataListNew = hiv_copd_data_list_bip_test, Result = mod.out, meth = "noBMA")
-      
-      # Save the component selection
-      factor_mpp_by_source <- mod.out$CompoSelMean[1:q,]
-      factor_mpp_by_source_list <- split(factor_mpp_by_source, rep(1:ncol(factor_mpp_by_source), each = nrow(factor_mpp_by_source)))
-      bip.joint.individual <- lapply(factor_mpp_by_source_list, function(comp) {
-        # Save lowest MPP
-        ind.min <- which.min(comp)
-        
-        # Save the highest MPP
-        ind.max <- which.max(comp)
-        
-        # If the smallest MPP is still greater than 0.5 then it is joint
-        if (comp[ind.min] >= 0.5) {
-          1:q
-        } 
-        
-        # If the smallest MPP is less than 0.5, check the max
-        else if (comp[ind.min] < 0.5) {
-          if (comp[ind.max] > 0.5) {
-            ind.max
-          } 
-        }
-      })
-      
-      # Save the joint factor indices
-      joint.factors <- sapply(bip.joint.individual, function(comp) {
-        length(comp) == q
-      })
-      
-      # Save the individual factor indices
-      indiv.factors <- lapply(1:q, function(s) {
-        sapply(bip.joint.individual, function(comp) {
-          all(comp %in% s) & length(comp) > 0
-        })
-      })
-      
-      # Save the joint rank
-      joint.rank <- sum(joint.factors)
-      
-      # Save the individual rank
-      indiv.rank <- sapply(1:q, function(s) {
-        sum(indiv.factors[[s]])
-      })
-      
-      # Save the predicted Y
-      Ym.draw_pair <- mod.test$ypredict
-      
-      # Save the results
-      ranks <- c(joint.rank, indiv.rank)
-      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod,"/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
-      
-      # Garbage collection
-      gc()
-    }
-    stopCluster(cl)
-  }
-  
 }
 
 # Imputing missing data 
