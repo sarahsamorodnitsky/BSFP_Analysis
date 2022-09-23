@@ -11259,7 +11259,7 @@ jointRot_multi <- function(lambda, eta, y = NULL, var_betas = NULL) {
 }
 
 # Modifying the factor switching method from Poworoznek et al. (2021)
-match_align_bpmf <- function(BPMF.fit, y, model_params, p.vec) {
+match_align_bpmf <- function(BPMF.fit, y, model_params, p.vec, iter_burnin) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -11268,6 +11268,7 @@ match_align_bpmf <- function(BPMF.fit, y, model_params, p.vec) {
   # y (matrix of lists): outcome vector
   # model_params (list): model parameters used in model fitting
   # p.vec (vector): vector with number of variables in each source
+  # iter_burnin (vector): indices for posterior samples after burn-in
   # ---------------------------------------------------------------------------
   
   # Loading in the library for factor switching
@@ -11342,15 +11343,106 @@ match_align_bpmf <- function(BPMF.fit, y, model_params, p.vec) {
   # Applying the permutation and sign switching to the scores
   individual.scores.final <- lapply(1:q, function(s) individual.results.rotate[[s]]$eta)
   
-  # Return the final loadings, scores, and betas
-  list(joint.scores.final = joint.scores.final, 
-       joint.loadings.final = joint.loadings.final, 
-       joint.betas.final = joint.betas.final, 
-       individual.scores.final = individual.scores.final, 
-       individual.loadings.final = individual.loadings.final, 
-       individual.betas.final = individual.betas.final)
+  # ---------------------------------------------------------------------------
+  # Reordering aligned results so that factors are ordered from most-to-least
+  # variance explained. 
+  # ---------------------------------------------------------------------------
   
+  # Order the components by squared Frobenius-norm of the corresponding rank-1 structure after burn-in --
+  
+  # Save the aligned components after burn-in
+  joint.scores.aligned.burnin <- joint.scores.final[iters_burnin]
+  joint.loadings.aligned.burnin <- joint.loadings.final[iters_burnin]
+  joint.betas.aligned.burnin <- joint.betas.final[iters_burnin]
+  
+  # For each component, calculate the posterior mean of the corresponding rank-1 structure
+  joint.rank1.structure <- lapply(1:joint.rank, function(r) {
+    # Calculate the rank-1 structure for the given component at each iteration
+    factor_r_structure <- lapply(1:burnin, function(iter) {
+      rbind(joint.loadings.aligned.burnin[[iter]][,r,drop=FALSE], t(joint.betas.aligned.burnin[[iter]][r,,drop=FALSE])) %*% 
+        t(joint.scores.aligned.burnin[[iter]][,r,drop=FALSE])
+    })
+    
+    # Calculate the posterior mean
+    Reduce("+", factor_r_structure)/length(factor_r_structure)
+  })
+  
+  # Calculate the norm of each rank-1 structure
+  joint.structure.norm <- sapply(joint.rank1.structure, function(str) frob(str))
+  
+  # Order the factors
+  joint.factor.order <- order(joint.structure.norm, decreasing = TRUE)
+  
+  # Reorder the joint scores, loadings, and betas after burn-in
+  joint.scores.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+    joint.scores.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
+  })
+  joint.loadings.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+    joint.loadings.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
+  })
+  joint.betas.aligned.burnin.order <- lapply(1:burnin, function(iter) {
+    joint.betas.aligned.burnin[[iter]][joint.factor.order,,drop=FALSE]
+  })
+  
+  # Order the factors in each individual structure by the Frobenius norm of their corresponding rank-1 structure --
+  
+  # Save the aligned components after burn-in
+  individual.scores.aligned.burnin <- lapply(1:q, function(s) individual.scores.final[[s]][iters_burnin])
+  individual.loadings.aligned.burnin <- lapply(1:q, function(s) individual.loadings.final[[s]][iters_burnin])
+  individual.betas.aligned.burnin <- lapply(1:q, function(s) individual.betas.final[[s]][iters_burnin])
+  
+  # For each source and each component, calculate the posterior mean of the corresponding rank-1 structure
+  individual.rank1.structure <- lapply(1:q, function(s) {
+    lapply(1:indiv.ranks[s], function(r) {
+      # Calculate the rank-1 structure for the given component at each iteration
+      factor_r_structure <- lapply(1:burnin, function(iter) {
+        rbind(individual.loadings.aligned.burnin[[s]][[iter]][,r,drop=FALSE], t(individual.betas.aligned.burnin[[s]][[iter]][r,,drop=FALSE])) %*% 
+          t(individual.scores.aligned.burnin[[s]][[iter]][,r,drop=FALSE])
+      })
+      
+      # Calculate the posterior mean
+      Reduce("+", factor_r_structure)/length(factor_r_structure)
+    })
+  })
+  
+  # Calculate the norm of each rank-1 structure for each source
+  individual.structure.norm <- lapply(1:q, function(s) {
+    sapply(individual.rank1.structure[[s]], function(str) frob(str))
+  })
+  
+  # Order the factors
+  individual.factor.order <- lapply(1:q, function(s) {
+    order(individual.structure.norm[[s]], decreasing = TRUE)
+  })
+  
+  # Reorder the individual scores, loadings, and betas after burn-in
+  individual.scores.aligned.burnin.order <- lapply(1:q, function(s) {
+    lapply(1:burnin, function(iter) {
+      individual.scores.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+    })
+  })
+  individual.loadings.aligned.burnin.order <- lapply(1:q, function(s) {
+    lapply(1:burnin, function(iter) {
+      individual.loadings.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+    })
+  })
+  individual.betas.aligned.burnin.order <- lapply(1:q, function(s) {
+    lapply(1:burnin, function(iter) {
+      individual.betas.aligned.burnin[[s]][[iter]][individual.factor.order[[s]],,drop=FALSE]
+    })
+  })
+  
+  # Return the final loadings, scores, and betas
+  list(joint.scores.final = joint.scores.aligned.burnin.order, 
+       joint.loadings.final = joint.loadings.aligned.burnin.order, 
+       joint.betas.final = joint.betas.aligned.burnin.order, 
+       individual.scores.final = individual.scores.aligned.burnin, 
+       individual.loadings.final = individual.loadings.aligned.burnin, 
+       individual.betas.final = individual.betas.aligned.burnin)
+  
+  # ---------------------------------------------------------------------------
   # Check the individual structure after the algorithm matches the original structure
+  # ---------------------------------------------------------------------------
   
   # Check the joint structure after the algorithm matches the original structure
   # joint.structure.original <- lapply(1:nsample, function(iter) {
