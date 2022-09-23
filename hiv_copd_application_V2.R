@@ -339,6 +339,15 @@ fev1pp_training_fit_nonsparse_aligned_V2 <- match_align_bpmf(fev1pp_training_fit
                                                              model_params = model_params, p.vec = p.vec, 
                                                              iter_burnin = iter_burnin)
 
+# Save
+joint.scores.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.scores.final
+joint.loadings.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.loadings.final
+joint.betas.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.betas.final
+
+individual.scores.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.scores.final
+individual.loadings.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.loadings.final
+individual.betas.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.betas.final
+
 # Check the joint structure after the algorithm matches the original structure --
 
 # Create a vector for the indices of each rank
@@ -399,15 +408,6 @@ individual.structure.new <- lapply(1:q, function(s) {
 
 # Check
 lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]])) # TRUE TRUE!
-
-# Rename
-joint.scores.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.scores.final
-joint.loadings.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.loadings.final
-joint.betas.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.betas.final
-
-individual.scores.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.scores.final
-individual.loadings.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.loadings.final
-individual.betas.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.betas.final
 
 # Save the results
 save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
