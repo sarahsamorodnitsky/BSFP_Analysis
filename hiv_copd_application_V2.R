@@ -245,6 +245,83 @@ points(fev1pp_training_nonsparse_conv_V2[burnin:nsample], col = 2)
 dev.off()
 
 # -----------------------------------------------------------------------------
+# Plotting a random selection of loadings and scores to check for mode-switching
+# * Includes a trace plot of the underlying structure
+# -----------------------------------------------------------------------------
+
+set.seed(1)
+
+# Randomly sample loadings
+ranks <- fev1pp_training_fit_nonsparse_V2$ranks
+rand.factor <- lapply(1:(q+1), function(s) sample(1:ranks[[s]], size = 1))
+rand.load <- lapply(1:q, function(s) sample(1:p.vec[s], size = 3, replace = FALSE))
+
+# Randomply sample scores
+rand.score <- sample(1:n, size = 2, replace = FALSE)
+
+# Plot
+pdf("~/BayesianPMF/04DataApplication/BPMF/Figures/Unaligned_Trace_Plots_Structure_Loadings_Scores.pdf")
+
+# Plot the structure
+par(mfrow = c(3,2))
+plot(sapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$J.draw[[iter]][[1,1]][rand.load[[1]][1], rand.score[[1]]]), ylab = "", main = "Joint Structure")
+plot(sapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$J.draw[[iter]][[2,1]][rand.load[[2]][1], rand.score[[2]]]), ylab = "", main = "Joint Structure")
+plot(sapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$A.draw[[iter]][[1,1]][rand.load[[1]][2], rand.score[[1]]]), ylab = "", main = "Metabolite Structure")
+plot(sapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$A.draw[[iter]][[1,1]][rand.load[[1]][3], rand.score[[2]]]), ylab = "", main = "Metabolite Structure")
+plot(sapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$A.draw[[iter]][[2,1]][rand.load[[2]][2], rand.score[[1]]]), ylab = "", main = "Protein Structure")
+plot(sapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$A.draw[[iter]][[2,1]][rand.load[[2]][3], rand.score[[2]]]), ylab = "", main = "Protein Structure")
+par(mfrow = c(1,1))
+
+# Plot the Loadings
+par(mfrow = c(3,2))
+for (s in 1:q) {
+  for (load in rand.load[[s]]) {
+    plot(sapply(iters_burnin, function(iter) {
+      fev1pp_training_fit_nonsparse_V2$U.draw[[iter]][[s,1]][load, rand.factor[[1]]]
+    }), ylab = "", main = "Joint Loading")
+  }
+}
+par(mfrow = c(1,1))
+par(mfrow = c(3,1))
+for (load in rand.load[[1]]) {
+  plot(sapply(iters_burnin, function(iter) {
+    fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[1,1]][load, rand.factor[[2]]]
+  }), ylab = "", main = "Metabolite Loading")
+}
+par(mfrow = c(1,1))
+par(mfrow = c(3,1))
+for (load in rand.load[[2]]) {
+  plot(sapply(iters_burnin, function(iter) {
+    fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[2,2]][load, rand.factor[[3]]]
+  }), ylab = "", main = "Protein Loading")
+}
+par(mfrow = c(1,1))
+
+# Plot the scores
+par(mfrow = c(3,2))
+plot(sapply(iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_V2$V.draw[[iter]][[1,1]][rand.score[1], rand.factor[[1]]]
+}), ylab = "", main = "Joint Score")
+plot(sapply(iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_V2$V.draw[[iter]][[1,1]][rand.score[2], rand.factor[[1]]]
+}), ylab = "", main = "Joint Score")
+plot(sapply(iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_V2$Vs.draw[[iter]][[1,1]][rand.score[1], rand.factor[[2]]]
+}), ylab = "", main = "Metabolite Score")
+plot(sapply(iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_V2$Vs.draw[[iter]][[1,1]][rand.score[2], rand.factor[[2]]]
+}), ylab = "", main = "Metabolite Score")
+plot(sapply(iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_V2$Vs.draw[[iter]][[1,2]][rand.score[1], rand.factor[[3]]]
+}), ylab = "", main = "Protein Score")
+plot(sapply(iters_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_V2$Vs.draw[[iter]][[1,2]][rand.score[2], rand.factor[[3]]]
+}), ylab = "", main = "Protein Score")
+par(mfrow = c(1,1))
+
+dev.off()
+
+# -----------------------------------------------------------------------------
 # Adjusting for factor switching
 # * Using the Poworoznek et al. (2021) solution 
 # -----------------------------------------------------------------------------
@@ -259,100 +336,8 @@ indiv.ranks <- fev1pp_training_fit_nonsparse_V2$ranks[-1]
 
 # Applying the Match Align algorithm to undo rotational invariance in the results
 fev1pp_training_fit_nonsparse_aligned_V2 <- match_align_bpmf(fev1pp_training_fit_nonsparse_V2, y = fev1pp,
-                                                             model_params = model_params, p.vec = p.vec)
-
-# Save the results from the label switching algorithm
-joint.scores.aligned <- fev1pp_training_fit_nonsparse_aligned_V2$joint.scores.final
-joint.loadings.aligned <- fev1pp_training_fit_nonsparse_aligned_V2$joint.loadings.final
-joint.betas.aligned <- fev1pp_training_fit_nonsparse_aligned_V2$joint.betas.final
-
-individual.scores.aligned <- fev1pp_training_fit_nonsparse_aligned_V2$individual.scores.final
-individual.loadings.aligned <- fev1pp_training_fit_nonsparse_aligned_V2$individual.loadings.final
-individual.betas.aligned <- fev1pp_training_fit_nonsparse_aligned_V2$individual.betas.final
-
-# Order the components by squared Frobenius-norm of the corresponding rank-1 structure after burn-in --
-
-# Save the aligned components after burn-in
-joint.scores.aligned.burnin <- joint.scores.aligned[iters_burnin]
-joint.loadings.aligned.burnin <- joint.loadings.aligned[iters_burnin]
-joint.betas.aligned.burnin <- joint.betas.aligned[iters_burnin]
-
-# For each component, calculate the posterior mean of the corresponding rank-1 structure
-joint.rank1.structure <- lapply(1:joint.rank, function(r) {
-  # Calculate the rank-1 structure for the given component at each iteration
-  factor_r_structure <- lapply(1:burnin, function(iter) {
-    rbind(joint.loadings.aligned.burnin[[iter]][,r,drop=FALSE], t(joint.betas.aligned.burnin[[iter]][r,,drop=FALSE])) %*% 
-      t(joint.scores.aligned.burnin[[iter]][,r,drop=FALSE])
-  })
-  
-  # Calculate the posterior mean
-  Reduce("+", factor_r_structure)/length(factor_r_structure)
-})
-
-# Calculate the norm of each rank-1 structure
-joint.structure.norm <- sapply(joint.rank1.structure, function(str) frob(str))
-
-# Order the factors
-joint.factor.order <- order(joint.structure.norm, decreasing = TRUE)
-
-# Reorder the joint scores, loadings, and betas after burn-in
-joint.scores.aligned.burnin.order <- lapply(1:burnin, function(iter) {
-  joint.scores.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
-})
-joint.loadings.aligned.burnin.order <- lapply(1:burnin, function(iter) {
-  joint.loadings.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
-})
-joint.betas.aligned.burnin.order <- lapply(1:burnin, function(iter) {
-  joint.betas.aligned.burnin[[iter]][joint.factor.order,,drop=FALSE]
-})
-
-# Order the factors in each individual structure by the Frobenius norm of their corresponding rank-1 structure --
-
-# Save the aligned components after burn-in
-individual.scores.aligned.burnin <- lapply(1:q, function(s) individual.scores.aligned[[s]][iters_burnin])
-individual.loadings.aligned.burnin <- lapply(1:q, function(s) individual.loadings.aligned[[s]][iters_burnin])
-individual.betas.aligned.burnin <- lapply(1:q, function(s) individual.betas.aligned[[s]][iters_burnin])
-
-# For each source and each component, calculate the posterior mean of the corresponding rank-1 structure
-individual.rank1.structure <- lapply(1:q, function(s) {
-  lapply(1:indiv.ranks[s], function(r) {
-    # Calculate the rank-1 structure for the given component at each iteration
-    factor_r_structure <- lapply(1:burnin, function(iter) {
-      rbind(individual.loadings.aligned.burnin[[s]][[iter]][,r,drop=FALSE], t(individual.betas.aligned.burnin[[s]][[iter]][r,,drop=FALSE])) %*% 
-        t(individual.scores.aligned.burnin[[s]][[iter]][,r,drop=FALSE])
-    })
-    
-    # Calculate the posterior mean
-    Reduce("+", factor_r_structure)/length(factor_r_structure)
-  })
-})
-
-# Calculate the norm of each rank-1 structure for each source
-individual.structure.norm <- lapply(1:q, function(s) {
-  sapply(individual.rank1.structure[[s]], function(str) frob(str))
-})
-
-# Order the factors
-individual.factor.order <- lapply(1:q, function(s) {
-  order(individual.structure.norm[[s]], decreasing = TRUE)
-})
-
-# Reorder the individual scores, loadings, and betas after burn-in
-individual.scores.aligned.burnin.order <- lapply(1:q, function(s) {
-  lapply(1:burnin, function(iter) {
-    individual.scores.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
-  })
-})
-individual.loadings.aligned.burnin.order <- lapply(1:q, function(s) {
-  lapply(1:burnin, function(iter) {
-    individual.loadings.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
-  })
-})
-individual.betas.aligned.burnin.order <- lapply(1:q, function(s) {
-  lapply(1:burnin, function(iter) {
-    individual.betas.aligned.burnin[[s]][[iter]][individual.factor.order[[s]],,drop=FALSE]
-  })
-})
+                                                             model_params = model_params, p.vec = p.vec, 
+                                                             iter_burnin = iter_burnin)
 
 # Check the joint structure after the algorithm matches the original structure --
 
@@ -416,13 +401,13 @@ individual.structure.new <- lapply(1:q, function(s) {
 lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]])) # TRUE TRUE!
 
 # Rename
-joint.scores.final <- joint.scores.aligned.burnin.order
-joint.loadings.final <- joint.loadings.aligned.burnin.order
-joint.betas.final <- joint.betas.aligned.burnin.order
+joint.scores.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.scores.final
+joint.loadings.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.loadings.final
+joint.betas.final <- fev1pp_training_fit_nonsparse_aligned_V2$joint.betas.final
 
-individual.scores.final <- individual.scores.aligned.burnin.order
-individual.loadings.final <- individual.loadings.aligned.burnin.order
-individual.betas.final <- individual.betas.aligned.burnin.order
+individual.scores.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.scores.final
+individual.loadings.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.loadings.final
+individual.betas.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.betas.final
 
 # Save the results
 save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
