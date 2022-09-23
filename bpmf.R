@@ -8500,7 +8500,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive", "BIP")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive")
   
   # Load in the full training data fit
   results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/", mod, "_training_data_fit.rda") 
@@ -8891,7 +8891,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       hiv_copd_data_missing_combined <- do.call(rbind, lapply(1:q, function(s) hiv_copd_data_missing[[s,1]]))
       
       # Impute the missing data using SVDmiss with given number of ranks
-      mod.impute <- SVDmiss(hiv_copd_data_missing_combined)
+      mod.impute <- SVDmiss(hiv_copd_data_missing_combined, niter = 50)
       
       # Save the imputed results
       metabolome_impute <- mod.impute$Xfill[p.ind[[1]],][metabolome_missing]
@@ -8904,7 +8904,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     if (mod == "SVD_Separate_Sources") {
       
       # Impute the missing data using SVDmiss with 4 components (default) 
-      mod.impute <- lapply(1:q, function(s)  SVDmiss(hiv_copd_data_missing[[s,1]]))
+      mod.impute <- lapply(1:q, function(s)  SVDmiss(hiv_copd_data_missing[[s,1]], niter = 50))
       
       # Save the imputed results
       metabolome_impute <- mod.impute[[1]]$Xfill[metabolome_missing]
@@ -8914,7 +8914,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
     }
     
-    if (mod == "BPCA - Combined Sources") {
+    if (mod == "BPCA_Combined_Sources") {
       
       # Concatenate the two sources of data together
       hiv_copd_data_missing_combined <- do.call(rbind, lapply(1:q, function(s) hiv_copd_data_missing[[s,1]]))
@@ -8963,7 +8963,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       
     }
     
-    if (mod == "BPCA - Separate Sources") {
+    if (mod == "BPCA_Separate_Sources") {
       
       # Impute missing values using full ranks from Bayesian PMF
       mod.pca <- lapply(1:q, function(s) {
