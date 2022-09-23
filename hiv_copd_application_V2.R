@@ -992,6 +992,14 @@ run_model_with_cv(mod = "MOFA", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
                   outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
                   model_params = model_params, nsample = nsample)
 
+# -------------------------------------
+# Running sJIVE with cross validation
+# -------------------------------------
+
+run_model_with_cv(mod = "sJIVE", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = nsample)
+
 # -----------------------------------------------------------------------------
 # Cross-Validated Model Fit Results
 # -----------------------------------------------------------------------------
