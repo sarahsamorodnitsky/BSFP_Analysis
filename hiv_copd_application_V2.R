@@ -348,7 +348,9 @@ individual.scores.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.s
 individual.loadings.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.loadings.final
 individual.betas.final <- fev1pp_training_fit_nonsparse_aligned_V2$individual.betas.final
 
-# Check the joint structure after the algorithm matches the original structure --
+# -------------------------------------
+# Check the joint structure after the algorithm matches the original structure 
+# -------------------------------------
 
 # Create a vector for the indices of each rank
 beta.ind <- lapply(1:length(ranks), function(i) {
@@ -413,8 +415,69 @@ lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual
 save(joint.scores.final, joint.loadings.final, joint.betas.final, individual.scores.final, individual.loadings.final, individual.betas.final,
      file = "/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered_V2.rda")
 
+# -------------------------------------
+# Calculate the difference between the posterior mean covariance and estimated covariance
+# using aligned loadings. 
+# -------------------------------------
+
+p.ind <- lapply(1:q, function(s) {
+  if (s == 1) {
+    1:p.vec[s]
+  } else {
+    (p.vec[s-1]+1):(sum(p.vec))
+  }
+})
+
+# Combining the loadings together into one big matrix
+combined.loadings.final <- lapply(1:burnin, function(iter) {
+  load <- matrix(list(), nrow = 3, ncol = 3)
+  
+  # Joint loadings
+  load[[1,1]] <- joint.loadings.final[[iter]][p.ind[[1]],]
+  load[[2,1]] <- joint.loadings.final[[iter]][p.ind[[2]],]
+  load[[3,1]] <- t(joint.betas.final[[iter]])
+  
+  # Individual loadings
+  load[[1,2]] <- individual.loadings.final[[1]][[iter]]
+  load[[2,2]] <- matrix(0, nrow = nrow(load[[2,1]]), ncol = ncol(load[[1,2]]))
+  load[[3,2]] <- t(individual.betas.final[[1]][[iter]])
+  
+  load[[2,3]] <- individual.loadings.final[[2]][[iter]] 
+  load[[1,3]] <- matrix(0, nrow = nrow(load[[1,2]]), ncol = ncol(load[[2,3]]))
+  load[[3,3]] <- t(individual.betas.final[[2]][[iter]])
+  
+  data.rearrange(load)$out
+})
+
+combined.loadings.unaligned <- lapply(iters_burnin, function(iter) {
+  load <- matrix(list(), nrow = 3, ncol = 3)
+  
+  # Joint
+  load[[1,1]] <- fev1pp_training_fit_nonsparse_V2$U.draw[[iter]][[1,1]]
+  load[[2,1]] <- fev1pp_training_fit_nonsparse_V2$U.draw[[iter]][[2,1]]
+  load[[3,1]] <- t(fev1pp_training_fit_nonsparse_V2$beta.draw[[iter]][[1,1]][beta.ind[[1]],,drop=FALSE])
+  
+  # Individual
+  load[[1,2]] <- fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[1,1]]
+  load[[2,2]] <- fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[2,1]]
+  load[[3,2]] <- t(fev1pp_training_fit_nonsparse_V2$beta.draw[[iter]][[1,1]][beta.ind[[2]],,drop=FALSE])
+  
+  load[[1,3]] <- fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[1,2]]
+  load[[2,3]] <- fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[2,2]]
+  load[[3,3]] <- t(fev1pp_training_fit_nonsparse_V2$beta.draw[[iter]][[1,1]][beta.ind[[3]],,drop=FALSE])
+  
+  data.rearrange(load)$out
+})
+
+# Calculate the posterior mean of the posterior mean of the covariance
+post.mean.covariance <- lmean(lapply(1:burnin, function(iter) combined.loadings.unaligned[[iter]] %*% t(combined.loadings.unaligned[[iter]])))
+
+# Calculate the estimated covariance using the posterior mean of the aligned loadings
+combined.loadings.final.mean <- lmean(combined.loadings.final)
+est.covariance.aligned.load <- 
+
 # -----------------------------------------------------------------------------
-# Create PCA-like plots using ALIGNED factors from non-sparse model.
+# Create PCA-like plots using ALIGNED factors
 # -----------------------------------------------------------------------------
 
 library(viridis)
@@ -517,6 +580,48 @@ for (rs1 in 1:indiv_rank2) {
 dev.off()
 
 # -----------------------------------------------------------------------------
+# Calculate the posterior mean of the scores, loadings, and betas for the
+# aligned and unaligned versions of the models
+# -----------------------------------------------------------------------------
+
+# Load in the aligned results --
+load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered_V2.rda", verbose = TRUE)
+
+# Load in infinitefactor
+library(infinitefactor)
+
+# Calculate the means
+joint.scores.final.mean <- lmean(joint.scores.final)
+joint.loadings.final.mean <- lmean(joint.loadings.final)
+joint.betas.final.mean <- lmean(joint.betas.final)
+
+individual.scores.final.mean <- lapply(1:q, function(s) lmean(individual.scores.final[[s]]))
+individual.loadings.final.mean <- lapply(1:q, function(s) lmean(individual.loadings.final[[s]]))
+individual.betas.final.mean <- lapply(1:q, function(s) lmean(individual.betas.final[[s]]))
+
+# Save
+save(joint.scores.final.mean, joint.loadings.final.mean, joint.betas.final.mean,
+     individual.scores.final.mean, individual.loadings.final.mean, individual.betas.final.mean,
+     file = "~/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Aligned_Posterior_Mean.rda")
+
+# Load in the unaligned results --
+load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit_V2.rda"), verbose = TRUE)
+
+# Calculate the means
+joint.scores.unaligned.mean <- lmean(lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$V.draw[[iter]][[1,1]]))
+joint.loadings.unaligned.mean <- lmean(lapply(iters_burnin, function(iter) do.call(rbind, fev1pp_training_fit_nonsparse_V2$U.draw[[iter]])))
+joint.betas.unaligned.mean <- lmean(lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$beta.draw[[iter]][[1,1]][beta.ind[[1]],,drop=FALSE]))
+
+individual.scores.unaligned.mean <- lapply(1:q, function(s) lmean(lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$Vs.draw[[iter]][[1,s]])))
+individual.loadings.unaligned.mean <- lapply(1:q, function(s) lmean(lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[s,s]])))
+individual.betas.unaligned.mean <- lapply(1:q, function(s) lmean(lapply(iters_burnin, function(iter) fev1pp_training_fit_nonsparse_V2$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],,drop=FALSE])))
+
+# Save
+save(joint.scores.unaligned.mean, joint.loadings.unaligned.mean, joint.betas.unaligned.mean,
+     individual.scores.unaligned.mean, individual.loadings.unaligned.mean, individual.betas.unaligned.mean,
+     file = "~/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Unaligned_Posterior_Mean.rda")
+
+# -----------------------------------------------------------------------------
 # Heatmaps 
 # * Initially using JIVE heatmaps
 # * Later, switched to sJIVE heatmaps to include response
@@ -562,7 +667,8 @@ plotHeatmap(heatmap_sup.r.jive, ylab = "FEV1pp", xlab = c("Metabolomics", "Prote
 dev.off()
 
 # -----------------------------------------------------------------------------
-# Credible Intervals for Coefficients Using Non-Sparse Model
+# Credible Intervals for Loadings, Scores, and Betas
+# * I create credible interval plots locally, but summarize the results here
 # -----------------------------------------------------------------------------
 
 # -------------------------------------
@@ -824,13 +930,13 @@ for (i in 1:sum(ranks)) {
 
 # Calculating the contribution of the joint factors to predicting FEV1pp
 joint_contribution_to_fev1pp <- sapply(1:burnin, function(iter) {
-  frob(joint.scores.final[[iter]] %*% joint.betas.final[[iter]])/frob(fev1pp[[1,1]])
+  var(joint.scores.final[[iter]] %*% joint.betas.final[[iter]])/var(fev1pp[[1,1]])
 })
 
 # Calculating the contribution of the individual factors to predicting FEV1pp
 individual_contribution_to_fev1pp <- lapply(1:q, function(s) {
   sapply(1:burnin, function(iter) {
-    frob(individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]])/frob(fev1pp[[1,1]])
+    var(individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]])/var(fev1pp[[1,1]])
   })
 })
 
@@ -985,12 +1091,12 @@ run_model_with_cv(mod = "sJIVE", hiv_copd_data = hiv_copd_data, outcome = fev1pp
                   outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
                   model_params = model_params, nsample = nsample)
 
-# -----------------------------------------------------------------------------
+# -------------------------------------
 # Cross-Validated Model Fit Results
-# -----------------------------------------------------------------------------
+# -------------------------------------
 
 # Create a vector with model names
-models <- c("BPMF", "BIDIFAC", "JIVE", "MOFA")
+models <- c("BPMF", "BIDIFAC", "JIVE", "MOFA", "sJIVE")
 
 # Create a vector of cross-validated FEV1pp results for each model
 fev1pp_cv <- lapply(models, function(mod) c())
@@ -1014,19 +1120,29 @@ for (mod in models) {
     if (mod == "MOFA") {
       load(paste0(results_wd, "MOFA/Cross_Validation/FEV1pp_CV_MOFA_Pair_", pair, ".rda"), verbose = TRUE)
     }
+    if (mod == "sJIVE") {
+      load(paste0(results_wd, "sJIVE/Cross_Validation/FEV1pp_CV_sJIVE_Pair_", pair, ".rda"), verbose = TRUE)
+    }
     
     # Combine the samples
-    samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
+    if (mod != "sJIVE") {
+      samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
+      
+      # Take a burn-in
+      samps_burnin <- samps[,thinned_iters_burnin]
+      
+      # Save in the vector
+      fev1pp_cv[[mod]][pair:(pair+1)] <- rowMeans(samps_burnin)
+      
+      # Calculate the 95% credible interval for each held-out individual
+      fev1pp_cv_ci[[mod]][pair,] <- c(quantile(samps_burnin[1,], 0.025), quantile(samps_burnin[1,], 0.975))
+      fev1pp_cv_ci[[mod]][pair+1,] <- c(quantile(samps_burnin[2,], 0.025), quantile(samps_burnin[2,], 0.975))
+    }
     
-    # Take a burn-in
-    samps_burnin <- samps[,thinned_iters_burnin]
-    
-    # Save in the vector
-    fev1pp_cv[[mod]][pair:(pair+1)] <- rowMeans(samps_burnin)
-    
-    # Calculate the 95% credible interval for each held-out individual
-    fev1pp_cv_ci[[mod]][pair,] <- c(quantile(samps_burnin[1,], 0.025), quantile(samps_burnin[1,], 0.975))
-    fev1pp_cv_ci[[mod]][pair+1,] <- c(quantile(samps_burnin[2,], 0.025), quantile(samps_burnin[2,], 0.975))
+    if (mod == "sJIVE") {
+      # Save in the vector
+      fev1pp_cv[[mod]][pair:(pair+1)] <- Ym.draw_pair
+    }
   }
 }
 
@@ -1035,6 +1151,7 @@ plot(fev1pp_cv$BPMF, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observ
 points(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]]), col = 2, pch = 16) # BIDIFAC
 points(fev1pp_cv$JIVE, c(fev1pp[[1,1]]), col = 3, pch = 16) # JIVE
 points(fev1pp_cv$MOFA, c(fev1pp[[1,1]]), col = 4, pch = 16) # MOFA
+points(fev1pp_cv$sJIVE, c(fev1pp[[1,1]]), col = 4, pch = 16) # sJIVE
 abline(a=0, b=1, lwd = 2)
 legend("bottomright", legend = c("BPMF", "BIDIFAC", "JIVE", "MOFA"), col = c(1, 2, 3, 4), pch = rep(16, 4), cex = 0.5)
 
@@ -1042,6 +1159,7 @@ legend("bottomright", legend = c("BPMF", "BIDIFAC", "JIVE", "MOFA"), col = c(1, 
 cor.test(fev1pp_cv$BPMF, c(fev1pp[[1,1]])) # BPMF
 cor.test(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]])) # BIDIFAC
 cor.test(fev1pp_cv$JIVE, c(fev1pp[[1,1]])) # JIVE
+cor.test(fev1pp_cv$sJIVE, c(fev1pp[[1,1]])) # sJIVE
 cor.test(fev1pp_cv$MOFA, c(fev1pp[[1,1]])) # MOFA
 
 # Compare the coverage rates for FEV1pp
@@ -1050,15 +1168,13 @@ mean(sapply(1:n, function(i) fev1pp_cv_ci$BIDIFAC[i,1] <= fev1pp[[1,1]][i] & fev
 mean(sapply(1:n, function(i) fev1pp_cv_ci$JIVE[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$JIVE[i,2])) # JIVE
 mean(sapply(1:n, function(i) fev1pp_cv_ci$MOFA[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$MOFA[i,2])) # MOFA
 
-# Create a table with the results
-fev1pp_cv_table <- data.frame(BSFP = numeric(),
-                              UNIFAC = numeric(),
-                              JIVE = numeric(),
-                              MOFA = numeric())
+# -----------------------------------------------------------------------------
+# Missing data imputation comparing several methods
+# -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
+# -------------------------------------
 # Missing data imputation using BPMF
-# -----------------------------------------------------------------------------
+# -------------------------------------
 
 # Setting the proportion of missing values (columns) in each dataset
 prop_missing <- 0.1
@@ -1076,9 +1192,9 @@ hiv_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_c
                                               outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                               nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
-# -----------------------------------------------------------------------------
+# -------------------------------------
 # Missing data imputation using BIDIFAC
-# -----------------------------------------------------------------------------
+# -------------------------------------
 
 # Running BIDIFAC with entrywise missing data
 hiv_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
@@ -1090,9 +1206,9 @@ hiv_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data =
                                                  outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
                                                  nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
-# -----------------------------------------------------------------------------
+# -------------------------------------
 # Missing data imputation using SVD
-# -----------------------------------------------------------------------------
+# -------------------------------------
 
 # Running SVDmiss with entrywise missing data, combined sources
 hiv_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
