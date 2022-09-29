@@ -7918,6 +7918,52 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
   list(imputation_results = imputation_results, mean_imputation_results = mean_imputation_results)
 }
 
+# Calculate proportion of variation explained
+var_explained <- function(BPMF.fit, hiv_copd_data, iters_burnin) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  #
+  # BPMF.fit: the results from fitting the BPMF model
+  # hiv_copd_data: the data used in model fitting
+  # iters_burnin (vec): vector of indices for samples after burn-in
+  # ---------------------------------------------------------------------------
+  
+  # Save the number of sources
+  q <- nrow(hiv_copd_data)
+  
+  # Save the estimated joint and individual structures and the fitted Y values
+  J.draw <- BPMF.fit$J.draw[iters_burnin]
+  A.draw <- BPMF.fit$A.draw[iters_burnin]
+  
+  # Joint structure --
+  joint_var_exp <- lapply(1:q, function(s) {
+    var_by_iter <- sapply(1:length(iters_burnin), function(iter) {
+      1 - (frob(hiv_copd_data[[s,1]] - J.draw[[iter]][[s,1]]))/frob(hiv_copd_data[[s,1]])
+    })
+  })
+  names(joint_var_exp) <- c("Metabolome", "Proteome")
+  
+  # Individual structure --
+  indiv_var_exp <- lapply(1:q, function(s) {
+    var_by_iter <- sapply(1:length(iters_burnin), function(iter) {
+      1 - (frob(hiv_copd_data[[s,1]] - A.draw[[iter]][[s,1]]))/frob(hiv_copd_data[[s,1]])
+    })
+  })
+  names(indiv_var_exp) <- c("Metabolome", "Proteome")
+
+  # Summarizing the results
+  joint_summary <- lapply(1:q, function(s) {
+    c(Mean = mean(joint_var_exp[[s]]), Lower = quantile(joint_var_exp[[s]], 0.025), Upper = quantile(joint_var_exp[[s]], 0.975))
+  })
+  indiv_summary <- lapply(1:q, function(s) {
+    c(Mean = mean(indiv_var_exp[[s]]), Lower = quantile(indiv_var_exp[[s]], 0.025), Upper = quantile(indiv_var_exp[[s]], 0.975))
+  })
+  names(joint_summary) <- names(indiv_summary) <- c("Metabolome", "Proteome")
+  
+  # Return
+  list(Joint = joint_summary, Individual = indiv_summary)
+}
 
 # -----------------------------------------------------------------------------
 # Addressing the factor switching problem
