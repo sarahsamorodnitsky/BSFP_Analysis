@@ -15,8 +15,8 @@ library(doParallel)
 library(foreach)
 
 # Working directories
-data_wd <- "~/BayesianPMFWithGit/data/"
-model_wd <- "~/BayesianPMFWithGit/"
+data_wd <- "~/BSFP/data/"
+model_wd <- "~/BSFP/"
 results_wd <- "~/BayesianPMF/04DataApplication/"
 
 # Loading in the model functions
