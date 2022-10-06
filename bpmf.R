@@ -7836,6 +7836,25 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       
     }
     
+    if (mod == "Mean_Imputation") {
+      
+      # Imputing the missing values based on the row means
+      hiv_copd_data_missing_impute <- hiv_copd_data_missing
+      
+      for (s in 1:q) {
+        for (i in 1:nrow(hiv_copd_data_missing_impute[[s,1]])) {
+          hiv_copd_data_missing_impute[[s,1]][i,][is.na(hiv_copd_data_missing_impute[[s,1]][i,])] <- mean(hiv_copd_data_missing_impute[[s,1]][i,], na.rm = TRUE)
+        }
+      }
+      
+      # Create a matrix of imputed values
+      metabolome_impute <- hiv_copd_data_missing_impute[[1,1]][metabolome_missing]
+      proteome_impute <- hiv_copd_data_missing_impute[[2,1]][proteome_missing]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+    }
+    
     # Calculate MSE with posterior mean and true observed values
     metabolome_mse <- frob(metabolome_missing_samples - metabolome_impute)/frob(metabolome_missing_samples)
     proteome_mse <- frob(proteome_missing_samples - proteome_impute)/frob(proteome_missing_samples)
@@ -8437,7 +8456,7 @@ factor_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamm
 }
 
 # Edit the jointRot function from the infinite factor package to use the Varimax-rotated BIDIFAC solutions 
-jointRot_multi <- function(lambda, eta, y = NULL, var_betas = NULL) {
+jointRot_multi <- function(lambda, eta, piv = NULL, y = NULL, var_betas = NULL, index = 0) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -8447,8 +8466,12 @@ jointRot_multi <- function(lambda, eta, y = NULL, var_betas = NULL) {
   # eta (list): list of scores matrices
   # var_betas (matrix): prior variance matrix for regression coefficients, if
   #                     considering an outcome
+  # piv (matrix OR int): user-provided pivot. If NULL, use median largest singular value. 
+  #                      If matrix, use as pivot. If integer, use corresponding Varimax-rotated posterior sample 
+  # index (int): allows user to choose a different pivot for sensitivity analysis. 
+  #              0 uses the default pivot. Could be positive or negative. 
   # 
-  # Acknowlegements: code adapted from infinitefactor package by Evan Poworoznek (2021)
+  # Acknowledgments: code adapted from infinitefactor package by Evan Poworoznek (2021)
   # ---------------------------------------------------------------------------
   
   # Apply the Varimax rotation to the loadings
@@ -8463,28 +8486,49 @@ jointRot_multi <- function(lambda, eta, y = NULL, var_betas = NULL) {
   # Apply the rotation matrix to the corresponding scores
   rotfact = mapply(`%*%`, eta, rots, SIMPLIFY = FALSE)
   
-  # Calculate the pivot to match to for the data
-  if (is.null(var_betas)) { # If y is not given
-    pivot.data <- loads[[1]][1:(nrow(loads[[1]])),] # The rotated BIDIFAC solution
-  }
-  
-  if (!is.null(var_betas)) { # If y is given
-    pivot.data <- loads[[1]][1:(nrow(loads[[1]])-1),] # The rotated BIDIFAC solution
-  }
-  
-  # Create a pivot for the betas based on the Varimax-BIDIFAC solution and posterior mean for betas
-  if (!is.null(var_betas)) {
-    X <- rotfact[[1]] # Saving the Varimax-rotated scores at the BIDIFAC solution
-    pivot.betas <- solve(t(X) %*% X + solve(var_betas)) %*% (t(X) %*% y[[1,1]])
+  # If no user-provided pivot is given, use default
+  if (is.null(piv)) {
+    norms = sapply(loads, norm, "2")
+    piv = loads[order(norms)][[round(length(lambda)/2) + index]]
     
-    # Combine the pivots together to create a fully joint pivot
-    piv <- rbind(pivot.data, t(as.matrix(pivot.betas)))
+    # Save the posterior sample after burn-in that was used as pivot
+    piv_index_to_return <- c(1:length(loads))[order(norms)][round(length(lambda)/2) + index]
   }
   
-  if (is.null(var_betas)) {
-    # Set the pivot to the data pivot
-    piv <- pivot.data
+  # If user-provided pivot is given
+  if (is.matrix(piv)) {
+    piv_index_to_return <- NULL
   }
+  
+  if (!is.matrix(piv)) {
+    piv = loads[[piv]]
+    
+    # Save the posterior sample after burn-in that was used as pivot
+    piv_index_to_return <- piv
+  }
+  
+  # # Calculate the pivot to match to for the data
+  # if (is.null(var_betas)) { # If y is not given
+  #   pivot.data <- loads[[1]][1:(nrow(loads[[1]])),] # The rotated BIDIFAC solution
+  # }
+  # 
+  # if (!is.null(var_betas)) { # If y is given
+  #   pivot.data <- loads[[1]][1:(nrow(loads[[1]])-1),] # The rotated BIDIFAC solution
+  # }
+  # 
+  # # Create a pivot for the betas based on the Varimax-BIDIFAC solution and posterior mean for betas
+  # if (!is.null(var_betas)) {
+  #   X <- rotfact[[1]] # Saving the Varimax-rotated scores at the BIDIFAC solution
+  #   pivot.betas <- solve(t(X) %*% X + solve(var_betas)) %*% (t(X) %*% y[[1,1]])
+  #   
+  #   # Combine the pivots together to create a fully joint pivot
+  #   piv <- rbind(pivot.data, t(as.matrix(pivot.betas)))
+  # }
+  # 
+  # if (is.null(var_betas)) {
+  #   # Set the pivot to the data pivot
+  #   piv <- pivot.data
+  # }
 
   # Match to the defined pivot
   matches = lapply(loads, msfOUT, piv)
@@ -8492,11 +8536,11 @@ jointRot_multi <- function(lambda, eta, y = NULL, var_betas = NULL) {
   etaout = mapply(aplr, rotfact, matches, SIMPLIFY = FALSE)
   
   # Return
-  return(list(lambda = lamout, eta = etaout))
+  return(list(lambda = lamout, eta = etaout, pivot_index = piv_index_to_return))
 }
 
 # Modifying the factor switching method from Poworoznek et al. (2021)
-match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burnin) {
+match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iters_burnin, piv.list = NULL, index = 0) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -8505,7 +8549,9 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   # y (matrix of lists): outcome vector if available
   # model_params (list): model parameters used in model fitting
   # p.vec (vector): vector with number of variables in each source
-  # iter_burnin (vector): indices for posterior samples after burn-in
+  # iters_burnin (vector): indices for posterior samples after burn-in
+  # piv.list (list of matrices or ints): list of pivot matrices for joint then 
+  #      individual structures or indices for pivots from posterior samples
   # ---------------------------------------------------------------------------
   
   # Loading in the library for factor switching
@@ -8513,12 +8559,17 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   
   # Save the ranks from the model fit
   ranks <- BPMF.fit$ranks
+  joint.rank <- ranks[1]
+  indiv.ranks <- ranks[-1]
   
   # Save the number of datasets
   q <- nrow(BPMF.fit$data)
   
   # Save the number of posterior samples
   nsample <- length(BPMF.fit$V.draw)
+  
+  # Save the burnin
+  burnin <- length(iters_burnin)
   
   # If no response is given
   if (is.null(y)) {
@@ -8537,6 +8588,11 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
     })
   }
   
+  # Checking if a pivot was provided
+  if (is.null(piv.list)) {
+    piv.list <- lapply(1:(q+1), function(i) NULL)
+  }
+  
   # Joint structure (plus joint regression coefficients) --
   
   # Save the overall number of features
@@ -8544,20 +8600,20 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   
   # Combine joint loadings and betas
   if (!is.null(y)) {
-    joint.loadings <- lapply(1:nsample, function(iter) {
+    joint.loadings <- lapply(iters_burnin, function(iter) {
       rbind(do.call(rbind, BPMF.fit$U.draw[[iter]]), # Joint loadings  
             t(BPMF.fit$beta.draw[[iter]][[1,1]][beta.ind[[1]],])) # Joint regression coefficients
     })
   }
   
   if (is.null(y)) {
-    joint.loadings <- lapply(1:nsample, function(iter) {
+    joint.loadings <- lapply(iters_burnin, function(iter) {
       rbind(do.call(rbind, BPMF.fit$U.draw[[iter]])) 
     })
   }
   
   # Save joint scores
-  joint.scores <- lapply(1:nsample, function(iter) BPMF.fit$V.draw[[iter]][[1,1]])
+  joint.scores <- lapply(iters_burnin, function(iter) BPMF.fit$V.draw[[iter]][[1,1]])
   
   # Save the prior variance on the betas for joint factors
   if (!is.null(y)) {
@@ -8565,7 +8621,7 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   }
   
   # Apply the factor switching method to the joint structure
-  joint.results.rotate <- jointRot_multi(joint.loadings, joint.scores, y = y, var_betas = joint_var_betas)
+  joint.results.rotate <- jointRot_multi(joint.loadings, joint.scores, y = y, var_betas = joint_var_betas, index = index, piv = piv.list[[1]])
   
   # Separate the joint loadings from the joint scores
   joint.loadings.final <- lapply(joint.results.rotate$lambda, function(iter) iter[1:p,])
@@ -8577,23 +8633,26 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   # Applying the permutation and sign switching to the scores
   joint.scores.final <- joint.results.rotate$eta
   
+  # Save the pivot index
+  joint_pivot_index <- joint.results.rotate$pivot_index
+  
   # Individual structure (plus individual regression coefficients) --
   
   # Combine the individual loadings and betas
   if (!is.null(y)) {
-    individual.loadings <- lapply(1:q, function(s) lapply(1:nsample, function(iter) {
+    individual.loadings <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) {
       rbind(BPMF.fit$W.draw[[iter]][[s,s]], 
             BPMF.fit$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
     }))
   }
   
   if (is.null(y)) {
-    individual.loadings <- lapply(1:q, function(s) lapply(1:nsample, function(iter) {
+    individual.loadings <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) {
       rbind(BPMF.fit$W.draw[[iter]][[s,s]])
     }))
   }
   
-  individual.scores <- lapply(1:q, function(s) lapply(1:nsample, function(iter) BPMF.fit$Vs.draw[[iter]][[1,s]]))
+  individual.scores <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) BPMF.fit$Vs.draw[[iter]][[1,s]]))
   
   # Save the prior variance on the betas for the individual factors
   if (!is.null(y)) {
@@ -8602,7 +8661,7 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   
   # Trying it a different way
   individual.results.rotate <- lapply(1:q, function(s) {
-    jointRot_multi(individual.loadings[[s]], individual.scores[[s]], y = y, var_betas = indiv_var_betas[[s]])
+    jointRot_multi(individual.loadings[[s]], individual.scores[[s]], y = y, var_betas = indiv_var_betas[[s]], index = index, piv = piv.list[[s+1]])
   })
   
   # Save the final individual loadings and betas
@@ -8615,6 +8674,9 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   # Applying the permutation and sign switching to the scores
   individual.scores.final <- lapply(1:q, function(s) individual.results.rotate[[s]]$eta)
   
+  # Save the pivot index
+  individual_pivot_index <- lapply(1:q, function(s) individual.results.rotate[[s]]$pivot_index)
+  
   # ---------------------------------------------------------------------------
   # Reordering aligned results so that factors are ordered from most-to-least
   # variance explained. 
@@ -8622,18 +8684,13 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   
   # Order the components by squared Frobenius-norm of the corresponding rank-1 structure after burn-in --
   
-  # Save the aligned components after burn-in
-  joint.scores.aligned.burnin <- joint.scores.final[iters_burnin]
-  joint.loadings.aligned.burnin <- joint.loadings.final[iters_burnin]
-  joint.betas.aligned.burnin <- joint.betas.final[iters_burnin]
-  
   # For each component, calculate the posterior mean of the corresponding rank-1 structure
   if (!is.null(y)) {
     joint.rank1.structure <- lapply(1:joint.rank, function(r) {
       # Calculate the rank-1 structure for the given component at each iteration
       factor_r_structure <- lapply(1:burnin, function(iter) {
-        rbind(joint.loadings.aligned.burnin[[iter]][,r,drop=FALSE], t(joint.betas.aligned.burnin[[iter]][r,,drop=FALSE])) %*% 
-          t(joint.scores.aligned.burnin[[iter]][,r,drop=FALSE])
+        rbind(joint.loadings.final[[iter]][,r,drop=FALSE], t(joint.betas.final[[iter]][r,,drop=FALSE])) %*% 
+          t(joint.scores.final[[iter]][,r,drop=FALSE])
       })
       
       # Calculate the posterior mean
@@ -8645,8 +8702,8 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
     joint.rank1.structure <- lapply(1:joint.rank, function(r) {
       # Calculate the rank-1 structure for the given component at each iteration
       factor_r_structure <- lapply(1:burnin, function(iter) {
-        joint.loadings.aligned.burnin[[iter]][,r,drop=FALSE] %*% 
-          t(joint.scores.aligned.burnin[[iter]][,r,drop=FALSE])
+        joint.loadings.final[[iter]][,r,drop=FALSE] %*% 
+          t(joint.scores.final[[iter]][,r,drop=FALSE])
       })
       
       # Calculate the posterior mean
@@ -8661,25 +8718,20 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   joint.factor.order <- order(joint.structure.norm, decreasing = TRUE)
   
   # Reorder the joint scores, loadings, and betas after burn-in
-  joint.scores.aligned.burnin.order <- lapply(1:burnin, function(iter) {
-    joint.scores.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
+  joint.scores.final.order <- lapply(1:burnin, function(iter) {
+    joint.scores.final[[iter]][,joint.factor.order,drop=FALSE]
   })
-  joint.loadings.aligned.burnin.order <- lapply(1:burnin, function(iter) {
-    joint.loadings.aligned.burnin[[iter]][,joint.factor.order,drop=FALSE]
+  joint.loadings.final.order <- lapply(1:burnin, function(iter) {
+    joint.loadings.final[[iter]][,joint.factor.order,drop=FALSE]
   })
   
   if (!is.null(y)) {
-    joint.betas.aligned.burnin.order <- lapply(1:burnin, function(iter) {
-      joint.betas.aligned.burnin[[iter]][joint.factor.order,,drop=FALSE]
+    joint.betas.final.order <- lapply(1:burnin, function(iter) {
+      joint.betas.final[[iter]][joint.factor.order,,drop=FALSE]
     })
   }
   
   # Order the factors in each individual structure by the Frobenius norm of their corresponding rank-1 structure --
-  
-  # Save the aligned components after burn-in
-  individual.scores.aligned.burnin <- lapply(1:q, function(s) individual.scores.final[[s]][iters_burnin])
-  individual.loadings.aligned.burnin <- lapply(1:q, function(s) individual.loadings.final[[s]][iters_burnin])
-  individual.betas.aligned.burnin <- lapply(1:q, function(s) individual.betas.final[[s]][iters_burnin])
   
   # For each source and each component, calculate the posterior mean of the corresponding rank-1 structure
   if (!is.null(y)) {
@@ -8687,8 +8739,8 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
       lapply(1:indiv.ranks[s], function(r) {
         # Calculate the rank-1 structure for the given component at each iteration
         factor_r_structure <- lapply(1:burnin, function(iter) {
-          rbind(individual.loadings.aligned.burnin[[s]][[iter]][,r,drop=FALSE], t(individual.betas.aligned.burnin[[s]][[iter]][r,,drop=FALSE])) %*% 
-            t(individual.scores.aligned.burnin[[s]][[iter]][,r,drop=FALSE])
+          rbind(individual.loadings.final[[s]][[iter]][,r,drop=FALSE], t(individual.betas.final[[s]][[iter]][r,,drop=FALSE])) %*% 
+            t(individual.scores.final[[s]][[iter]][,r,drop=FALSE])
         })
         
         # Calculate the posterior mean
@@ -8702,8 +8754,8 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
       lapply(1:indiv.ranks[s], function(r) {
         # Calculate the rank-1 structure for the given component at each iteration
         factor_r_structure <- lapply(1:burnin, function(iter) {
-          individual.loadings.aligned.burnin[[s]][[iter]][,r,drop=FALSE] %*% 
-            t(individual.scores.aligned.burnin[[s]][[iter]][,r,drop=FALSE])
+          individual.loadings.final[[s]][[iter]][,r,drop=FALSE] %*% 
+            t(individual.scores.final[[s]][[iter]][,r,drop=FALSE])
         })
         
         # Calculate the posterior mean
@@ -8723,48 +8775,50 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   })
   
   # Reorder the individual scores, loadings, and betas after burn-in
-  individual.scores.aligned.burnin.order <- lapply(1:q, function(s) {
+  individual.scores.final.order <- lapply(1:q, function(s) {
     lapply(1:burnin, function(iter) {
-      individual.scores.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+      individual.scores.final[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
     })
   })
-  individual.loadings.aligned.burnin.order <- lapply(1:q, function(s) {
+  individual.loadings.final.order <- lapply(1:q, function(s) {
     lapply(1:burnin, function(iter) {
-      individual.loadings.aligned.burnin[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+      individual.loadings.final[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
     })
   })
   
   if (!is.null(y)) {
-    individual.betas.aligned.burnin.order <- lapply(1:q, function(s) {
+    individual.betas.final.order <- lapply(1:q, function(s) {
       lapply(1:burnin, function(iter) {
-        individual.betas.aligned.burnin[[s]][[iter]][individual.factor.order[[s]],,drop=FALSE]
+        individual.betas.final[[s]][[iter]][individual.factor.order[[s]],,drop=FALSE]
       })
     })
   }
   
   # If no response was given
   if (is.null(y)) {
-    joint.betas.aligned.burnin.order <- individual.betas.aligned.burnin <- NULL
+    joint.betas.final.order <- individual.final.burnin <- NULL
   }
   
   # Return the final loadings, scores, and betas
-  list(joint.scores.final = joint.scores.aligned.burnin.order, 
-       joint.loadings.final = joint.loadings.aligned.burnin.order, 
-       joint.betas.final = joint.betas.aligned.burnin.order, 
-       individual.scores.final = individual.scores.aligned.burnin, 
-       individual.loadings.final = individual.loadings.aligned.burnin, 
-       individual.betas.final = individual.betas.aligned.burnin)
+  list(joint.scores.final = joint.scores.final.order, 
+       joint.loadings.final = joint.loadings.final.order, 
+       joint.betas.final = joint.betas.final.order, 
+       joint_pivot_index = joint_pivot_index,
+       individual.scores.final = individual.scores.final.order, 
+       individual.loadings.final = individual.loadings.final.order, 
+       individual.betas.final = individual.betas.final.order,
+       individual_pivot_index = individual_pivot_index)
   
   # ---------------------------------------------------------------------------
   # Check the individual structure after the algorithm matches the original structure
   # ---------------------------------------------------------------------------
   
   # Check the joint structure after the algorithm matches the original structure
-  # joint.structure.original <- lapply(1:nsample, function(iter) {
+  # joint.structure.original <- lapply(1:burnin, function(iter) {
   #   joint.loadings[[iter]] %*% t(joint.scores[[iter]])
   # })
   # 
-  # joint.structure.new <- lapply(1:nsample, function(iter) {
+  # joint.structure.new <- lapply(1:burnin, function(iter) {
   #   joint.results.rotate$lambda[[iter]] %*% t(joint.results.rotate$eta[[iter]])
   # })
   # 
@@ -8773,14 +8827,14 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iter_burni
   
   # Calculate the original structure
   # individual.structure.original <- lapply(1:q, function(s) {
-  #   lapply(1:nsample, function(iter) {
+  #   lapply(1:burnin, function(iter) {
   #     individual.loadings[[s]][[iter]] %*% t(individual.scores[[s]][[iter]])
   #   })
   # })
   # 
   # # Calculate the new structure
   # individual.structure.new <- lapply(1:q, function(s) {
-  #   lapply(1:nsample, function(iter) {
+  #   lapply(1:burnin, function(iter) {
   #     individual.results.rotate[[s]]$lambda[[iter]] %*% t(individual.results.rotate[[s]]$eta[[iter]])
   #   })
   # })
