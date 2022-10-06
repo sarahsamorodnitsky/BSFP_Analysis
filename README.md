@@ -1,8 +1,8 @@
-# BayesianPMFWithGit
+# BSFP
 
 The files in this repository perform the following measures:
 
-* bpmf.R contains all functions needed for BPMF
+* bsfp.R contains all functions needed for BPMF
 * bpmf_validation.R contains the validation study for the BPMF model. Results 
   from validation simulations can be found in the validation_results folder. 
 * hiv_copd_application_V2.R contains the Data Application, where the BPMF
