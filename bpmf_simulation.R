@@ -9,7 +9,7 @@
 # -----------------------------------------------------------------------------
 
 # Load in helper functions
-source("~/BayesianPMFWithGit/bpmf.R")
+source("~/BSFP/bpmf.R")
 
 # Number of data sources
 q <- 2
