@@ -4462,7 +4462,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
   # s2nY = signal-to-noise ratio in the response (if continuous)
   # response = NULL if no response is desired, "continuous", or "binary" 
   # missingness = NULL, "missingness_in_data", "missingness_in_response"
-  # missing_data_type = NULL if missingness = NULL; otherwise, = entrywise if randomly sample across sources, = columnwise if randomly set samples to missing, = rowwise is randomly set features to missing
+  # missing_data_type = NULL if missingness = NULL; otherwise, = entrywise if randomly sample across sources, = columnwise if randomly set samples to missing, = MNAR is randomly set features below a threshold to missing
   # prop_missing = NULL if missingness = NULL, otherwise the proportion of entries, columns, or rows missing
   # sparsity = TRUE if generate regression coefficients under spike-and-slab prior, FALSE otherwise
   # identically_zero = TRUE if generating response with sparsity and want spike coefficients to be exactly 0
@@ -4758,14 +4758,18 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
         }
       }
       
-      if (missing_data_type == "rowwise") { # Restrict missing to within features
+      if (missing_data_type == "MNAR") { # Restrict missing to within features
         for (s in 1:q) {
-          # These are counters going down the ROWS of X. So 9 would be the 9th row missing in a given source. 
-          missing_rows[[s,1]] <- sort(sample(x=1:p.vec[s], size = p.vec[s]*prop_missing, replace = FALSE))
+          # Sort the entries in source s
+          sorted_entries_s <- sort(c(data[[s,1]]), decreasing = FALSE)
+          
+          # Calculate the threshold at which the bottom prop_missing are set to NA
+          number_below_lod <- prop_missing * length(sorted_entries_s)
+          LOD <- ceiling(max(sorted_entries_s[1:number_below_lod]))
           
           # Duplicate Xs so that I have one with the full data and one with the missing data
           missing_data[[s,1]] <- data[[s,1]]
-          missing_data[[s,1]][missing_rows[[s,1]],] <- NA
+          missing_data[[s,1]][missing_data[[s,1]] < LOD] <- NA
           missing_obs[[s,1]] <- sort(which(is.na(missing_data[[s,1]])))
         }
       }
@@ -6787,6 +6791,288 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # Return
   sim_results
   
+}
+
+# Run each model being compared in comparison of imputation accuracies
+imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, model_params = NULL, s2nX, s2nY, nsim, nsample = 2000, n_clust, missing_data_type, prop_missing) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  # 
+  # mod = string in c("SVDmiss", "UNIFAC", "BSFP", "Mean_Imputation", "KNN", "RF")
+  # p.vec = number of features per source
+  # n = sample size
+  # ranks = vector of joint and individual ranks = c(joint rank, indiv rank 1, indiv rank 2, ...)
+  # response = string in c(NULL, "continuous", "binary")
+  # true_params = the list of true parameters under which to generate data
+  # model_params = list of model parameters for BPMF. NULL if mod != BPMF
+  # s2nX = signal-to-noise ratio in the data, X.
+  # s2nY = signal-to-noise ratio in the response, Y. NULL if response == "binary"
+  # nsim = number of simulations to run
+  # nsample = number of Gibbs sampling iterations to draw for the linear model
+  # n_clust = how many clusters to run simulation in parallel?
+  # missing_data_type (str): specifies the type of missingness %in% c("entrywise", "columnwise", "MNAR")
+  # prop_missing (double): between 0 and 1. Specifies randomly proportion of entries
+  #                        to remove if missingness == "entrywise" or proportion of 
+  #                        non-overlapping columns if missingness == "columnwise". 
+  #                        If missingness == "MNAR" determines proportion of samples below a
+  #                        corresponding LOD
+  # ---------------------------------------------------------------------------
+  
+  # Loading in the packages
+  library(doParallel)
+  library(foreach)
+  library(r.jive)
+  
+  # The model options
+  models <- c("SVDmiss", "UNIFAC", "BSFP", "Mean_Imputation", "KNN", "RF")
+  
+  cl <- makeCluster(n_clust)
+  registerDoParallel(cl)
+  funcs <- c("bpmf_data", "center_data", "BIDIFAC", "SVDmiss", 
+             "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
+             "bidifac.plus.impute", "bidifac.plus.given")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "missForest")
+  sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
+    
+    # Set seed
+    seed <- sim_iter + which(models %in% mod) * nsim
+    set.seed(seed)
+    
+    # -------------------------------------------------------------------------
+    # Generate data 
+    # -------------------------------------------------------------------------
+    
+    # Generate n samples for training data set
+    sim_data <- bpmf_data(p.vec, n, ranks, true_params, s2nX, s2nY, response = NULL, missingness = "missingness_in_data", missing_data_type = missing_data_type, prop_missing = prop_missing, sparsity = FALSE)
+    
+    # Saving the data
+    observed_data <- sim_data$missing_data
+    observed_data_list <- lapply(observed_data, function(s) s)
+    
+    true_data <- sim_data$data
+    true_data_list <- lapply(true_data, function(s) s)
+    
+    # Save the indices of the missing values in each source
+    missing_obs_indices <- sim_data$missing_obs
+    
+    # Save the unobserved values
+    missing_obs <- lapply(1:q, function(s) {
+      true_data[[s,1]][missing_obs_indices[[s]]]
+    })
+    
+    # Saving the underlying structure
+    joint.structure <- sim_data$joint.structure
+    indiv.structure <- sim_data$indiv.structure
+    
+    # Save the number of sources (not including Y)
+    q <- length(p.vec)
+    
+    # The standardizing coefficients
+    s2nX_coef <- sim_data$s2nX_coef
+    s2nY_coef <- sim_data$s2nY_coef
+    
+    # Save a burn-in
+    burnin <- nsample/2
+    
+    # Set the indices of the sources
+    p.ind <- lapply(1:q, function(s) {
+      if (s == 1) {
+        1:p.vec[s]
+      } else {
+        (p.vec[s-1] + 1):cumsum(p.vec)[s]
+      }
+    })
+    
+    # Set the indices of the samples
+    n.ind <- list(1:n)
+    
+    # -------------------------------------------------------------------------
+    # Fit each model on generated data to obtain estimate of underlying structure
+    # -------------------------------------------------------------------------
+    
+    if (mod == "SVD_Combined_Sources") {
+      
+      # Combine the sources together
+      observed_data_combined <- do.call(rbind, lapply(1:q, function(s) observed_data[[s,1]]))
+      
+      # Impute the missing data using SVDmiss with given number of ranks
+      mod.impute <- SVDmiss(observed_data_combined, niter = 100)
+      
+      # Save the imputed results
+      imputed_values <- lapply(1:q, function(s) {
+        mod.impute$Xfill[p.ind[[s]],][missing_obs_indices[[s]]]
+      })
+      
+      # Save NAs for the other parameters
+      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+    }
+    
+    if (mod == "SVD_Separate_Sources") {
+      
+      # Impute the missing data using SVDmiss with 4 components (default)
+      mod.impute <- lapply(1:q, function(s)  SVDmiss(observed_data[[s,1]], niter = 100))
+      
+      # Save the imputed results
+      imputed_values <- lapply(1:q, function(s) {
+        mod.impute[[s]]$Xfill[missing_obs_indices[[s]]]
+      })
+      
+      # Save NAs for the other parameters
+      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+    }
+    
+    if (mod == "UNIFAC") {
+      
+      # Running the UNIFAC model
+      mod.impute <- impute.BIDIFAC(data = observed_data)
+      
+      # Create a matrix of imputed values
+      imputed_values <- lapply(1:q, function(s)  mod.impute$X[[s,1]][missing_obs_indices[[s,1]]])
+      
+      # Saving the joint rank
+      joint.rank <- rankMatrix(mod.impute$C[[1,1]])[1]
+      
+      # Saving the individual ranks
+      indiv.rank <- sapply(mod.impute$I, function(s) {
+        rankMatrix(s)[1]
+      }) 
+      
+      # Save the ranks
+      mod.ranks <- c(joint.rank, indiv.rank)
+      
+      # Save NAs for the other parameters
+      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+    }
+    
+    if (mod == "Mean_Imputation") {
+      
+      # Initialize a new matrix with imputed values
+      observed_data_impute <- observed_data
+      
+      # Calculate row means and impute
+      for (s in 1:q) {
+        for (i in 1:nrow(observed_data_impute[[s,1]])) {
+          observed_data_impute[[s,1]][i,][is.na(observed_data_impute[[s,1]][i,])] <- mean(observed_data_impute[[s,1]][i,], na.rm = TRUE)
+        }
+      }
+      
+      # Create a matrix of imputed values
+      imputed_values <- lapply(1:q, function(s)  observed_data_impute[[s,1]][missing_obs_indices[[s,1]]])
+      
+      # Save NAs for the other parameters
+      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+    }
+    
+    if (mod == "KNN") {
+      
+    }
+    
+    if (mod == "RF_Combined_Sources") {
+      
+      # Combine the sources together
+      observed_data_combined <- do.call(rbind, lapply(1:q, function(s) observed_data[[s,1]]))
+      
+      # Impute missing values using RF with default parameters (permute so variables are columns)
+      mod.impute <- missForest(xmis = t(observed_data_combined))
+      
+      # Save the imputed results
+      imputed_values <- lapply(1:q, function(s) {
+        t(mod.impute$ximp)[p.ind[[s]],][missing_obs_indices[[s]]]
+      })
+      
+      # Save NAs for the other parameters
+      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+  
+    }
+    
+    if (mod == "RF_Separate_Sources") {
+      
+      # Impute missing values using RF with default parameters (permute so variables are columns)
+      mod.impute <- lapply(1:q, function(s) {
+        missForest(xmis = t(observed_data[[s,1]]))
+      })
+      
+      # Save the imputed results
+      imputed_values <- lapply(1:q, function(s) {
+        t(mod.impute[[s]]$ximp)[missing_obs_indices[[s]]]
+      })
+      
+      # Save NAs for the other parameters
+      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+    }
+
+    if (mod == "BSFP") {
+      
+      # Fitting the model on the missing values
+      mod.impute <- bpmf_data_mode(
+        data = observed_data,
+        Y = NULL,
+        nninit = TRUE,
+        model_params = model_params,
+        sparsity = FALSE,
+        nsample = nsample,
+        progress = TRUE
+      )
+      
+      # Add a burn-in to the imputed values
+      imputed_values_burnin <- lapply(1:q, function(s) {
+        lapply(burnin:nsample, function(iter) {
+          matrix(mod.impute$Xm.draw[[iter]][[s,1]], nrow = 1)
+        })
+      })
+      
+      # Create a matrix of imputed values
+      imputed_values_burnin_mat <- lapply(1:q, function(s) {
+        do.call(rbind, imputed_values_burnin[[s]])
+      })
+      
+      # Calculate credible intervals for each imputed values
+      imputed_values_cis <- lapply(1:q, function(s) {
+        apply(imputed_values_burnin_mat[[s]], 2, function(col) {
+          c(quantile(col, 0.025), quantile(col, 0.975))
+        })
+      })
+      
+      # Calculate coverage
+      imputed_values_coverage <- sapply(1:q, function(s) {
+        mean(sapply(1:length(missing_obs_indices[[s]]), function(i) {
+          imputed_values_cis[[s]][1,i] <= missing_obs[[s]][i] & missing_obs[[s]][i] <= imputed_values_cis[[s]][2,i]
+        }))
+      })
+      
+      # Calculate the posterior mean of the imputed values
+      imputed_values <- lapply(1:q, function(s) colMeans(imputed_values_burnin_mat[[s]]))
+      
+      # Calculate the CI width
+      imputed_values_ci_width <- sapply(1:q, function(s) mean(abs(imputed_values_cis[[s]][2,] - imputed_values_cis[[s]][1,])))
+       
+      # Save the estimated ranks
+      mod.ranks <- mod.impute$ranks
+    }
+    
+    # -------------------------------------------------------------------------
+    # Assess recovery of unobserved values
+    # -------------------------------------------------------------------------
+    
+    imputation_mse <- sapply(1:q, function(s) {
+      frob(missing_obs[[s]] - imputed_values[[s]])/frob(missing_obs[[s]])
+    })
+
+    
+    # Save 
+    file_name <- paste0("~/BayesianPMF/03Simulations/Imputation/", mod, "/", mod,"_imputation_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, "_seed_", seed, ".rda")
+    
+    save(imputation_mse, imputed_values_coverage, imputed_values_ci_width, imputed_values, mod.ranks,
+         file = file_name)
+    
+    res <- c(imputation_mse, imputed_values_coverage, imputed_values_ci_width, mod.ranks)
+    names(res) <- c(paste("imputation mse source:", 1:q), paste("imputation coverage source:", 1:q), paste("imputation CI width source:", 1:q), "joint rank", paste("indiv rank", 1:q))
+    
+    res
+  }
+  stopCluster(cl)
 }
 
 # Simulation study for assessing adjustment of label switching (permutation invariance)
