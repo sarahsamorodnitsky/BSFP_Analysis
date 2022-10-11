@@ -67,11 +67,6 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   # Which entries are missing?
   missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
   
-  # If there is missingness, initialize the missing values with 0s
-  for (s in 1:q) {
-    data[[s,1]][missing_obs[[s]]] <- 0
-  }
-  
   # ---------------------------------------------------------------------------
   # Is there a response vector?
   # ---------------------------------------------------------------------------
@@ -96,7 +91,16 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   # ---------------------------------------------------------------------------
   
   if (nninit) {
-    rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
+    
+    # If there is not missing data
+    if (!missingness_in_data) {
+      rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
+    }
+    
+    # If there is missing data
+    if (missingness_in_data) {
+      rank_init <- impute.BIDIFAC(data = data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
+    }
     
     # Print when finished
     print("Posterior mode obtained: joint and individual ranks determined.")
@@ -4202,7 +4206,7 @@ impute.BIDIFAC=function(data,
                         rmt=T, sigma=NULL,
                         pbar=TRUE,
                         start=NULL, max.iter.impute=20, 
-                        eps.impute=1e-3,...){
+                        eps.impute=1e-3, scale_back=TRUE,...){
   dim.data=dim(data)
   p=dim.data[1]; q=dim.data[2]
   
@@ -4255,16 +4259,32 @@ impute.BIDIFAC=function(data,
     else{ count2=count2+1 }
   }
   
-  for (i in 1:p){
-    for (j in 1:q){
-      fit$X[[i,j]]=fit$X[[i,j]]*sigma[i,j]
-      fit$S[[i,j]]=fit$S[[i,j]]*sigma[i,j]
-      fit$G[[i,j]]=fit$G[[i,j]]*sigma[i,j]
-      fit$R[[i,j]]=fit$R[[i,j]]*sigma[i,j]
-      fit$C[[i,j]]=fit$C[[i,j]]*sigma[i,j]
-      fit$I[[i,j]]=fit$I[[i,j]]*sigma[i,j]
+  if (scale_back) {
+    for (i in 1:p){
+      for (j in 1:q){
+        fit$X[[i,j]]=fit$X[[i,j]]*sigma[i,j]
+        fit$S[[i,j]]=fit$S[[i,j]]*sigma[i,j]
+        fit$G[[i,j]]=fit$G[[i,j]]*sigma[i,j]
+        fit$R[[i,j]]=fit$R[[i,j]]*sigma[i,j]
+        fit$C[[i,j]]=fit$C[[i,j]]*sigma[i,j]
+        fit$I[[i,j]]=fit$I[[i,j]]*sigma[i,j]
+      }
     }
   }
+  
+  if (!scale_back) {
+    for (i in 1:p){
+      for (j in 1:q){
+        fit$X[[i,j]]=fit$X[[i,j]]#*sigma[i,j]
+        fit$S[[i,j]]=fit$S[[i,j]]#*sigma[i,j]
+        fit$G[[i,j]]=fit$G[[i,j]]#*sigma[i,j]
+        fit$R[[i,j]]=fit$R[[i,j]]#*sigma[i,j]
+        fit$C[[i,j]]=fit$C[[i,j]]#*sigma[i,j]
+        fit$I[[i,j]]=fit$I[[i,j]]#*sigma[i,j]
+      }
+    }
+  }
+  
   fit$sigma.mat=sigma
   
   return(fit)
@@ -7607,17 +7627,17 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   # ---------------------------------------------------------------------------
   
   # Set the functions and packages for the parallel computation
-  funcs <- c("bpmf_data", "center_data", "bpmf_full_mode", "bpmf_data_mode", "bpmf_test", "bpmf_test_scale", "get_results", "BIDIFAC",
+  funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "bpmf_test", "bpmf_test_scale", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
   packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive")
   
   # Load in the full training data fit
-  results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/", mod, "_training_data_fit.rda") 
+  results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/", mod, "_training_data_fit.rda") 
   
   # Check if the full training data fit is available and load in if so (since we don't have full training fit for BIP)
-  training_fit_avail <- paste0(mod, "_training_data_fit.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/Training_Fit/", mod))
+  training_fit_avail <- paste0(mod, "_training_data_fit.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/"))
   
   if (training_fit_avail) {
     out <- load(results_path, verbose = TRUE)
@@ -7832,7 +7852,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       
       # Fit on the training data
       mod.out <- sJIVE(X = hiv_copd_data_list_training, Y = c(outcome_train[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, 
-                                  method = "permute", threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
+                                  method = "permute", threshold = 0.001, center.scale = TRUE, reduce.dim = TRUE, max.iter = 3000)
       
       # Fitting the model on test data
       mod.test <- stats::predict(mod.out, newdata = hiv_copd_data_list_test)
