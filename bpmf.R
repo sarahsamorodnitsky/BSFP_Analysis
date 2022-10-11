@@ -6849,11 +6849,11 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
-  funcs <- c("bpmf_data", "center_data", "BIDIFAC", "SVDmiss", 
+  funcs <- c("bpmf_data", "center_data", "BIDIFAC", "SVDmiss", "impute.BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "missForest")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "missForest", "VIM")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     
     # Set seed
@@ -6946,10 +6946,10 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
     if (mod == "UNIFAC") {
       
       # Running the UNIFAC model
-      mod.impute <- impute.BIDIFAC(data = observed_data)
+      mod.impute <- impute.BIDIFAC(data = observed_data, rmt = TRUE, scale_back = TRUE)
       
       # Create a matrix of imputed values
-      imputed_values <- lapply(1:q, function(s)  mod.impute$X[[s,1]][missing_obs_indices[[s,1]]])
+      imputed_values <- lapply(1:q, function(s) mod.impute$X[[s,1]][missing_obs_indices[[s,1]]])
       
       # Saving the joint rank
       joint.rank <- rankMatrix(mod.impute$C[[1,1]])[1]
@@ -6979,14 +6979,43 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       }
       
       # Create a matrix of imputed values
-      imputed_values <- lapply(1:q, function(s)  observed_data_impute[[s,1]][missing_obs_indices[[s,1]]])
+      imputed_values <- lapply(1:q, function(s) observed_data_impute[[s,1]][missing_obs_indices[[s,1]]])
       
       # Save NAs for the other parameters
       imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
     }
     
-    if (mod == "KNN") {
+    if (mod == "KNN_Combined_Sources") {
       
+      # Combine the sources together
+      observed_data_combined <- do.call(rbind, lapply(1:q, function(s) observed_data[[s,1]]))
+      
+      # Impute the missing data using SVDmiss with given number of ranks
+      mod.impute.list <- kNN(t(observed_data_combined))
+      mod.impute <- t(mod.impute.list[1:sum(p.vec)])
+      
+      # Save the imputed results
+      imputed_values <- lapply(1:q, function(s) {
+        mod.impute[p.ind[[s]],][missing_obs_indices[[s]]]
+      })
+      
+      # Save NAs for the other parameters
+      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+    }
+    
+    if (mod == "KNN_Separate_Sources") {
+      
+      # Impute the missing data using SVDmiss with given number of ranks
+      mod.impute.list <- lapply(1:q, function(s) kNN(t(observed_data[[s]])))
+      mod.impute <- lapply(1:q, function(s) t(mod.impute.list[[s]][1:p.vec[s]]))
+      
+      # Save the imputed results
+      imputed_values <- lapply(1:q, function(s) {
+        mod.impute[[s]][missing_obs_indices[[s]]]
+      })
+      
+      # Save NAs for the other parameters
+      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
     }
     
     if (mod == "RF_Combined_Sources") {
@@ -7076,11 +7105,11 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
     # Assess recovery of unobserved values
     # -------------------------------------------------------------------------
     
+    # Calculate the relative squared error difference between unobserved and imputed values
     imputation_mse <- sapply(1:q, function(s) {
       frob(missing_obs[[s]] - imputed_values[[s]])/frob(missing_obs[[s]])
     })
 
-    
     # Save 
     file_name <- paste0("~/BayesianPMF/03Simulations/Imputation/", mod, "/", mod,"_imputation_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, "_seed_", seed, ".rda")
     
