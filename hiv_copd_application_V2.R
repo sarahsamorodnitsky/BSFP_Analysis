@@ -719,7 +719,7 @@ dev.off()
 # -------------------------------------
 
 # Load in the aligned factors
-load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered_V2.rda", verbose = TRUE)
+load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered_V2_NewPivot_Burnin.rda", verbose = TRUE)
 
 library(dplyr)
 
@@ -989,13 +989,13 @@ var_exp_summary$Individual
 # -----------------------------------------------------------------------------
 
 # Calculating the contribution of the joint factors to predicting FEV1pp
-joint_contribution_to_fev1pp <- sapply(1:burnin, function(iter) {
+joint_contribution_to_fev1pp <- sapply(1:length(iters_burnin), function(iter) {
   var(joint.scores.final[[iter]] %*% joint.betas.final[[iter]])/var(fev1pp[[1,1]])
 })
 
 # Calculating the contribution of the individual factors to predicting FEV1pp
 individual_contribution_to_fev1pp <- lapply(1:q, function(s) {
-  sapply(1:burnin, function(iter) {
+  sapply(1:length(iters_burnin), function(iter) {
     var(individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]])/var(fev1pp[[1,1]])
   })
 })
@@ -1009,6 +1009,23 @@ sapply(individual_contribution_to_fev1pp, mean)
 sapply(individual_contribution_to_fev1pp, function(indiv) {
   c(quantile(indiv, 0.025), quantile(indiv, 0.975))
 })
+
+# Calculate the contribution of the joint structure to predicting FEV1pp for each sample
+joint_contribution_to_fev1pp_by_sample <- sapply(1:length(iters_burnin), function(iter) {
+  joint.scores.final[[iter]] %*% joint.betas.final[[iter]]
+})
+
+# Calculate the contribution of the individual structures to predicting FEV1pp for each sample
+individual_contribution_to_fev1pp_by_sample <- lapply(1:q, function(s) {
+  sapply(1:length(iters_burnin), function(iter) {
+    individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]]
+  })
+})
+
+# Save the results
+save(joint_contribution_to_fev1pp_by_sample, individual_contribution_to_fev1pp_by_sample,
+     file = "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/V2/Aligned/NewPivot_Burnin/Structure_Contribution_to_FEV1pp_NewPivot_Burnin.rda")
+
 
 # -----------------------------------------------------------------------------
 # K-Means on the Posterior Sampling Iterations
@@ -1097,9 +1114,9 @@ packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
 # Running BPMF with cross validation
 # -------------------------------------
 
-cl <- makeCluster(3)
+cl <- makeCluster(2)
 registerDoParallel(cl)
-fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+fev1pp_cv <- foreach(pair = ind_of_pairs[12:26], .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
   # Create a new vector of the outcome with the current pair set to NA
   fev1pp_cv <- fev1pp
   fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
@@ -1296,6 +1313,9 @@ mean(sapply(1:n, function(i) fev1pp_cv_ci$BPMF[i,1] <= fev1pp[[1,1]][i] & fev1pp
 mean(sapply(1:n, function(i) fev1pp_cv_ci$BIDIFAC[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$BIDIFAC[i,2])) # BIDIFAC
 mean(sapply(1:n, function(i) fev1pp_cv_ci$JIVE[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$JIVE[i,2])) # JIVE
 mean(sapply(1:n, function(i) fev1pp_cv_ci$MOFA[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$MOFA[i,2])) # MOFA
+
+# Save the imputed values and credible intervals to plot locally
+save(fev1pp_cv, fev1pp_cv_ci, file = "~/BayesianPMF/04DataApplication/FEV1pp_EY_CV.rda")
 
 # -----------------------------------------------------------------------------
 # Missing data imputation comparing several methods
