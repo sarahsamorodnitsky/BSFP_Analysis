@@ -7744,6 +7744,9 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   
   # For MOFA
   if (mod == "MOFA") {
+    # Load in the MOFA library
+    library(MOFA2)
+    
     # Getting the variance explained in each source by each factor
     mod.var.exp <- get_variance_explained(get(out))$r2_per_factor$group1 # variance explained by factor per view
     
