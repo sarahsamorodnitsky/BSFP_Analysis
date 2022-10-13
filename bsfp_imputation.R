@@ -42,23 +42,46 @@ joint_var_no_y <- 1/(sqrt(n) + sqrt(sum(p.vec))) # Number of samples and number 
 indiv_vars_no_y <- sapply(1:q, function(s) 1/(sqrt(n) + sqrt(p.vec[s]))) # Number of samples and number of features in each source plus Y
 
 # Setting the model variances
-model_params<- list(error_vars = c(X1 = 1, X2 = 1), # Error variance for each source
+model_params <- list(error_vars = c(X1 = 1, X2 = 1), # Error variance for each source
                     joint_var = joint_var_no_y, # Variance for joint structure
                     indiv_vars = indiv_vars_no_y, # Variance for each individual structure
                     beta_vars = c(intercept = 10, joint  = 1, indiv = rep(1,q)), # Variance of intercept effect and each joint effect 
                     response_vars = c(shape = 1, rate = 1) # Hyperparameters for prior on tau2
 )   
 
+# The missingness proportion
+prop_missing <- 0.1
+
+# Model simulation parameters 
+n_clust <- 10
+
 # -----------------------------------------------------------------------------
-# BIDIFAC
+# BPMF (Data Mode) 
 # -----------------------------------------------------------------------------
 
-BIDIFAC.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+# Entrywise missingness
+BPMF.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
-    BIDIFAC.res[[ind]] <- model_comparison(mod = "BIDIFAC", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
+    BPMF.entrywise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, response = NULL, true_params, model_params = model_params, s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, missing_data_type = "entrywise", prop_missing = prop_missing)  
+    ind <- ind + 1
+  }
+}
+
+
+# -----------------------------------------------------------------------------
+# BIDIFAC
+# -----------------------------------------------------------------------------
+
+# Entrywise missingness
+BIDIFAC.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    BIDIFAC.entrywise[[ind]] <- model_comparison(mod = "UNIFAC", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
                                            s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
   }
