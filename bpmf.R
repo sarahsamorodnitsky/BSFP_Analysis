@@ -6852,10 +6852,10 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
   funcs <- c("bpmf_data", "center_data", "BIDIFAC", "SVDmiss", "impute.BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
-             "bidifac.plus.impute", "bidifac.plus.given")
+             "bidifac.plus.impute", "bidifac.plus.given", "bpmf_data_mode", "fill.matrix")
   packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "missForest", "VIM")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
-    
+  # for (sim_iter in 1:nsim) {
     # Set seed
     seed <- sim_iter + which(models %in% mod) * nsim
     set.seed(seed)
@@ -6874,6 +6874,10 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
     true_data <- sim_data$data
     true_data_list <- lapply(true_data, function(s) s)
     
+    
+    # Save the number of sources (not including Y)
+    q <- length(p.vec)
+    
     # Save the indices of the missing values in each source
     missing_obs_indices <- sim_data$missing_obs
     
@@ -6885,9 +6889,6 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
     # Saving the underlying structure
     joint.structure <- sim_data$joint.structure
     indiv.structure <- sim_data$indiv.structure
-    
-    # Save the number of sources (not including Y)
-    q <- length(p.vec)
     
     # The standardizing coefficients
     s2nX_coef <- sim_data$s2nX_coef
@@ -7111,7 +7112,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
     })
 
     # Save 
-    file_name <- paste0("~/BayesianPMF/03Simulations/Imputation/", mod, "/", mod,"_imputation_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, "_seed_", seed, ".rda")
+    file_name <- paste0("~/BayesianPMF/03Simulations/Imputation/", mod, "/", mod,"_imputation_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, "_seed_", seed, "_", missing_data_type, ".rda")
     
     save(imputation_mse, imputed_values_coverage, imputed_values_ci_width, imputed_values, mod.ranks,
          file = file_name)
@@ -8322,6 +8323,172 @@ var_explained <- function(BPMF.fit, hiv_copd_data, iters_burnin) {
   list(Joint = joint_summary, Individual = indiv_summary)
 }
 
+# Create posterior mean and credible interval summaries for factor loadings/scores/betas before or after alignment for the HIV-COPD application
+factor_summaries <- function(joint.loadings.final, joint.scores.final, joint.betas.final,
+                             individual.loadings.final, individual.scores.final, individual.betas.final,
+                             ranks, exploring_factors_wd, nsample_after_burnin,
+                             lavage_processed_no_info_log_scale, somascan_normalized_clean_no_info_transpose_scale) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments: 
+  # 
+  # joint.loadings.final (list): list of the joint loadings for each source after alignment
+  # joint.scores.final (list): list of the joint scores for each source after alignment
+  # joint.betas.final (list): list of the joint betas for each source after alignment
+  # individual.loadings.final (list): list of the individual loadings for each source after alignment
+  # individual.scores.final (list): list of the individual scores for each source after alignment
+  # individual.betas.final (list): list of the individual betas for each source after alignment
+  # ranks (vector of length q (number of sources) + 1): the estimated rank of the factorization 
+  # exploring_factors_wd (string): directory where summaries should be stored
+  #    Function will save results to given directory. Will not return output. 
+  # nsample_after_burnin (int): number of samples after burn-in 
+  # ---------------------------------------------------------------------------
+  
+  # Save the rank indices
+  q <- length(ranks) - 1
+  rank.inds <- lapply(1:(q+1), function(s) {
+    if (s == 1) {
+      1:ranks[s]
+    } else {
+      (cumsum(ranks[1:(s-1)])[s-1] + 1):cumsum(ranks[1:s])[s]
+    }
+  })
+  
+  
+  # Creating summaries of the factors
+  for (i in 1:sum(ranks)) {
+    
+    # Save the results for the given factor
+    if (i %in% rank.inds[[1]]) {
+      rank_index <- i
+      factor.final <- do.call(cbind, lapply(1:nsample_after_burnin, function(iter) joint.loadings.final[[iter]][,rank_index,drop=FALSE]))
+      scores.final <- do.call(cbind, lapply(1:nsample_after_burnin, function(iter) joint.scores.final[[iter]][,rank_index,drop=FALSE]))
+      
+      # Calculating means and CIs for each loading
+      factor.final.summary <- t(apply(factor.final, 1, function(load) {
+        c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+      }))
+      scores.final.summary <- t(apply(scores.final, 1, function(score) {
+        c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
+      }))
+      
+      # Name the rows by the respective biomarker
+      rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
+      
+      # Name the rows by the subject ID
+      rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
+      
+      # Separate the loadings by metabolites and proteins
+      factor.final.summary.metabolites <- factor.final.summary[1:p.vec[1],,drop=FALSE]
+      factor.final.summary.proteins <- factor.final.summary[(p.vec[1]+1):p,,drop=FALSE]
+      
+      # Order the loadings within the metabolites and proteins by the posterior mean
+      factor.final.summary.metabolites.order <- 
+        factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+      
+      factor.final.summary.proteins.order <- 
+        factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+      
+      # Create the file name
+      file_name <- paste0(exploring_factors_wd, "/Joint_Factor", rank_index, "_Aligned_Ordered_Summary_NewPivot_Burnin.rda")
+      
+      # Save the results
+      save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order, scores.final.summary, file = file_name)
+    }
+    
+    if (i %in% rank.inds[[2]]) {
+      rank_index <- i - ranks[1]
+      factor.final <- do.call(cbind, lapply(1:nsample_after_burnin, function(iter) individual.loadings.final[[1]][[iter]][,rank_index,drop=FALSE]))
+      scores.final <- do.call(cbind, lapply(1:nsample_after_burnin, function(iter) individual.scores.final[[1]][[iter]][,rank_index,drop=FALSE]))
+      
+      # Calculating means and CIs for each loading
+      factor.final.summary <- t(apply(factor.final, 1, function(load) {
+        c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+      }))
+      scores.final.summary <- t(apply(scores.final, 1, function(score) {
+        c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
+      }))
+      
+      # Name the rows by the respective biomarker
+      rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale))
+      
+      # Name the rows by the subject ID
+      rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
+      
+      # Separate the loadings by metabolites and proteins (only metabolites here)
+      factor.final.summary.metabolites <- factor.final.summary
+      factor.final.summary.proteins <- NA
+      
+      # Order the loadings within the metabolites and proteins by the posterior mean
+      factor.final.summary.metabolites.order <- 
+        factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
+      
+      # Create a file name
+      file_name <- paste0(exploring_factors_wd, "/Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary_NewPivot_Burnin.rda")
+      
+      # Save the results
+      save(factor.final.summary.metabolites.order, scores.final.summary, file = file_name)
+    }
+    
+    if (i %in% rank.inds[[3]]) {
+      rank_index <- i - cumsum(ranks[1:2])[2]
+      factor.final <- do.call(cbind, lapply(1:nsample_after_burnin, function(iter) individual.loadings.final[[2]][[iter]][,rank_index,drop=FALSE]))
+      scores.final <- do.call(cbind, lapply(1:nsample_after_burnin, function(iter) individual.scores.final[[2]][[iter]][,rank_index,drop=FALSE]))
+      
+      # Calculating means and CIs for each loading
+      factor.final.summary <- t(apply(factor.final, 1, function(load) {
+        c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
+      }))
+      scores.final.summary <- t(apply(scores.final, 1, function(score) {
+        c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
+      }))
+      
+      # Name the rows by the respective biomarker
+      rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
+      
+      # Name the rows by the subject ID
+      rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
+      
+      # Separate the loadings by metabolites and proteins (only proteins here)
+      factor.final.summary.metabolites <- NA
+      factor.final.summary.proteins <- factor.final.summary
+      
+      # Order the loadings within the metabolites and proteins by the posterior mean
+      factor.final.summary.proteins.order <- 
+        factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
+      
+      # Create the file name
+      file_name <- paste0(exploring_factors_wd, "/Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary_NewPivot_Burnin.rda")
+      
+      # Save the results
+      save(factor.final.summary.proteins.order, scores.final.summary, file = file_name)
+    }
+    
+  }
+  
+  # Creating summaries of the betas --
+  
+  # Combining the betas into a matrix
+  joint.betas.final.mat <- do.call(cbind, joint.betas.final)
+  individual.betas.final.mat <- lapply(1:q, function(s) do.call(cbind, individual.betas.final[[s]]))
+  
+  # Calculating the summaries
+  joint.betas.final.mat.summary <- t(apply(joint.betas.final.mat, 1, function(beta) {
+    c(mean = mean(beta), lower.ci = quantile(beta, 0.025), upper.ci = quantile(beta, 0.975))
+  }))
+  
+  individual.betas.final.mat.summary <- lapply(1:q, function(s) {
+    t(apply(individual.betas.final.mat[[s]], 1, function(beta) {
+      c(mean = mean(beta), lower.ci = quantile(beta, 0.025), upper.ci = quantile(beta, 0.975))
+    }))
+  })
+  
+  # Save the results
+  save(joint.betas.final.mat.summary, individual.betas.final.mat.summary,
+       file = paste0(exploring_factors_wd, "/Betas_Aligned_Summary_NewPivot_Burnin.rda"))
+
+}
+
 # -----------------------------------------------------------------------------
 # Addressing the factor switching problem
 # -----------------------------------------------------------------------------
@@ -9181,7 +9348,90 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iters_burn
   # lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]]))
 }
 
+# Calculating the difference between covariance matrices
+diff_in_cov <- function(U.draw, W.draw, joint.beta.draw, individual.beta.draw, U.draw.aligned, W.draw.aligned, joint.beta.draw.aligned, individual.beta.draw.aligned, p.vec, nsample_after_burnin) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  # 
+  # U.draw (list): joint loadings prior to alignment (after burn-in)
+  # W.draw (list): individual.loadings prior to alignment (after burn-in)
+  # beta.draw (list): betas prior to alignment (after burn-in)
+  # U.draw.aligned (list): joint loadings after alignment (after burn-in)
+  # W.draw.aligned (list): individual loadings after alignment (after burn-in)
+  # beta.draw.aligned (list): betas after alignment (after burn-in)
+  # p.vec (vector): number of features per source
+  # nsample_after_burnin (int): number of samples post burn-in
+  # ---------------------------------------------------------------------------
+  
+  # Load in the library for fast matrix multiplication
+  library(Rfast)
+  
+  # Load in library for lmean
+  library(infinitefactor)
+  
+  # Save the number of features per source
+  q <- length(p.vec)
+  
+  # Save the indices for each feature from each source
+  p.ind <- lapply(1:q, function(s) {
+    if (s == 1) {
+      1:p.vec[s]
+    } else {
+      (p.vec[s-1]+1):(sum(p.vec))
+    }
+  })
+  
+  # Combining the loadings together into one big matrix
+  combined.loadings.aligned <- lapply(1:nsample_after_burnin, function(iter) {
+    load <- matrix(list(), nrow = q+1, ncol = q+1)
+    
+    # Joint loadings
+    load[[1,1]] <- U.draw.aligned[[iter]][p.ind[[1]],]
+    load[[2,1]] <- U.draw.aligned[[iter]][p.ind[[2]],]
+    load[[3,1]] <- t(joint.betas.draw.aligned[[iter]])
+    
+    # Individual loadings
+    load[[1,2]] <- W.draw.aligned[[1]][[iter]]
+    load[[2,2]] <- matrix(0, nrow = nrow(load[[2,1]]), ncol = ncol(load[[1,2]]))
+    load[[3,2]] <- t(individual.betas.draw.aligned[[1]][[iter]])
+    
+    load[[2,3]] <- W.draw.aligned[[2]][[iter]] 
+    load[[1,3]] <- matrix(0, nrow = nrow(load[[1,2]]), ncol = ncol(load[[2,3]]))
+    load[[3,3]] <- t(individual.betas.draw.aligned[[2]][[iter]])
+    
+    data.rearrange(load)$out
+  })
+  
+  combined.loadings.unaligned <- lapply(1:nsample_after_burnin, function(iter) {
+    load <- matrix(list(), nrow = q+1, ncol = q+1)
+    
+    # Joint
+    load[[1,1]] <- U.draw[[iter]][[1,1]]
+    load[[2,1]] <- U.draw[[iter]][[2,1]]
+    load[[3,1]] <- t(joint.betas.draw[[iter]])
+    
+    # Individual
+    load[[1,2]] <- W.draw[[iter]][[1,1]]
+    load[[2,2]] <- W.draw[[iter]][[2,1]]
+    load[[3,2]] <- t(individual.betas.draw[[1]][[iter]])
+    
+    load[[1,3]] <- fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[1,2]]
+    load[[2,3]] <- fev1pp_training_fit_nonsparse_V2$W.draw[[iter]][[2,2]]
+    load[[3,3]] <- t(individual.betas.draw[[2]][[iter]])
+    
+    data.rearrange(load)$out
+  })
+  
+  # Calculate the estimated covariance using the posterior mean of the aligned loadings
+  combined.loadings.final.mean <- lmean(combined.loadings.aligned)
+  est.cov.post.alignment.mean <- Tcrossprod(combined.loadings.final.mean, combined.loadings.final.mean)
+  
+  # Calculate the posterior mean of the covariance prior to alignment
+  
+  post.mean.covariance.unaligned <- lmean(lapply(1:nsample_after_burnin, function(iter) Tcrossprod(combined.loadings.unaligned[[iter]], combined.loadings.unaligned[[iter]])))
 
+}
 
 
 
