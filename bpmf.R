@@ -7459,6 +7459,49 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
   sim_results
 }
 
+# Imputation based on the iterative SVD
+SVDmiss <- function (X, niter = 25, ncomp = min(4, dim(X)[2]), conv.reldiff = 0.001) {
+  niter <- max(niter, 1)
+  if (ncomp < 1) {
+    stop("ncomp should be >0, is: ", ncomp)
+  }
+  Ina <- is.na(X)
+  if (all(!Ina)) {
+    svd0 <- svd(X)
+    XF <- X
+    i <- diff <- reldiff <- 0
+  }
+  else {
+    u1 <- rowMeans(X, na.rm = TRUE)
+    XM <- matrix(1, nrow(X), ncol(X))
+    XM[Ina] <- 0
+    XZ <- X
+    XZ[Ina] <- 0
+    v1 <- diag(t(XZ) %*% (XM * u1))/diag(t(XM * u1) %*% (XM * 
+                                                           u1))
+    XF <- X
+    XF[Ina] <- (matrix(u1, ncol = 1) %*% matrix(v1, nrow = 1))[Ina]
+    if (any(is.na(XF))) 
+      stop("Unable to complete matrix, too much missing data")
+    reldiff <- conv.reldiff + 1
+    i <- 0
+    while (i < niter && reldiff > conv.reldiff) {
+      svd0 <- svd(XF)
+      Xnew <- X
+      Xnew[Ina] <- (svd0$u[, 1:ncomp] %*% diag(svd0$d[1:ncomp], 
+                                               nrow = length(svd0$d[1:ncomp])) %*% t(svd0$v[, 
+                                                                                            1:ncomp]))[Ina]
+      diff <- max(abs(Xnew - XF))
+      reldiff <- diff/max(abs(XF[Ina]))
+      XF <- Xnew
+      i <- i + 1
+    }
+  }
+  final.diff <- c(diff, reldiff, i, niter)
+  names(final.diff) <- c("diff", "rel.diff", "n.iter", "max.iter")
+  return(list(svd = svd0, Xfill = XF, status = final.diff))
+}
+
 # -----------------------------------------------------------------------------
 # Create tables for results
 # -----------------------------------------------------------------------------
