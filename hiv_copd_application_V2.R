@@ -121,6 +121,7 @@ model_params <- list(error_vars = c(sigma21, sigma22),
 # Gibbs sampler parameters
 nsample <- 5000
 burnin <- 1000
+nsample_after_burnin <- nsample-burnin
 iters_burnin <- seq(burnin+1, nsample)
 thinned_iters <- seq(1, nsample, by = 10)
 thinned_iters_burnin <- seq(burnin, nsample, by = 10)
@@ -724,151 +725,17 @@ load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp
 library(dplyr)
 
 # Save the working directory where the summaries will go
-exploring_factors_wd <- "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/V2/"
+exploring_factors_wd <- "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/V2/Aligned/NewPivot_Burnin"
 
 # Save the joint and individual ranks
 ranks <- fev1pp_training_fit_nonsparse_V2$ranks
 
-# Save the rank indices
-rank.inds <- lapply(1:(q+1), function(s) {
-  if (s == 1) {
-    1:ranks[s]
-  } else {
-    (cumsum(ranks[1:(s-1)])[s-1] + 1):cumsum(ranks[1:s])[s]
-  }
-})
+# Calculate summaries of the factors 
+factor_summaries(joint.loadings.final, joint.scores.final, joint.betas.final,
+                 individual.loadings.final, individual.scores.final, individual.betas.final,
+                 ranks = ranks, exploring_factors_wd = exploring_factors_wd,
+                 nsample_after_burnin = nsample_after_burnin)
 
-# For each factor, 
-for (i in 1:sum(ranks)) {
-  
-  # Save the results for the given factor
-  if (i %in% rank.inds[[1]]) {
-    rank_index <- i
-    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) joint.loadings.final[[iter]][,rank_index,drop=FALSE]))
-    scores.final <- do.call(cbind, lapply(1:burnin, function(iter) joint.scores.final[[iter]][,rank_index,drop=FALSE]))
-    
-    # Calculating means and CIs for each loading
-    factor.final.summary <- t(apply(factor.final, 1, function(load) {
-      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
-    }))
-    scores.final.summary <- t(apply(scores.final, 1, function(score) {
-      c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
-    }))
-    
-    # Name the rows by the respective biomarker
-    rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale), rownames(somascan_normalized_clean_no_info_transpose_scale))
-    
-    # Name the rows by the subject ID
-    rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
-    
-    # Separate the loadings by metabolites and proteins
-    factor.final.summary.metabolites <- factor.final.summary[1:p.vec[1],,drop=FALSE]
-    factor.final.summary.proteins <- factor.final.summary[(p.vec[1]+1):p,,drop=FALSE]
-    
-    # Order the loadings within the metabolites and proteins by the posterior mean
-    factor.final.summary.metabolites.order <- 
-      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
-    
-    factor.final.summary.proteins.order <- 
-      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
-    
-    # Create the file name
-    file_name <- paste0(exploring_factors_wd, "Aligned/Joint_Factor", rank_index, "_Aligned_Ordered_Summary_NewPivot_Burnin.rda")
-    
-    # Save the results
-    save(factor.final.summary, factor.final.summary.metabolites.order, factor.final.summary.proteins.order, scores.final.summary, file = file_name)
-  }
-  
-  if (i %in% rank.inds[[2]]) {
-    rank_index <- i - ranks[1]
-    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.loadings.final[[1]][[iter]][,rank_index,drop=FALSE]))
-    scores.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.scores.final[[1]][[iter]][,rank_index,drop=FALSE]))
-    
-    # Calculating means and CIs for each loading
-    factor.final.summary <- t(apply(factor.final, 1, function(load) {
-      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
-    }))
-    scores.final.summary <- t(apply(scores.final, 1, function(score) {
-      c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
-    }))
-    
-    # Name the rows by the respective biomarker
-    rownames(factor.final.summary) <- c(rownames(lavage_processed_no_info_log_scale))
-    
-    # Name the rows by the subject ID
-    rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
-    
-    # Separate the loadings by metabolites and proteins (only metabolites here)
-    factor.final.summary.metabolites <- factor.final.summary
-    factor.final.summary.proteins <- NA
-    
-    # Order the loadings within the metabolites and proteins by the posterior mean
-    factor.final.summary.metabolites.order <- 
-      factor.final.summary.metabolites[order(factor.final.summary.metabolites[,1], decreasing = FALSE),]
-    
-    # Create a file name
-    file_name <- paste0(exploring_factors_wd, "Aligned/Metabolite_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary_NewPivot_Burnin.rda")
-    
-    # Save the results
-    save(factor.final.summary.metabolites.order, scores.final.summary, file = file_name)
-  }
-  
-  if (i %in% rank.inds[[3]]) {
-    rank_index <- i - cumsum(ranks[1:2])[2]
-    factor.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.loadings.final[[2]][[iter]][,rank_index,drop=FALSE]))
-    scores.final <- do.call(cbind, lapply(1:burnin, function(iter) individual.scores.final[[2]][[iter]][,rank_index,drop=FALSE]))
-    
-    # Calculating means and CIs for each loading
-    factor.final.summary <- t(apply(factor.final, 1, function(load) {
-      c(mean = mean(load), lower.ci = quantile(load, 0.025), upper.ci = quantile(load, 0.975))
-    }))
-    scores.final.summary <- t(apply(scores.final, 1, function(score) {
-      c(mean = mean(score), lower.ci = quantile(score, 0.025), upper.ci = quantile(score, 0.975))
-    }))
-    
-    # Name the rows by the respective biomarker
-    rownames(factor.final.summary) <- rownames(somascan_normalized_clean_no_info_transpose_scale)
-    
-    # Name the rows by the subject ID
-    rownames(scores.final.summary) <- colnames(lavage_processed_no_info_log_scale)
-    
-    # Separate the loadings by metabolites and proteins (only proteins here)
-    factor.final.summary.metabolites <- NA
-    factor.final.summary.proteins <- factor.final.summary
-    
-    # Order the loadings within the metabolites and proteins by the posterior mean
-    factor.final.summary.proteins.order <- 
-      factor.final.summary.proteins[order(factor.final.summary.proteins[,1], decreasing = FALSE),]
-    
-    # Create the file name
-    file_name <- paste0(exploring_factors_wd, "Aligned/Protein_Indiv_Factor", rank_index, "_Aligned_Ordered_Summary_NewPivot_Burnin.rda")
-    
-    # Save the results
-    save(factor.final.summary.proteins.order, scores.final.summary, file = file_name)
-  }
-  
-}
-
-# Creating summaries of the betas --
-
-# Combining the betas into a matrix
-joint.betas.final.mat <- do.call(cbind, joint.betas.final)
-individual.betas.final.mat <- lapply(1:q, function(s) do.call(cbind, individual.betas.final[[s]]))
-
-# Calculating the summaries
-joint.betas.final.mat.summary <- t(apply(joint.betas.final.mat, 1, function(beta) {
-  c(mean = mean(beta), lower.ci = quantile(beta, 0.025), upper.ci = quantile(beta, 0.975))
-}))
-
-individual.betas.final.mat.summary <- lapply(1:q, function(s) {
-  t(apply(individual.betas.final.mat[[s]], 1, function(beta) {
-    c(mean = mean(beta), lower.ci = quantile(beta, 0.025), upper.ci = quantile(beta, 0.975))
-  }))
-})
-
-# Save the results
-save(joint.betas.final.mat.summary, individual.betas.final.mat.summary,
-     file = "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/V2/Aligned/Betas_Aligned_Summary_NewPivot_Burnin.rda")
 
 # -------------------------------------
 # Creating summaries of the UNALIGNED factors
@@ -989,13 +856,13 @@ var_exp_summary$Individual
 # -----------------------------------------------------------------------------
 
 # Calculating the contribution of the joint factors to predicting FEV1pp
-joint_contribution_to_fev1pp <- sapply(1:length(iters_burnin), function(iter) {
+joint_contribution_to_fev1pp <- sapply(1:nsample_after_burnin, function(iter) {
   var(joint.scores.final[[iter]] %*% joint.betas.final[[iter]])/var(fev1pp[[1,1]])
 })
 
 # Calculating the contribution of the individual factors to predicting FEV1pp
 individual_contribution_to_fev1pp <- lapply(1:q, function(s) {
-  sapply(1:length(iters_burnin), function(iter) {
+  sapply(1:nsample_after_burnin, function(iter) {
     var(individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]])/var(fev1pp[[1,1]])
   })
 })
@@ -1011,13 +878,13 @@ sapply(individual_contribution_to_fev1pp, function(indiv) {
 })
 
 # Calculate the contribution of the joint structure to predicting FEV1pp for each sample
-joint_contribution_to_fev1pp_by_sample <- sapply(1:length(iters_burnin), function(iter) {
+joint_contribution_to_fev1pp_by_sample <- sapply(1:nsample_after_burnin, function(iter) {
   joint.scores.final[[iter]] %*% joint.betas.final[[iter]]
 })
 
 # Calculate the contribution of the individual structures to predicting FEV1pp for each sample
 individual_contribution_to_fev1pp_by_sample <- lapply(1:q, function(s) {
-  sapply(1:length(iters_burnin), function(iter) {
+  sapply(1:nsample_after_burnin, function(iter) {
     individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]]
   })
 })
@@ -1116,7 +983,7 @@ packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
 
 cl <- makeCluster(2)
 registerDoParallel(cl)
-fev1pp_cv <- foreach(pair = ind_of_pairs[12:26], .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
   # Create a new vector of the outcome with the current pair set to NA
   fev1pp_cv <- fev1pp
   fev1pp_cv[[1,1]][pair:(pair+1),] <- NA
@@ -1226,7 +1093,7 @@ run_model_with_cv(mod = "JIVE", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
 # -------------------------------------
 
 run_model_with_cv(mod = "MOFA", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
-                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs,
                   model_params = model_params, nsample = nsample)
 
 # -------------------------------------
@@ -1304,8 +1171,8 @@ legend("bottomright", legend = c("BPMF", "BIDIFAC", "JIVE", "MOFA"), col = c(1, 
 # Calculating a correlation test for each cross validated outcome vs. true FEV1pp
 cor.test(fev1pp_cv$BPMF, c(fev1pp[[1,1]])) # BPMF
 cor.test(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]])) # BIDIFAC
-cor.test(fev1pp_cv$JIVE, c(fev1pp[[1,1]])) # JIVE
 cor.test(fev1pp_cv$sJIVE, c(fev1pp[[1,1]])) # sJIVE
+cor.test(fev1pp_cv$JIVE, c(fev1pp[[1,1]])) # JIVE
 cor.test(fev1pp_cv$MOFA, c(fev1pp[[1,1]])) # MOFA
 
 # Compare the coverage rates for FEV1pp
