@@ -7118,7 +7118,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
     })
 
     # Save 
-    file_name <- paste0("~/BayesianPMF/03Simulations/Imputation/", mod, "/", mod,"_imputation_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, "_seed_", seed, "_", missing_data_type, ".rda")
+    file_name <- paste0("~/BayesianPMF/03Simulations/Imputation/", mod, "/", mod,"_imputation_sim_", sim_iter, "_s2nX_", s2nX, "_seed_", seed, "_", missing_data_type, ".rda")
     
     save(imputation_mse, imputed_values_coverage, imputed_values_ci_width, imputed_values, mod.ranks,
          file = file_name)
