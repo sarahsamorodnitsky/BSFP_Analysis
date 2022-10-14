@@ -7685,6 +7685,50 @@ create_simulation_table <- function(simulation_results, mod.list, path.list, s2n
   simulation_results
 }
 
+# Function for checking that all simulation conditions ran
+check_all_sims <- function(path, s2nX, s2nY = NULL, nsim, split = "_", missing_data_type = NULL) {
+  
+  # ---------------------------------------------------------------------------
+  # Arguments:
+  # 
+  # path (string): pathway to folder where simulation results are stored
+  # s2nX, s2nY (dbl): s2n level for simulation replication. s2nY not necessarily supplied
+  # nsim (int): number of simulation replications to check
+  # missing_data_type (string): type of missingness, if applicable
+  # ---------------------------------------------------------------------------
+  
+  # Check that condition ran
+  all_files <- list.files(path)
+  all_files_split <- strsplit(all_files, split = split)
+  
+  # Subset to just files for specific type of missingness
+  if (!is.null(missing_data_type)) {
+    all_files_sub <- all_files[grepl("entrywise", all_files)]
+    all_files_split_sub <- all_files_split[grepl("entrywise", all_files)]
+  }
+  
+  if (is.null(missing_data_type)) {
+    all_files_sub <- all_files
+    all_files_split_sub <- all_files_split
+  }
+  
+  # Select all the files corresponding to current s2nX and s2nY 
+  if (is.null(s2nY)) {
+    ind_of_s2nX <- which(all_files_split_sub[[1]] == "s2nX") + 1
+    files_for_s2nX_s2nY <- all_files_sub[sapply(all_files_split_sub, function(file) file[ind_of_s2nX] == s2nX)]
+  }
+  
+  if (!is.null(s2nY)) {
+    ind_of_s2nX <- which(all_files_split_sub[[1]] == "s2nX") + 1
+    ind_of_s2nY <- which(all_files_split_sub[[1]] == "s2nY") + 1
+    files_for_s2nX_s2nY <- all_files_sub[sapply(all_files_split_sub, function(file) file[ind_of_s2nX] == s2nX & file[ind_of_s2nY] == s2nY)]
+  }
+  
+  # Result
+  length(files_for_s2nX_s2nY) == 100
+
+}
+
 # -----------------------------------------------------------------------------
 # Functions for data application
 # -----------------------------------------------------------------------------
