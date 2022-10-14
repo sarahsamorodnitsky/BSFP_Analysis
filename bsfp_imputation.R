@@ -281,7 +281,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[8] == s2nX) & (file[10] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -320,7 +320,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[8] == s2nX) & (file[10] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -359,7 +359,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[8] == s2nX) & (file[10] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -398,7 +398,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[8] == s2nX) & (file[10] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
