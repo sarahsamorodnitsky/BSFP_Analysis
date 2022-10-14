@@ -6842,7 +6842,6 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
   # Loading in the packages
   library(doParallel)
   library(foreach)
-  library(r.jive)
   
   # The model options
   models <- c("Mean_Imputation", "UNIFAC", "BSFP", "SVD_Combined_Sources", "SVD_Separate_Sources", "KNN_Combined_Sources", "KNN_Separate_Sources", "RF_Combined_Sources", "RF_Separate_Sources")
@@ -6853,7 +6852,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given", "bpmf_data_mode", "fill.matrix")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "missForest", "VIM")
+  packs <- c("Matrix", "MASS", "truncnorm", "missForest", "VIM")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
   # for (sim_iter in 1:nsim) {
     # Set seed
@@ -6927,7 +6926,8 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       })
       
       # Save NAs for the other parameters
-      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+      imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
+      mod.ranks <- sapply(1:(q+1), function(s) NA)
     }
     
     if (mod == "SVD_Separate_Sources") {
@@ -6941,7 +6941,8 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       })
       
       # Save NAs for the other parameters
-      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+      imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
+      mod.ranks <- sapply(1:(q+1), function(s) NA)
     }
     
     if (mod == "UNIFAC") {
@@ -6964,7 +6965,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       mod.ranks <- c(joint.rank, indiv.rank)
       
       # Save NAs for the other parameters
-      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+      imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
     }
     
     if (mod == "Mean_Imputation") {
@@ -6983,7 +6984,8 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       imputed_values <- lapply(1:q, function(s) observed_data_impute[[s,1]][missing_obs_indices[[s,1]]])
       
       # Save NAs for the other parameters
-      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+      imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
+      mod.ranks <- sapply(1:(q+1), function(s) NA)
     }
     
     if (mod == "KNN_Combined_Sources") {
@@ -7001,7 +7003,8 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       })
       
       # Save NAs for the other parameters
-      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+      imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
+      mod.ranks <- sapply(1:(q+1), function(s) NA)
     }
     
     if (mod == "KNN_Separate_Sources") {
@@ -7016,7 +7019,8 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       })
       
       # Save NAs for the other parameters
-      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+      imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
+      mod.ranks <- sapply(1:(q+1), function(s) NA)
     }
     
     if (mod == "RF_Combined_Sources") {
@@ -7033,7 +7037,8 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       })
       
       # Save NAs for the other parameters
-      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
+      imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
+      mod.ranks <- sapply(1:(q+1), function(s) NA)
   
     }
     
@@ -7050,8 +7055,9 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       })
       
       # Save NAs for the other parameters
-      imputed_values_coverage <- imputed_values_ci_width <- mod.ranks <- sapply(1:q, function(s) NA)
-    }
+      imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
+      mod.ranks <- sapply(1:(q+1), function(s) NA)
+    } 
 
     if (mod == "BSFP") {
       
