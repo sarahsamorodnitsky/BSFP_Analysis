@@ -69,31 +69,35 @@ BPMF.entrywise <- UNIFAC.entrywise <- mean_imputation.entrywise <- svd_combined.
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   BPMF.entrywise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "entrywise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/BSFP", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
   BPMF.entrywise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "entrywise", prop_missing = prop_missing)  
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/BSFP")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  # Select all the files corresponding to current s2nX and s2nY 
-  files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX)]
-  all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-  combos[ind] <- paste(s2nX, "&", s2nY)
-  ind <- ind + 1
-}
-names(all_s2n) <- combos
-all(all_s2n)
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/BSFP", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
 
 # -----------------------------------------------------------------------------
 # UNIFAC
@@ -103,33 +107,35 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   UNIFAC.entrywise[[ind]] <- imputation_simulation(mod = "UNIFAC", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                    response = NULL, true_params, model_params = model_params, 
+#                                                    s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                    missing_data_type = "entrywise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/UNIFAC", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  UNIFAC.entrywise[[ind]] <- imputation_simulation(mod = "UNIFAC", p.vec = p.vec, n = n, ranks = ranks, 
-                                                   response = NULL, true_params, model_params = model_params, 
-                                                   s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                   missing_data_type = "entrywise", prop_missing = prop_missing)
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "UNIFAC", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/UNIFAC")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-all(all_s2n)
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/UNIFAC", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
 
 # -----------------------------------------------------------------------------
 # Mean Imputation
@@ -139,33 +145,36 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   mean_imputation.entrywise[[ind]] <- imputation_simulation(mod = "Mean_Imputation", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                             response = NULL, true_params, model_params = model_params, 
+#                                                             s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                             missing_data_type = "entrywise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/Mean_Imputation", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  mean_imputation.entrywise[[ind]] <- imputation_simulation(mod = "Mean_Imputation", p.vec = p.vec, n = n, ranks = ranks, 
-                                                            response = NULL, true_params, model_params = model_params, 
-                                                            s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                            missing_data_type = "entrywise", prop_missing = prop_missing)
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "Mean_Imputation", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/Mean_Imputation")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-all(all_s2n)
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/Mean_Imputation", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 
 # -----------------------------------------------------------------------------
 # SVD Combined Sources
@@ -175,33 +184,35 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                             response = NULL, true_params, model_params = model_params, 
+#                                                             s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                             missing_data_type = "entrywise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                            response = NULL, true_params, model_params = model_params, 
-                                                            s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                            missing_data_type = "entrywise", prop_missing = prop_missing)
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/SVD_Combined_Sources")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-all(all_s2n)
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
 
 # -----------------------------------------------------------------------------
 # SVD Separate Sources
@@ -211,34 +222,35 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                          response = NULL, true_params, model_params = model_params, 
+#                                                          s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                          missing_data_type = "entrywise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                         response = NULL, true_params, model_params = model_params, 
-                                                         s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/SVD_Separate_Sources")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-all(all_s2n)
-
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
 
 # -----------------------------------------------------------------------------
 # KNN Combined Sources
@@ -248,33 +260,35 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   knn_combined.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                          response = NULL, true_params, model_params = model_params, 
+#                                                          s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                          missing_data_type = "entrywise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  knn_combined.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                         response = NULL, true_params, model_params = model_params, 
-                                                         s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/KNN_Combined_Sources")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-all(all_s2n)
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
 
 # -----------------------------------------------------------------------------
 # KNN Separate Sources
@@ -284,33 +298,35 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   knn_separate.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                          response = NULL, true_params, model_params = model_params, 
+#                                                          s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                          missing_data_type = "entrywise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  knn_separate.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                         response = NULL, true_params, model_params = model_params, 
-                                                         s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/KNN_Combined_Sources")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-all(all_s2n)
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
 
 # -----------------------------------------------------------------------------
 # RF Combined Sources
@@ -320,33 +336,35 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   rf_combined.entrywise[[ind]] <- imputation_simulation(mod = "RF_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                         response = NULL, true_params, model_params = model_params, 
+#                                                         s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  rf_combined.entrywise[[ind]] <- imputation_simulation(mod = "RF_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                        response = NULL, true_params, model_params = model_params, 
-                                                        s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                        missing_data_type = "entrywise", prop_missing = prop_missing)
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "RF_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/RF_Combined_Sources")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) function(file) file[6] == s2nX))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-all(all_s2n)
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
 
 # -----------------------------------------------------------------------------
 # RF Separate Sources
@@ -356,33 +374,35 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   rf_separate.entrywise[[ind]] <- imputation_simulation(mod = "RF_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                          response = NULL, true_params, model_params = model_params, 
+#                                                          s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                          missing_data_type = "entrywise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
+
+# -------------------------------------
+# Columnwise missingness
+# -------------------------------------
+
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  rf_separate.entrywise[[ind]] <- imputation_simulation(mod = "RF_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                         response = NULL, true_params, model_params = model_params, 
-                                                         s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "RF_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/RF_Separate_Sources")
-all_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) function(file) file[6] == s2nX))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-all(all_s2n)
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
 
 
 
