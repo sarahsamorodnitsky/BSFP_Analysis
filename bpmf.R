@@ -6845,7 +6845,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
   library(r.jive)
   
   # The model options
-  models <- c("SVDmiss", "UNIFAC", "BSFP", "Mean_Imputation", "KNN", "RF")
+  models <- c("Mean_Imputation", "UNIFAC", "BSFP", "SVD_Combined_Sources", "SVD_Separate_Sources", "KNN_Combined_Sources", "KNN_Separate_Sources", "RF_Combined_Sources", "RF_Separate_Sources")
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
