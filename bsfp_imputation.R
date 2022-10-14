@@ -55,6 +55,12 @@ prop_missing <- 0.1
 # Model simulation parameters 
 n_clust <- 10
 
+# Initialize lists to store the results
+BPMF.entrywise <- UNIFAC.entrywise <- mean_imputation.entrywise <- svd_combined.entrywise <-
+  svd_combined.entrywise <- knn_combined.entrywise <- knn_separate.entrywise <- 
+  rf_combined.entrywise <- rf_separate.entrywise <-
+  lapply(1:(length(s2nX.list)), function(rep) list())
+
 # -----------------------------------------------------------------------------
 # BPMF (Data Mode) 
 # -----------------------------------------------------------------------------
@@ -63,7 +69,6 @@ n_clust <- 10
 # Entrywise missingness
 # -------------------------------------
 
-BPMF.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
@@ -98,7 +103,6 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
-UNIFAC.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
@@ -135,7 +139,6 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
-mean_imputation.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
@@ -172,7 +175,6 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
-svd_combined.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
@@ -209,7 +211,6 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
-svd_combined.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
@@ -247,7 +248,6 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
-knn_combined.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
@@ -284,7 +284,6 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
-knn_separate.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
@@ -321,7 +320,6 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
-rf_combined.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
@@ -358,7 +356,6 @@ all(all_s2n)
 # Entrywise missingness
 # -------------------------------------
 
-rf_separate.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
 
 for (s2nX in s2nX.list) {
