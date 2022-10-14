@@ -35,7 +35,7 @@ nsample <- 2000
 nsim <- 100
 
 # Signal-to-noise ratios to consider
-s2nX.list <- s2nY.list <- c(0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75)
+s2nX.list <- c(0.9/0.1, 0.75/0.25, 0.5/0.5, 0.25/0.75)
 
 # The parameters for the Bayesian model
 joint_var_no_y <- 1/(sqrt(n) + sqrt(sum(p.vec))) # Number of samples and number of features across all sources and Y
@@ -67,13 +67,11 @@ BPMF.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    BPMF.entrywise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
-                                                   response = NULL, true_params, model_params = model_params, 
-                                                   s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                   missing_data_type = "entrywise", prop_missing = prop_missing)  
-    ind <- ind + 1
-  }
+  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
+                                                 response = NULL, true_params, model_params = model_params, 
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                 missing_data_type = "entrywise", prop_missing = prop_missing)  
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -83,13 +81,11 @@ all_files <- list.files("~/BayesianPMF/03Simulations/Imputation/BSFP")
 all_files_split <- strsplit(all_files, split = "_")
 ind <- 1
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
+  # Select all the files corresponding to current s2nX and s2nY 
+  files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX)]
+  all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
+  combos[ind] <- paste(s2nX, "&", s2nY)
+  ind <- ind + 1
 }
 names(all_s2n) <- combos
 all(all_s2n)
@@ -106,13 +102,11 @@ UNIFAC.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(r
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    UNIFAC.entrywise[[ind]] <- imputation_simulation(mod = "UNIFAC", p.vec = p.vec, n = n, ranks = ranks, 
-                                                     response = NULL, true_params, model_params = model_params, 
-                                                     s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                     missing_data_type = "entrywise", prop_missing = prop_missing)
-    ind <- ind + 1
-  }
+  UNIFAC.entrywise[[ind]] <- imputation_simulation(mod = "UNIFAC", p.vec = p.vec, n = n, ranks = ranks, 
+                                                   response = NULL, true_params, model_params = model_params, 
+                                                   s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                   missing_data_type = "entrywise", prop_missing = prop_missing)
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -124,7 +118,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -145,13 +139,11 @@ mean_imputation.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), f
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    mean_imputation.entrywise[[ind]] <- imputation_simulation(mod = "Mean_Imputation", p.vec = p.vec, n = n, ranks = ranks, 
-                                                              response = NULL, true_params, model_params = model_params, 
-                                                              s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                              missing_data_type = "entrywise", prop_missing = prop_missing)
-    ind <- ind + 1
-  }
+  mean_imputation.entrywise[[ind]] <- imputation_simulation(mod = "Mean_Imputation", p.vec = p.vec, n = n, ranks = ranks, 
+                                                            response = NULL, true_params, model_params = model_params, 
+                                                            s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                            missing_data_type = "entrywise", prop_missing = prop_missing)
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -163,7 +155,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -184,13 +176,11 @@ svd_combined.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), func
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                              response = NULL, true_params, model_params = model_params, 
-                                                              s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                              missing_data_type = "entrywise", prop_missing = prop_missing)
-    ind <- ind + 1
-  }
+  svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                            response = NULL, true_params, model_params = model_params, 
+                                                            s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                            missing_data_type = "entrywise", prop_missing = prop_missing)
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -202,7 +192,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -223,13 +213,11 @@ svd_combined.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), func
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                           response = NULL, true_params, model_params = model_params, 
-                                                           s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                           missing_data_type = "entrywise", prop_missing = prop_missing)
-    ind <- ind + 1
-  }
+  svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                         response = NULL, true_params, model_params = model_params, 
+                                                         s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -241,7 +229,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -263,13 +251,11 @@ knn_combined.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), func
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    knn_combined.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                           response = NULL, true_params, model_params = model_params, 
-                                                           s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                           missing_data_type = "entrywise", prop_missing = prop_missing)
-    ind <- ind + 1
-  }
+  knn_combined.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                         response = NULL, true_params, model_params = model_params, 
+                                                         s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -281,7 +267,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -302,13 +288,11 @@ knn_separate.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), func
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    knn_separate.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                           response = NULL, true_params, model_params = model_params, 
-                                                           s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                           missing_data_type = "entrywise", prop_missing = prop_missing)
-    ind <- ind + 1
-  }
+  knn_separate.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                         response = NULL, true_params, model_params = model_params, 
+                                                         s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -320,7 +304,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) file[6] == s2nX))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -341,13 +325,11 @@ rf_combined.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), funct
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    rf_combined.entrywise[[ind]] <- imputation_simulation(mod = "RF_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                          response = NULL, true_params, model_params = model_params, 
-                                                          s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                          missing_data_type = "entrywise", prop_missing = prop_missing)
-    ind <- ind + 1
-  }
+  rf_combined.entrywise[[ind]] <- imputation_simulation(mod = "RF_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                        response = NULL, true_params, model_params = model_params, 
+                                                        s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                        missing_data_type = "entrywise", prop_missing = prop_missing)
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -359,7 +341,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) function(file) file[6] == s2nX))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
@@ -380,13 +362,11 @@ rf_separate.entrywise <- lapply(1:(length(s2nX.list) * length(s2nY.list)), funct
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    rf_separate.entrywise[[ind]] <- imputation_simulation(mod = "RF_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                           response = NULL, true_params, model_params = model_params, 
-                                                           s2nX = s2nX, s2nY = s2nY, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                           missing_data_type = "entrywise", prop_missing = prop_missing)
-    ind <- ind + 1
-  }
+  rf_separate.entrywise[[ind]] <- imputation_simulation(mod = "RF_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+                                                         response = NULL, true_params, model_params = model_params, 
+                                                         s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+                                                         missing_data_type = "entrywise", prop_missing = prop_missing)
+  ind <- ind + 1
 }
 
 # Check that all conditions ran
@@ -398,7 +378,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) (file[6] == s2nX) & (file[8] == s2nY))]
+    files_for_s2nX_s2nY <- all_files[sapply(all_files_split, function(file) function(file) file[6] == s2nX))]
     all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
     combos[ind] <- paste(s2nX, "&", s2nY)
     ind <- ind + 1
