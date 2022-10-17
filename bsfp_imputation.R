@@ -338,7 +338,7 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  SVD_separate.MNAR[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+  svd_separate.MNAR[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
                                                  missing_data_type = "MNAR", prop_missing = prop_missing)  
