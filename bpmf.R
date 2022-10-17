@@ -4205,7 +4205,7 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
 impute.BIDIFAC=function(data, 
                         rmt=T, sigma=NULL,
                         pbar=TRUE,
-                        start=NULL, max.iter.impute=20, 
+                        start=NULL, max.iter.impute=100, 
                         eps.impute=1e-3, scale_back=TRUE,...){
   dim.data=dim(data)
   p=dim.data[1]; q=dim.data[2]
