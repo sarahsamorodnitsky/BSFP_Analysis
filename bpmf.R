@@ -7703,8 +7703,8 @@ check_all_sims <- function(path, s2nX, s2nY = NULL, nsim, split = "_", missing_d
   
   # Subset to just files for specific type of missingness
   if (!is.null(missing_data_type)) {
-    all_files_sub <- all_files[grepl("entrywise", all_files)]
-    all_files_split_sub <- all_files_split[grepl("entrywise", all_files)]
+    all_files_sub <- all_files[grepl(missing_data_type, all_files)]
+    all_files_split_sub <- all_files_split[grepl(missing_data_type, all_files)]
   }
   
   if (is.null(missing_data_type)) {
