@@ -601,7 +601,7 @@ dev.off()
 # -----------------------------------------------------------------------------
 
 # Load in the aligned results --
-load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered_V2.rda", verbose = TRUE)
+load("/home/samorodnitsky/BayesianPMF/04DataApplication/BPMF/Training_Fit/FEV1pp_Joint_Individual_Structures_Factor_Switching_Ordered_V2_NewPivot_Burnin.rda", verbose = TRUE)
 
 # Load in the original results --
 load(paste0(results_wd, "BPMF/Training_Fit/training_data_fit_V2.rda"), verbose = TRUE)
@@ -889,8 +889,16 @@ individual_contribution_to_fev1pp_by_sample <- lapply(1:q, function(s) {
   })
 })
 
+# Calculate the overall contribution of the factors in explaining FEV1pp
+overall_contribution_to_fev1pp <- sapply(1:nsample_after_burnin, function(iter) {
+    fev1pp_training_fit_nonsparse_V2$beta.draw[iters_burnin][[iter]][[1,1]][1,] +  # Intercept
+    joint.scores.final[[iter]] %*% joint.betas.final[[iter]] +                     # Joint
+    individual.scores.final[[1]][[iter]] %*% individual.betas.final[[1]][[iter]] + # Metabolome
+    individual.scores.final[[2]][[iter]] %*% individual.betas.final[[2]][[iter]]   # Proteome
+})
+
 # Save the results
-save(joint_contribution_to_fev1pp_by_sample, individual_contribution_to_fev1pp_by_sample,
+save(joint_contribution_to_fev1pp_by_sample, individual_contribution_to_fev1pp_by_sample, overall_contribution_to_fev1pp,
      file = "~/BayesianPMF/04DataApplication/BPMF/Exploring_Factors/V2/Aligned/NewPivot_Burnin/Structure_Contribution_to_FEV1pp_NewPivot_Burnin.rda")
 
 
