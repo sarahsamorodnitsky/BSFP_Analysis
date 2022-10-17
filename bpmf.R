@@ -4234,7 +4234,7 @@ impute.BIDIFAC=function(data,
   while (bool2){
     if (pbar){  setTxtProgressBar(pb, count2)  }
     impute.vec.old=impute.vec
-    fit=BIDIFAC(data, rmt=F, sigma=matrix(1,p,q),start=start, pbar = F, ...)
+    fit=BIDIFAC(data, rmt=F, sigma=matrix(1,p,q),start=start, pbar = F)
     
     start=list(
       data.rearrange(fit$G)$out, data.rearrange(fit$R)$out,
