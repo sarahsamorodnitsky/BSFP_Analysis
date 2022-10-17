@@ -57,8 +57,18 @@ n_clust <- 10
 
 # Initialize lists to store the results
 BPMF.entrywise <- UNIFAC.entrywise <- mean_imputation.entrywise <- svd_combined.entrywise <-
-  svd_combined.entrywise <- knn_combined.entrywise <- knn_separate.entrywise <- 
+  svd_separate.entrywise <- knn_combined.entrywise <- knn_separate.entrywise <- 
   rf_combined.entrywise <- rf_separate.entrywise <-
+  lapply(1:(length(s2nX.list)), function(rep) list())
+
+BPMF.columnwise <- UNIFAC.columnwise <- mean_imputation.columnwise <- svd_combined.columnwise <-
+  svd_separate.columnwise <- knn_combined.columnwise <- knn_separate.columnwise <- 
+  rf_combined.columnwise <- rf_separate.columnwise <-
+  lapply(1:(length(s2nX.list)), function(rep) list())
+
+BPMF.MNAR <- UNIFAC.MNAR <- mean_imputation.MNAR <- svd_combined.MNAR <-
+  svd_separate.MNAR <- knn_combined.MNAR <- knn_separate.MNAR <- 
+  rf_combined.MNAR <- rf_separate.MNAR <-
   lapply(1:(length(s2nX.list)), function(rep) list())
 
 # -----------------------------------------------------------------------------
@@ -82,22 +92,39 @@ BPMF.entrywise <- UNIFAC.entrywise <- mean_imputation.entrywise <- svd_combined.
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/BSFP", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   BPMF.columnwise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/BSFP", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
-# Columnwise missingness
+# MNAR missingness
 # -------------------------------------
 
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
+  BPMF.MNAR[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/BSFP", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/BSFP", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
 
 # -----------------------------------------------------------------------------
 # UNIFAC
@@ -120,22 +147,39 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/UNIFAC", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   UNIFAC.columnwise[[ind]] <- imputation_simulation(mod = "UNIFAC", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/UNIFAC", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
-# Columnwise missingness
+# MNAR missingness
 # -------------------------------------
 
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "UNIFAC", p.vec = p.vec, n = n, ranks = ranks, 
+  UNIFAC.MNAR[[ind]] <- imputation_simulation(mod = "UNIFAC", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/UNIFAC", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/UNIFAC", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
 
 # -----------------------------------------------------------------------------
 # Mean Imputation
@@ -158,6 +202,23 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/Mean_Imputation", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   mean_imputation.columnwise[[ind]] <- imputation_simulation(mod = "Mean_Imputation", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/Mean_Imputation", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
 # Columnwise missingness
 # -------------------------------------
@@ -165,15 +226,15 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "Mean_Imputation", p.vec = p.vec, n = n, ranks = ranks, 
+  mean_imputation.MNAR[[ind]] <- imputation_simulation(mod = "Mean_Imputation", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/Mean_Imputation", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/Mean_Imputation", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
 
 
 # -----------------------------------------------------------------------------
@@ -197,22 +258,40 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   BPMF.columnwise[[ind]] <- imputation_simulation(mod = "SVD_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
-# Columnwise missingness
+# MNAR missingness
 # -------------------------------------
 
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+  svd_combined.MNAR[[ind]] <- imputation_simulation(mod = "SVD_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
+
 
 # -----------------------------------------------------------------------------
 # SVD Separate Sources
@@ -225,7 +304,7 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # ind <- 1
 # 
 # for (s2nX in s2nX.list) {
-#   svd_combined.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#   svd_separate.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
 #                                                          response = NULL, true_params, model_params = model_params, 
 #                                                          s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
 #                                                          missing_data_type = "entrywise", prop_missing = prop_missing)
@@ -235,22 +314,40 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   svd_separate.columnwise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
-# Columnwise missingness
+# MNAR missingness
 # -------------------------------------
 
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+  SVD_separate.MNAR[[ind]] <- imputation_simulation(mod = "SVD_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/SVD_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
+
 
 # -----------------------------------------------------------------------------
 # KNN Combined Sources
@@ -273,22 +370,40 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   knn_combined.columnwise[[ind]] <- imputation_simulation(mod = "KNN_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks,
+#                                                  response = NULL, true_params, model_params = model_params,
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust,
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
-# Columnwise missingness
+# MNAR missingness
 # -------------------------------------
 
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
-                                                 response = NULL, true_params, model_params = model_params, 
-                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+  knn_combined.MNAR[[ind]] <- imputation_simulation(mod = "KNN_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks,
+                                                 response = NULL, true_params, model_params = model_params,
+                                                 s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust,
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
+
 
 # -----------------------------------------------------------------------------
 # KNN Separate Sources
@@ -311,22 +426,40 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   KNN_separate.columnwise[[ind]] <- imputation_simulation(mod = "KNN_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
-# Columnwise missingness
+# MNAR missingness
 # -------------------------------------
 
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "KNN_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+  knn_separate.MNAR[[ind]] <- imputation_simulation(mod = "KNN_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/KNN_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
+
 
 # -----------------------------------------------------------------------------
 # RF Combined Sources
@@ -349,22 +482,40 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   rf_combined.columnwise[[ind]] <- imputation_simulation(mod = "RF_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
-# Columnwise missingness
+# MNAR missingness
 # -------------------------------------
 
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "RF_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+  rf_combined.MNAR[[ind]] <- imputation_simulation(mod = "RF_Combined_Sources", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Combined_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
+
 
 # -----------------------------------------------------------------------------
 # RF Separate Sources
@@ -387,23 +538,39 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 # # Check that all conditions ran
 # all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "entrywise")))
 
+# # -------------------------------------
+# # Columnwise missingness
+# # -------------------------------------
+# 
+# ind <- 1
+# 
+# for (s2nX in s2nX.list) {
+#   rf_separate.columnwise[[ind]] <- imputation_simulation(mod = "RF_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+#                                                  response = NULL, true_params, model_params = model_params, 
+#                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
+#                                                  missing_data_type = "columnwise", prop_missing = prop_missing)  
+#   ind <- ind + 1
+# }
+# 
+# # Check that all conditions ran
+# all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
+
 # -------------------------------------
-# Columnwise missingness
+# MNAR missingness
 # -------------------------------------
 
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "RF_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
+  rf_separate.MNAR[[ind]] <- imputation_simulation(mod = "RF_Separate_Sources", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
-                                                 missing_data_type = "columnwise", prop_missing = prop_missing)  
+                                                 missing_data_type = "MNAR", prop_missing = prop_missing)  
   ind <- ind + 1
 }
 
 # Check that all conditions ran
-all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "columnwise")))
-
+all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simulations/Imputation/RF_Separate_Sources", s2nX = s2nX, nsim = nsim, missing_data_type = "MNAR")))
 
 
 
