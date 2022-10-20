@@ -1113,11 +1113,35 @@ run_model_with_cv(mod = "sJIVE", hiv_copd_data = hiv_copd_data, outcome = fev1pp
                   model_params = model_params, nsample = nsample)
 
 # -------------------------------------
+# Running LASSO with cross validation on combined data
+# -------------------------------------
+
+run_model_with_cv(mod = "LASSO_Combined_Sources", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = nsample)
+
+# -------------------------------------
+# Running LASSO with cross validation on metabolites only
+# -------------------------------------
+
+run_model_with_cv(mod = "LASSO_Metabolite_Only", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = nsample)
+
+# -------------------------------------
+# Running LASSO with cross validation on proteins only
+# -------------------------------------
+
+run_model_with_cv(mod = "LASSO_Protein_Only", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = nsample)
+
+# -------------------------------------
 # Cross-Validated Model Fit Results
 # -------------------------------------
 
 # Create a vector with model names
-models <- c("BPMF", "BIDIFAC", "JIVE", "MOFA", "sJIVE")
+models <- c("BPMF", "BIDIFAC", "JIVE", "MOFA", "sJIVE", "LASSO_Combined_Sources", "LASSO_Metabolite_Only", "LASSO_Protein_Only")
 
 # Create a vector of cross-validated FEV1pp results for each model
 fev1pp_cv <- lapply(models, function(mod) c())
@@ -1144,9 +1168,18 @@ for (mod in models) {
     if (mod == "sJIVE") {
       load(paste0(results_wd, "sJIVE/Cross_Validation/FEV1pp_CV_sJIVE_Pair_", pair, ".rda"), verbose = TRUE)
     }
+    if (mod == "LASSO_Combined_Sources") {
+      load(paste0(results_wd, "LASSO_Combined_Sources/Cross_Validation/FEV1pp_CV_LASSO_Combined_Sources_Pair_", pair, ".rda"), verbose = TRUE)
+    }
+    if (mod == "LASSO_Metabolite_Only") {
+      load(paste0(results_wd, "LASSO_Metabolite_Only/Cross_Validation/FEV1pp_CV_LASSO_Metabolite_Only_Pair_", pair, ".rda"), verbose = TRUE)
+    }
+    if (mod == "LASSO_Protein_Only") {
+      load(paste0(results_wd, "LASSO_Protein_Only/Cross_Validation/FEV1pp_CV_LASSO_Protein_Only_Pair_", pair, ".rda"), verbose = TRUE)
+    }
     
     # Combine the samples
-    if (mod != "sJIVE") {
+    if (mod != "sJIVE" & !grepl("LASSO", mod)) {
       samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
       
       # Take a burn-in
@@ -1160,7 +1193,7 @@ for (mod in models) {
       fev1pp_cv_ci[[mod]][pair+1,] <- c(quantile(samps_burnin[2,], 0.025), quantile(samps_burnin[2,], 0.975))
     }
     
-    if (mod == "sJIVE") {
+    if (mod == "sJIVE" | grepl("LASSO", mod)) {
       # Save in the vector
       fev1pp_cv[[mod]][pair:(pair+1)] <- Ym.draw_pair
     }
@@ -1182,6 +1215,9 @@ cor.test(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]])) # BIDIFAC
 cor.test(fev1pp_cv$sJIVE, c(fev1pp[[1,1]])) # sJIVE
 cor.test(fev1pp_cv$JIVE, c(fev1pp[[1,1]])) # JIVE
 cor.test(fev1pp_cv$MOFA, c(fev1pp[[1,1]])) # MOFA
+cor.test(fev1pp_cv$LASSO_Combined_Sources, c(fev1pp[[1,1]])) # LASSO Combined Sources
+cor.test(fev1pp_cv$LASSO_Metabolite_Only, c(fev1pp[[1,1]])) # LASSO Combined Sources
+cor.test(fev1pp_cv$LASSO_Protein_Only, c(fev1pp[[1,1]])) # LASSO Combined Sources
 
 # Compare the coverage rates for FEV1pp
 mean(sapply(1:n, function(i) fev1pp_cv_ci$BPMF[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$BPMF[i,2])) # BPMF
@@ -1191,6 +1227,20 @@ mean(sapply(1:n, function(i) fev1pp_cv_ci$MOFA[i,1] <= fev1pp[[1,1]][i] & fev1pp
 
 # Save the imputed values and credible intervals to plot locally
 save(fev1pp_cv, fev1pp_cv_ci, file = "~/BayesianPMF/04DataApplication/FEV1pp_EY_CV.rda")
+
+# Create table
+library(xtable)
+
+cv_results <- data.frame(Model = character(), Correlation = numeric(), PValue = numeric())
+
+for (mod in models) {
+  res <- cor.test(fev1pp_cv[[mod]], c(fev1pp[[1,1]]))
+  cv_results[nrow(cv_results) + 1,] <- data.frame(mod, res$estimate, res$p.value)
+}
+
+cv_results[order(cv_results$Correlation, decreasing = TRUE),] %>%
+  xtable(digits = 4) %>%
+    print.xtable(include.rownames=FALSE)
 
 # -----------------------------------------------------------------------------
 # Missing data imputation comparing several methods
