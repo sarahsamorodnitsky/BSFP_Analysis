@@ -339,7 +339,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   if (missingness_in_data) {
     Xm0 <- matrix(list(), ncol = 1, nrow = q)
     for (s in 1:q) {
-      Xm0[[s,1]] <- rep(0, length(missing_obs[s]))
+      Xm0[[s,1]] <- rank_init$X[[s,1]][missing_obs[[s]]]
     }
   }
   
@@ -7754,7 +7754,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive", "glmnet")
   
   # Load in the full training data fit
   results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/", mod, "_training_data_fit.rda") 
@@ -7991,6 +7991,113 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       # Remove large objects
       rm(mod.out, hiv_copd_data_list_training, hiv_copd_data_list_test)
     }
+    stopCluster(cl)
+  }
+  
+  # For LASSO
+  if (mod == "LASSO_Combined_Sources") {
+    
+    # Combine the datasets together
+    hiv_copd_data_combined <- t(data.rearrange(hiv_copd_data)$out)
+    
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Find optimal penalty
+      cv.fit <- cv.glmnet(x = hiv_copd_data_combined[-c(pair, pair+1),],
+                          y = outcome[[1,1]][-c(pair, pair+1)],
+                          family = "gaussian",
+                          alpha = 1)
+      
+      # Save optimal penalty
+      lambda.min <- cv.fit$lambda.min
+      
+      # Refit model with penalty
+      fit <- glmnet(x = hiv_copd_data_combined[-c(pair, pair+1),],
+                    y = outcome[[1,1]][-c(pair, pair+1)],
+                    family = "gaussian", 
+                    alpha = 1,
+                    lambda = lambda.min)
+      
+      # Save the predicted outcomes
+      Ym.draw_pair <- predict.glmnet(fit, newx = hiv_copd_data_combined[c(pair, pair+1),])
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd, mod,"/Cross_Validation/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+    }
+    stopCluster(cl)
+    
+  }
+  
+  if (mod == "LASSO_Metabolite_Only") {
+    
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Saving just the metabolite data
+      hiv_copd_metabolites <- t(hiv_copd_data[[1,1]])
+      
+      # Find optimal penalty
+      cv.fit <- cv.glmnet(x = hiv_copd_metabolites[-c(pair, pair+1),],
+                          y = outcome[[1,1]][-c(pair, pair+1)],
+                          family = "gaussian",
+                          alpha = 1)
+      
+      # Save optimal penalty
+      lambda.min <- cv.fit$lambda.min
+      
+      # Refit model with penalty
+      fit <- glmnet(x = hiv_copd_metabolites[-c(pair, pair+1),],
+                    y = outcome[[1,1]][-c(pair, pair+1)],
+                    family = "gaussian", 
+                    alpha = 1,
+                    lambda = lambda.min)
+      
+      # Save the predicted outcomes
+      Ym.draw_pair <- predict.glmnet(fit, newx = hiv_copd_metabolites[c(pair, pair+1),])
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd, mod,"/Cross_Validation/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+    }
+    stopCluster(cl)
+    
+  }
+  
+  if (mod == "LASSO_Protein_Only") {
+    
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Saving just the metabolite data
+      hiv_copd_proteins <- t(hiv_copd_data[[2,1]])
+      
+      # Find optimal penalty
+      cv.fit <- cv.glmnet(x = hiv_copd_proteins[-c(pair, pair+1),],
+                          y = outcome[[1,1]][-c(pair, pair+1)],
+                          family = "gaussian",
+                          alpha = 1)
+      
+      # Save optimal penalty
+      lambda.min <- cv.fit$lambda.min
+      
+      # Refit model with penalty
+      fit <- glmnet(x = hiv_copd_proteins[-c(pair, pair+1),],
+                    y = outcome[[1,1]][-c(pair, pair+1)],
+                    family = "gaussian", 
+                    alpha = 1,
+                    lambda = lambda.min)
+      
+      # Save the predicted outcomes
+      Ym.draw_pair <- predict.glmnet(fit, newx = hiv_copd_proteins[c(pair, pair+1),])
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd, mod,"/Cross_Validation/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+    }
+    stopCluster(cl)
+    
   }
 }
 
