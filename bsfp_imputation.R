@@ -14,7 +14,7 @@ source("~/BSFP/bpmf.R")
 q <- 2
 
 # Joint and individual ranks (ranks[1] = joint, ranks[2:r_total] = individual)
-ranks <- c(5,5,5)
+ranks <- c(1,1,1)
 names(ranks) <- c("joint", paste("indiv", 1:q))
 
 # Number of predictors for each source
