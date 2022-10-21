@@ -4087,7 +4087,8 @@ BIDIFAC=function(data,rmt=T, sigma=NULL,
                  start=NULL, out=FALSE,
                  eps=1e-3, max.iter=1000, pbar=TRUE, seed=NULL, scale_back = TRUE, ...){
   if (!is.null(seed)){set.seed(seed)}
-  if (!rmt & class(sigma)!="matrix") stop("sigma must be a matrix.")
+  # if (!rmt & class(sigma)!="matrix") stop("sigma must be a matrix.")
+  if (!rmt & !("matrix" %in% class(sigma))) stop("sigma must be a matrix.")
   
   fit=data.rearrange(data, rmt, sigma)
   sigma.mat=fit$sigma.mat
@@ -7073,20 +7074,20 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       )
       
       # Add a burn-in to the imputed values
-      imputed_values_burnin <- lapply(1:q, function(s) {
-        lapply(burnin:nsample, function(iter) {
+      imputed_values_list <- lapply(1:q, function(s) {
+        lapply(1:nsample, function(iter) {
           matrix(mod.impute$Xm.draw[[iter]][[s,1]], nrow = 1)
         })
       })
       
       # Create a matrix of imputed values
-      imputed_values_burnin_mat <- lapply(1:q, function(s) {
-        do.call(rbind, imputed_values_burnin[[s]])
+      imputed_values_list_mat <- lapply(1:q, function(s) {
+        do.call(rbind, imputed_values_list[[s]])
       })
       
       # Calculate credible intervals for each imputed values
       imputed_values_cis <- lapply(1:q, function(s) {
-        apply(imputed_values_burnin_mat[[s]], 2, function(col) {
+        apply(imputed_values_list_mat[[s]], 2, function(col) {
           c(quantile(col, 0.025), quantile(col, 0.975))
         })
       })
@@ -7099,7 +7100,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       })
       
       # Calculate the posterior mean of the imputed values
-      imputed_values <- lapply(1:q, function(s) colMeans(imputed_values_burnin_mat[[s]]))
+      imputed_values <- lapply(1:q, function(s) colMeans(imputed_values_list_mat[[s]]))
       
       # Calculate the CI width
       imputed_values_ci_width <- sapply(1:q, function(s) mean(abs(imputed_values_cis[[s]][2,] - imputed_values_cis[[s]][1,])))
@@ -8278,103 +8279,6 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
     }
     
-    if (mod == "BPCA_Combined_Sources") {
-      
-      # Concatenate the two sources of data together
-      hiv_copd_data_missing_combined <- do.call(rbind, lapply(1:q, function(s) hiv_copd_data_missing[[s,1]]))
-      
-      # Impute missing values using full ranks from Bayesian PMF
-      mod.pca <- MIPCA(hiv_copd_data_missing_combined, ncp = 4, scale = FALSE, method.mi = "Bayes")
-      mod.impute <- mod.pca$res.imputePCA
-        
-      # Save the imputed results
-      metabolome_impute <- mod.impute[p.ind[[1]],][metabolome_missing]
-      proteome_impute <- mod.impute[p.ind[[2]],][proteome_missing]
-      
-      # Save the uncertainty from the Bayes method
-      mod.uncertainty <- lapply(1:q, function(s) {
-        if (s == 1) {
-          do.call(rbind, lapply(1:100, function(iter) {
-            as.matrix(mod.pca$res.MI[[iter]][p.ind[[s]],])[metabolome_missing]
-          }))
-        } else {
-          do.call(rbind, lapply(1:100, function(iter) {
-            as.matrix(mod.pca$res.MI[[iter]][p.ind[[s]],])[proteome_missing]
-          }))
-        }
-      })
-      
-      # Save the credible intervals
-      metabolome_cis <- apply(mod.uncertainty[[1]], 2, function(col) {
-        c(quantile(col, 0.025), quantile(col, 0.975))
-      })
-      
-      proteome_cis <- apply(mod.uncertainty[[2]], 2, function(col) {
-        c(quantile(col, 0.025), quantile(col, 0.975))
-      })
-      
-      # Calculate the coverage
-      metabolome_coverage <- mean(sapply(1:length(metabolome_missing), function(i) {
-        metabolome_cis[1,i] <= metabolome_missing_samples[i] & metabolome_missing_samples[i] <= metabolome_cis[2,i]
-      }))
-      proteome_coverage <- mean(sapply(1:length(proteome_missing), function(i) {
-        proteome_cis[1,i] <= proteome_missing_samples[i] & proteome_missing_samples[i] <= proteome_cis[2,i]
-      }))
-      
-      # Calculate the CI width
-      metabolome_ci_width <- mean(abs(metabolome_cis[2,] - metabolome_cis[1,]))
-      proteome_ci_width <- mean(abs(proteome_cis[2,] - proteome_cis[1,]))
-      
-    }
-    
-    if (mod == "BPCA_Separate_Sources") {
-      
-      # Impute missing values using full ranks from Bayesian PMF
-      mod.pca <- lapply(1:q, function(s) {
-        MIPCA(hiv_copd_data_missing[[s]], ncp = ranks[s+1], scale = FALSE, method.mi = "Bayes")
-      })
-      mod.impute <- lapply(1:q, function(s)  mod.pca[[s]]$res.imputePCA)
-
-      # Save the imputed results
-      metabolome_impute <- mod.impute[[1]][metabolome_missing]
-      proteome_impute <- mod.impute[[2]][proteome_missing]
-      
-      # Save the uncertainty from the Bayes method
-      mod.uncertainty <- lapply(1:q, function(s) {
-        if (s == 1) {
-          do.call(rbind, lapply(1:100, function(iter) {
-            as.matrix(mod.pca[[s]]$res.MI[[iter]])[metabolome_missing]
-          }))
-        } else {
-          do.call(rbind, lapply(1:100, function(iter) {
-            as.matrix(mod.pca[[s]]$res.MI[[iter]])[proteome_missing]
-          }))
-        }
-      })
-      
-      # Save the credible intervals
-      metabolome_cis <- apply(mod.uncertainty[[1]], 2, function(col) {
-        c(quantile(col, 0.025), quantile(col, 0.975))
-      })
-      
-      proteome_cis <- apply(mod.uncertainty[[2]], 2, function(col) {
-        c(quantile(col, 0.025), quantile(col, 0.975))
-      })
-      
-      # Calculate the coverage
-      metabolome_coverage <- mean(sapply(1:length(metabolome_missing), function(i) {
-        metabolome_cis[1,i] <= metabolome_missing_samples[i] & metabolome_missing_samples[i] <= metabolome_cis[2,i]
-      }))
-      proteome_coverage <- mean(sapply(1:length(proteome_missing), function(i) {
-        proteome_cis[1,i] <= proteome_missing_samples[i] & proteome_missing_samples[i] <= proteome_cis[2,i]
-      }))
-      
-      # Calculate the CI width
-      metabolome_ci_width <- mean(abs(metabolome_cis[2,] - metabolome_cis[1,]))
-      proteome_ci_width <- mean(abs(proteome_cis[2,] - proteome_cis[1,]))
-      
-    }
-    
     if (mod == "Mean_Imputation") {
       
       # Imputing the missing values based on the row means
@@ -8393,6 +8297,14 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       # Save NAs for the other parameters
       metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
     }
+    
+    if (mod == "KNN_Combined_Sources") {}
+    
+    if (mod == "KNN_Separate_Sources") {}
+    
+    if (mod == "RF_Combined_Sources") {}
+    
+    if (mod == "RF_Separate_Sources") {}
     
     # Calculate MSE with posterior mean and true observed values
     metabolome_mse <- frob(metabolome_missing_samples - metabolome_impute)/frob(metabolome_missing_samples)
