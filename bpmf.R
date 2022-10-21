@@ -8102,8 +8102,8 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   }
 }
 
-# Imputing missing data 
-model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_params = NULL, nsample = NULL, nsim, prop_missing, entrywise = TRUE, ranks = NULL, p.vec = NULL, results_wd = "~/BayesianPMF/04DataApplication/") {
+# Imputing missing data in the HIV-COPD application
+model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_params = NULL, nsample = NULL, nsim, prop_missing, entrywise = TRUE, ranks = NULL, results_wd = "~/BayesianPMF/04DataApplication/") {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -8131,13 +8131,16 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
   funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC", "impute.BIDIFAC", "fill.matrix",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
-  packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix", "monomvn", "r.jive", "pcaMethods")
+  packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix", "missForest", "VIM")
   hiv_copd_imputation <- foreach(sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% { 
     
     q <- nrow(hiv_copd_data)
     
     # Set a seed
     set.seed(sim_iter)
+    
+    # Save the number of features in each source
+    p.vec <- sapply(1:q, function(s) nrow(hiv_copd_data[[s,1]]))
     
     # Indices for the features in each source
     p.ind <- lapply(1:q, function(s) {
@@ -8183,6 +8186,9 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     # Save the missing samples
     metabolome_missing_samples <- hiv_copd_data[[1,1]][metabolome_missing]
     proteome_missing_samples <- hiv_copd_data[[2,1]][proteome_missing]
+    
+    # Combine the sources together if needed
+    hiv_copd_data_missing_combined <- do.call(rbind, lapply(1:q, function(s) hiv_copd_data_missing[[s,1]]))
     
     # Running the chosen model --
     
@@ -8252,9 +8258,6 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     
     if (mod == "SVD_Combined_Sources") {
       
-      # Combine the sources together
-      hiv_copd_data_missing_combined <- do.call(rbind, lapply(1:q, function(s) hiv_copd_data_missing[[s,1]]))
-      
       # Impute the missing data using SVDmiss with given number of ranks
       mod.impute <- SVDmiss(hiv_copd_data_missing_combined, niter = 50)
       
@@ -8298,13 +8301,62 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
     }
     
-    if (mod == "KNN_Combined_Sources") {}
+    if (mod == "KNN_Combined_Sources") {
+
+      # Impute the missing data using KNN with default parameters
+      mod.impute.list <- kNN(t(hiv_copd_data_missing_combined))
+      mod.impute <- t(mod.impute.list[1:sum(p.vec)])
+      
+      # Save the imputed results
+      metabolome_impute <- mod.impute[p.ind[[1]],][metabolome_missing]
+      proteome_impute <- mod.impute[p.ind[[2]],][proteome_missing]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+    }
     
-    if (mod == "KNN_Separate_Sources") {}
+    if (mod == "KNN_Separate_Sources") {
+      
+      # Impute the missing data using KNN with default parameters
+      mod.impute.list <- lapply(1:q, function(s) kNN(t(hiv_copd_data_missing[[s]])))
+      mod.impute <- lapply(1:q, function(s) t(mod.impute.list[[s]][1:p.vec[s]]))
+      
+      # Save the imputed results
+      metabolome_impute <- mod.impute[[1]][metabolome_missing]
+      proteome_impute <- mod.impute[[2]][proteome_missing]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+    }
     
-    if (mod == "RF_Combined_Sources") {}
+    if (mod == "RF_Combined_Sources") {
+      
+      # Impute missing values using RF with default parameters
+      mod.impute <- missForest(xmis = t(hiv_copd_data_missing_combined))
+      
+      # Save the imputed results
+      metabolome_impute <- t(mod.impute$ximp)[p.ind[[1]],][metabolome_missing]
+      proteome_impute <- t(mod.impute$ximp)[p.ind[[2]],][proteome_missing]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+    }
     
-    if (mod == "RF_Separate_Sources") {}
+    if (mod == "RF_Separate_Sources") {
+      
+      # Impute missing values using RF with default parameters
+      mod.impute <- lapply(1:q, function(s) {
+        missForest(xmis = t(hiv_copd_data_missing[[s,1]]))
+      })
+      
+      # Save the imputed results
+      metabolome_impute <- t(mod.impute[[1]]$ximp)[metabolome_missing]
+      proteome_impute <- t(mod.impute[[2]]$ximp)[proteome_missing]
+      
+      # Save NAs for the other parameters
+      metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
+
+    }
     
     # Calculate MSE with posterior mean and true observed values
     metabolome_mse <- frob(metabolome_missing_samples - metabolome_impute)/frob(metabolome_missing_samples)
@@ -8334,10 +8386,6 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     
     if (mod == "BIDIFAC") {
       rm(mod.impute, hiv_copd_data_missing)
-    }
-    
-    if (grepl("BPCA", mod)) {
-      rm(mod.impute, mod.pca, metabolome_cis, proteome_cis)
     }
     
     gc()
