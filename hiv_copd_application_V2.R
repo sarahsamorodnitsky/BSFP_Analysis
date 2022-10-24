@@ -1319,6 +1319,31 @@ hiv_copd_mean_imputation <- model_imputation(mod = "Mean_Imputation", hiv_copd_d
                                              nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
 # -------------------------------------
+# Missing data imputation using k-Nearest Neighbors
+# -------------------------------------
+
+# Entrywise
+hiv_copd_knn_combined <- model_imputation(mod = "KNN_Combined_Sources", hiv_copd_data = hiv_copd_data,
+                                             outcome = fev1pp, outcome_name = "fev1pp", 
+                                             nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+
+# Columnwise
+hiv_copd_knn_combined <- model_imputation(mod = "KNN_Combined_Sources", hiv_copd_data = hiv_copd_data,
+                                             outcome = fev1pp, outcome_name = "fev1pp",
+                                             nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+
+# Entrywise
+hiv_copd_knn_combined <- model_imputation(mod = "KNN_Separate_Sources", hiv_copd_data = hiv_copd_data,
+                                          outcome = fev1pp, outcome_name = "fev1pp",
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+
+# Columnwise
+hiv_copd_knn_combined <- model_imputation(mod = "KNN_Separate_Sources", hiv_copd_data = hiv_copd_data,
+                                          outcome = fev1pp, outcome_name = "fev1pp", 
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+
+
+# -------------------------------------
 # Tabulating the results
 # -------------------------------------
 
