@@ -14,7 +14,7 @@ source("~/BSFP/bpmf.R")
 q <- 2
 
 # Joint and individual ranks (ranks[1] = joint, ranks[2:r_total] = individual)
-ranks <- c(1,1,1)
+ranks <- c(5,5,5)
 names(ranks) <- c("joint", paste("indiv", 1:q))
 
 # Number of predictors for each source
@@ -56,17 +56,17 @@ prop_missing <- 0.1
 n_clust <- 10
 
 # Initialize lists to store the results
-BPMF.entrywise <- UNIFAC.entrywise <- mean_imputation.entrywise <- svd_combined.entrywise <-
+BSFP.entrywise <- UNIFAC.entrywise <- mean_imputation.entrywise <- svd_combined.entrywise <-
   svd_separate.entrywise <- knn_combined.entrywise <- knn_separate.entrywise <- 
   rf_combined.entrywise <- rf_separate.entrywise <-
   lapply(1:(length(s2nX.list)), function(rep) list())
 
-BPMF.columnwise <- UNIFAC.columnwise <- mean_imputation.columnwise <- svd_combined.columnwise <-
+BSFP.columnwise <- UNIFAC.columnwise <- mean_imputation.columnwise <- svd_combined.columnwise <-
   svd_separate.columnwise <- knn_combined.columnwise <- knn_separate.columnwise <- 
   rf_combined.columnwise <- rf_separate.columnwise <-
   lapply(1:(length(s2nX.list)), function(rep) list())
 
-BPMF.MNAR <- UNIFAC.MNAR <- mean_imputation.MNAR <- svd_combined.MNAR <-
+BSFP.MNAR <- UNIFAC.MNAR <- mean_imputation.MNAR <- svd_combined.MNAR <-
   svd_separate.MNAR <- knn_combined.MNAR <- knn_separate.MNAR <- 
   rf_combined.MNAR <- rf_separate.MNAR <-
   lapply(1:(length(s2nX.list)), function(rep) list())
@@ -82,7 +82,7 @@ BPMF.MNAR <- UNIFAC.MNAR <- mean_imputation.MNAR <- svd_combined.MNAR <-
 ind <- 1
 
 for (s2nX in s2nX.list) {
-  BPMF.entrywise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks,
+  BSFP.entrywise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks,
                                                  response = NULL, true_params, model_params = model_params,
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust,
                                                  missing_data_type = "entrywise", prop_missing = prop_missing)
@@ -99,8 +99,8 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 
 ind <- 1
 
-for (s2nX in s2nX.list[2]) {
-  BPMF.columnwise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks,
+for (s2nX in s2nX.list[-c(1:2)]) {
+  BSFP.columnwise[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks,
                                                  response = NULL, true_params, model_params = model_params,
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust,
                                                  missing_data_type = "columnwise", prop_missing = prop_missing)
@@ -117,8 +117,8 @@ all(sapply(s2nX.list, function(s2nX) check_all_sims(path = "~/BayesianPMF/03Simu
 
 ind <- 1
 
-for (s2nX in s2nX.list) {
-  BPMF.MNAR[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
+for (s2nX in s2nX.list[-c(1:2)]) {
+  BSFP.MNAR[[ind]] <- imputation_simulation(mod = "BSFP", p.vec = p.vec, n = n, ranks = ranks, 
                                                  response = NULL, true_params, model_params = model_params, 
                                                  s2nX = s2nX, s2nY = NULL, nsim = nsim, nsample = 2000, n_clust = n_clust, 
                                                  missing_data_type = "MNAR", prop_missing = prop_missing)  
