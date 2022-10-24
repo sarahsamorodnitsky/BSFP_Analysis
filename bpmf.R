@@ -8103,7 +8103,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
 }
 
 # Imputing missing data in the HIV-COPD application
-model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_params = NULL, nsample = NULL, nsim, prop_missing, entrywise = TRUE, ranks = NULL, results_wd = "~/BayesianPMF/04DataApplication/") {
+model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_params = NULL, nsample = NULL, nsim, prop_missing, entrywise = TRUE, ranks = NULL, results_wd = "~/BayesianPMF/04DataApplication/", nclust = 5) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -8126,7 +8126,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
   q <- nrow(hiv_copd_data)
   
   # For nsim replications:
-  cl <- makeCluster(5)
+  cl <- makeCluster(nclust)
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC", "impute.BIDIFAC", "fill.matrix",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
