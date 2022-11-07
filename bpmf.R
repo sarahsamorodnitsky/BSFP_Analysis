@@ -8195,7 +8195,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     if (mod == "BPMF") {
       mod.impute <- bpmf_data_mode(
         data = hiv_copd_data_missing,
-        Y = fev1pp,
+        Y = outcome,
         nninit = TRUE,
         model_params = model_params,
         sparsity = FALSE,
@@ -8204,11 +8204,11 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       )
       
       # Saving the imputed values for each source with burn-in
-      metabolome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+      metabolome_impute_burnin <- lapply(1:nsample, function(iter) {
         matrix(mod.impute$Xm.draw[[iter]][[1,1]], nrow = 1) 
       })
       
-      proteome_impute_burnin <- lapply(burnin:nsample, function(iter) {
+      proteome_impute_burnin <- lapply(1:nsample, function(iter) {
         matrix(mod.impute$Xm.draw[[iter]][[2,1]], nrow = 1)
       })
       
@@ -8381,7 +8381,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     
     # Remove large matrices and clean
     if (mod == "BPMF") {
-      rm(hiv_copd_data_missing, bpmf_impute, metabolome_cis, proteome_cis)
+      rm(hiv_copd_data_missing, mod.impute, metabolome_cis, proteome_cis)
     }
     
     if (mod == "BIDIFAC") {
