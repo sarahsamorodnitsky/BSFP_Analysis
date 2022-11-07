@@ -27,7 +27,9 @@
 #' the following named-list form: model_params = list(error_vars = c(), joint_var = double(),
 #' indiv_vars = c(), beta_vars = c(), response_vars = c()). error_vars, indiv_vars are 
 #' vectors of length q for each source. response_vars must define the shape and rate for
-#' the Inverse-Gamma prior of the response variance. 
+#' the Inverse-Gamma prior of the response variance. beta_vars must be of length q+1
+#' to specify the prior variance on the intercept, the prior variance on each joint factor's
+#' contribution to the outcome, and for each individual factor's contribution from each source. 
 #' @param ranks A list of length q+1 for the ranks of the joint and individual structures.
 #' Leave NULL if nninit=TRUE. 
 #' @param scores Matrix with scores estimated by existing factorization method. Use only
@@ -90,26 +92,6 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
   n <- ncol(data[[1,1]]) # Number of subjects
   
   # ---------------------------------------------------------------------------
-  # Extracting the model parameters
-  # ---------------------------------------------------------------------------
-  
-  error_vars <- model_params$error_vars # Error variances
-  sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
-  sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
-  beta_vars <- model_params$beta_vars # Variances on betas
-  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
-  
-  # ---------------------------------------------------------------------------
-  # Check for missingness in data
-  # ---------------------------------------------------------------------------
-  
-  # Check for missingness
-  missingness_in_data <- any(sapply(data[,1], function(source) any(is.na(source))))
-  
-  # Which entries are missing?
-  missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
-  
-  # ---------------------------------------------------------------------------
   # Is there a response vector?
   # ---------------------------------------------------------------------------
   
@@ -127,6 +109,84 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
     # Which entries are missing?
     missing_obs_Y <- which(is.na(Y))
   }
+  
+  # ---------------------------------------------------------------------------
+  # Extracting the model parameters
+  # ---------------------------------------------------------------------------
+  
+  # If no model parameters are given
+  if (is.null(model_params)) {
+    
+    # Error variances
+    error_vars <- sapply(1:q, function(s) 1)
+    
+    # Variance of joint structure
+    lambda_joint <- sqrt(sum(p.vec)) + sqrt(n)
+    sigma2_joint <- joint_var <- 1/(lambda_joint)
+    
+    # Variance of individual structure for Biocrates
+    lambda_indiv <- sapply(1:q, function(s) sqrt(p.vec[s]) + sqrt(n))
+    sigma2_indiv <- indiv_vars <- 1/(lambda_indiv) 
+    
+    # For the regression coefficients, beta
+    lambda2_intercept <- 1e6
+    lambda2_joint <- 1
+    lambda2_indiv1 <- 1
+    lambda2_indiv2 <- 1
+    beta_vars <- c(lambda2_intercept, lambda2_joint, lambda2_indiv1, lambda2_indiv2)
+    
+    # For the response vector
+    shape <- 0.01
+    rate <- 0.01
+    
+    # Putting the model parameters together
+    model_params <- list(error_vars = error_vars,
+                         joint_var = sigma2_joint,
+                         indiv_vars = sigma2_indiv,
+                         beta_vars = beta_vars,
+                         response_vars = c(shape = shape, rate = rate))
+  }
+  
+  # If model parameters are given
+  if (!is.null(model_params)) {
+    error_vars <- model_params$error_vars # Error variances
+    sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
+    sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
+    
+    # If a prior on the regression betas is given
+    if (!is.null(model_params$beta_vars)) {
+      beta_vars <- model_params$beta_vars # Variances on betas
+    }
+    
+    # If a prior on the response variance is given
+    if (!is.null(model_params$response_vars)) {
+      response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
+    }
+    
+    # If there is a response and model_params is not NULL, there must be beta priors and response variance priors
+    if ((!is.null(Y[[1,1]]) & is.null(model_params$beta_vars))) {
+      stop("A response vector is given so please provide hyperparameters for the regression coefficients in the form
+           of model_params$beta_vars = c(intercept_prior_var, prior_var_on_joint_factors, prior_var_on_individual_factors_source_1, ..., prior_var_on_individual_factors_source_q")
+    }
+    
+    # If there is a CONTINUOUS response and model_params is not NULL, there must be beta priors and response variance priors
+    if ((!is.null(Y[[1,1]]) & is.null(model_params$response_vars))) {
+      if (response_type == "continuous") {
+        stop("A response vector is given so please provide hyperparameters for the response variance prior in the form
+             of a shape and a rate parameter, i.e. model_params$response_vars = c(shape = a, rate = b).")
+      }
+    }
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Check for missingness in data
+  # ---------------------------------------------------------------------------
+  
+  # Check for missingness
+  missingness_in_data <- any(sapply(data[,1], function(source) any(is.na(source))))
+  
+  # Which entries are missing?
+  missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
   
   # ---------------------------------------------------------------------------
   # Obtaining the ranks 
@@ -196,17 +256,8 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
     Xm.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   }
   
-  if (!sparsity) {
-    gamma.draw <- p.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
-  }
-  
   if (response_given) {
     beta.draw <- Z.draw <- tau2.draw <- Ym.draw <- VStar.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1)) 
-    
-    if (sparsity) {
-      gamma.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
-      p.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
-    }
   }
   
   if (missingness_in_data) {
@@ -371,10 +422,6 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta0, sd = 1))
     tau20 <- matrix(1/rgamma(1, shape = shape, rate = rate))
     
-    if (sparsity) {
-      p0 <- 0.5
-      gamma0 <- matrix(rbinom(n_beta, size = 1, prob = p0), ncol = 1)
-    }
   }
   
   # If there is missingness in the data, generate starting values for the missing entries
@@ -419,10 +466,6 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
       Ym.draw[[1]][[1,1]] <- Ym0
     }
     
-    if (sparsity) {
-      gamma.draw[[1]][[1,1]] <- gamma0
-      p.draw[[1]][[1,1]] <- p0
-    }
   }
   
   if (missingness_in_data) {
@@ -529,10 +572,6 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
         Y_complete <- Y
       }
       
-      if (sparsity) {
-        gamma.iter <- gamma.draw[[iter]][[1,1]]
-        p.iter <- p.draw[[iter]][[1,1]]
-      }
     }
     
     if (missingness_in_data) {
@@ -804,17 +843,6 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
     
     if (response_given) {
       
-      if (sparsity) {
-        # Change the precision for the intercept
-        diag(SigmaBetaInv)[1] <- 1/beta_vars[1]
-        
-        # Change the precision of those betas under the slab, excluding the intercept
-        diag(SigmaBetaInv)[-1][gamma.iter[-1] == 1] <- 1/(beta_vars[-1][gamma.iter[-1] == 1])
-        
-        # Change the precision of those betas under the spike
-        diag(SigmaBetaInv)[-1][gamma.iter[-1] == 0] <- 1000 # Can change this precision
-      }
-      
       if (response_type == "binary") {
         Bbeta <- solve(t(VStar.iter) %*% VStar.iter + SigmaBetaInv)
         bbeta <- t(VStar.iter) %*% Z.iter
@@ -852,33 +880,6 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
           if (s != 1) beta_indiv.iter[[s, 1]] <- beta_indiv.iter.temp[(r.vec[s-1]+1):(r.vec[s-1] + r.vec[s]),, drop = FALSE]
         }
       }
-    }
-    
-    # -------------------------------------------------------------------------
-    # Posterior sample for spike-and-slab indicators and probabilities
-    # -------------------------------------------------------------------------
-    
-    if (response_given & sparsity) {
-      # Calculate the likelihood for beta under the spike and slab
-      like_spike <- dnorm(beta.iter, mean = 0, sd = sqrt(1/1000), log = TRUE)
-      like_slab <- dnorm(beta.iter, mean = 0, sd = sqrt(beta_vars), log = TRUE)
-      
-      # Calculating the probability that each gamma equals 1
-      prob = sapply(1:n_beta, function(rs) {
-        x = log(p.iter) + like_slab[rs,]
-        y = log(1 - p.iter) + like_spike[rs,]
-        exp(x - logSum(c(x,y)))
-      })
-      prob[1] <- 1 # Always include the intercept
-      
-      # Generating the gammas
-      gamma.draw[[iter+1]][[1,1]] <- matrix(rbinom(n_beta, size = 1, prob = prob), ncol = 1)
-      
-      # Saving the current value of gamma
-      gamma.iter <- gamma.draw[[iter+1]][[1,1]]
-      
-      # Generating the prior probabilities (excluding the intercept, hence n_beta - 1 and sum(gamma[-1]))
-      p.draw[[iter+1]][[1,1]] <- rbeta(1, 1 + sum(gamma.iter[-1,]), 1 + (n_beta-1) - sum(gamma.iter[-1,]))
     }
     
     # -------------------------------------------------------------------------
@@ -948,40 +949,36 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
   }
   
   # ---------------------------------------------------------------------------
-  # Calculating the joint and individual structure, scaled to the data
+  # Aligning the posterior samples
   # ---------------------------------------------------------------------------
   
-  # Storing the structures at each Gibbs sampling iteration
-  J.draw <- A.draw <- S.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
-  
-  # Calculating the structure for Y at each Gibbs sampling iteration
-  EY.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
-  
-  if (is.null(scores)) {
-    for (iter in 1:nsample) {
-      for (s in 1:q) {
-        # Calculating the joint structure and scaling by sigma.mat
-        J.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
-        
-        # Calculating the individual structure and scaling by sigma.mat
-        A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,s]] %*% t(Vs.draw[[iter]][[1,s]])) * sigma.mat[s,1]
-        
-        # Calculate the overall structure (joint + individual
-        S.draw[[iter]][[s,1]] <- J.draw[[iter]][[s,1]] + A.draw[[iter]][[s,1]]
-      }
-      
-      # Calculate the structure for Y
-      if (response_given) {
-        if (response_type == "continuous") {
-          EY.draw[[iter]][[1,1]] <- VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]]
-        }
-        
-        if (response_type == "binary") {
-          EY.draw[[iter]][[1,1]] <- pnorm(VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]])
-        }
-      }
-    }
+  # If a burn-in is not given
+  if (is.null(burnin)) {
+    burnin <- nsample/2
   }
+  
+  # Save the iterations after burn-in
+  iters_burnin <- seq(burnin+1, nsample)
+  
+  # Combining the results into a list
+  BSFP.fit <-   list(data = data, # Returning the scaled version of the data
+                     Y = Y, # Return the response vector
+                     sigma.mat = sigma.mat, # Scaling factors
+                     V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
+                     VStar.draw = VStar.draw, # Components that predict Y,
+                     Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
+                     scores = scores, # Scores if provided by another method 
+                     ranks = c(r, r.vec), # Ranks
+                     tau2.draw = tau2.draw, beta.draw = beta.draw) # Regression parameters
+  
+  # Put Y back into the matrix-list format
+  new_Y <- matrix(list(), nrow = 1, ncol = 1)
+  new_Y[[1,1]] <- Y
+  
+  # Applying the Match Align algorithm to undo rotational invariance in the results
+  aligned_results <- match_align_bpmf(BSFP.fit, y = new_Y,
+                                      model_params = model_params, p.vec = p.vec, 
+                                      iters_burnin = iters_burnin)
   
   # Return
   list(data = data, # Returning the scaled version of the data
@@ -993,7 +990,6 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
        scores = scores, # Scores if provided by another method 
        ranks = c(r, r.vec), # Ranks
-       tau2.draw = tau2.draw, beta.draw = beta.draw, # Regression parameters
-       gamma.draw = gamma.draw, p.draw = p.draw) # Sparsity parameters
+       tau2.draw = tau2.draw, beta.draw = beta.draw) # Regression parameters
   
 }
