@@ -1258,13 +1258,15 @@ nsim <- 20
 
 # Running BPMF with entrywise missing data
 hiv_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_copd_data,
-                                              outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                              nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+                                             outcome = NULL, outcome_name = "fev1pp", nsample = 5000,
+                                             nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
+                                             nclust = 5)
 
 # Running BPMF with columnwise missing data
 hiv_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_copd_data,
-                                              outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                              nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+                                             outcome = NULL, outcome_name = "fev1pp", nsample = 5000,
+                                             nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
+                                             nclust = 5)
 
 # -------------------------------------
 # Missing data imputation using BIDIFAC
@@ -1324,23 +1326,55 @@ hiv_copd_mean_imputation <- model_imputation(mod = "Mean_Imputation", hiv_copd_d
 
 # Entrywise
 hiv_copd_knn_combined <- model_imputation(mod = "KNN_Combined_Sources", hiv_copd_data = hiv_copd_data,
-                                             outcome = fev1pp, outcome_name = "fev1pp", 
-                                             nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+                                          outcome = fev1pp, outcome_name = "fev1pp", 
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
+                                          nclust = 10)
 
 # Columnwise
 hiv_copd_knn_combined <- model_imputation(mod = "KNN_Combined_Sources", hiv_copd_data = hiv_copd_data,
-                                             outcome = fev1pp, outcome_name = "fev1pp",
-                                             nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+                                          outcome = fev1pp, outcome_name = "fev1pp",
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
+                                          nclust = 10)
 
 # Entrywise
 hiv_copd_knn_combined <- model_imputation(mod = "KNN_Separate_Sources", hiv_copd_data = hiv_copd_data,
                                           outcome = fev1pp, outcome_name = "fev1pp",
-                                          nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
+                                          nclust = 10)
 
 # Columnwise
 hiv_copd_knn_combined <- model_imputation(mod = "KNN_Separate_Sources", hiv_copd_data = hiv_copd_data,
                                           outcome = fev1pp, outcome_name = "fev1pp", 
-                                          nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
+                                          nclust = 10)
+
+# -------------------------------------
+# Missing data imputation using random forest
+# -------------------------------------
+
+# Entrywise
+hiv_copd_rf_combined <- model_imputation(mod = "RF_Combined_Sources", hiv_copd_data = hiv_copd_data,
+                                          outcome = fev1pp, outcome_name = "fev1pp", 
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
+                                          nclust = 10)
+
+# Columnwise
+hiv_copd_rf_combined <- model_imputation(mod = "RF_Combined_Sources", hiv_copd_data = hiv_copd_data,
+                                          outcome = fev1pp, outcome_name = "fev1pp",
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
+                                          nclust = 10)
+
+# Entrywise
+hiv_copd_rf_separate <- model_imputation(mod = "RF_Separate_Sources", hiv_copd_data = hiv_copd_data,
+                                          outcome = fev1pp, outcome_name = "fev1pp",
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
+                                          nclust = 10)
+
+# Columnwise
+hiv_copd_rf_separate <- model_imputation(mod = "RF_Separate_Sources", hiv_copd_data = hiv_copd_data,
+                                          outcome = fev1pp, outcome_name = "fev1pp", 
+                                          nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
+                                          nclust = 10)
 
 
 # -------------------------------------
@@ -1358,7 +1392,8 @@ hiv_copd_imputation_results <- data.frame(Model = character(),
                                           Proteome_CI_Width = character())
 
 # For each model
-mods <- c("BPMF", "BIDIFAC", "SVD_Combined_Sources", "SVD_Separate_Sources", "Mean_Imputation")
+mods <- c("BPMF", "BIDIFAC", "Mean_Imputation", "SVD_Combined_Sources", "SVD_Separate_Sources",
+          "KNN_Combined_Sources", "KNN_Separate_Sources", "RF_Combined_Sources", "RF_Separate_Sources")
 
 for (mod in mods) {
   
@@ -1424,3 +1459,12 @@ for (mod in mods) {
 colnames(hiv_copd_imputation_results) <- c("Model", "Missingness", "Metabolome_MSE",
                                            "Proteome_MSE", "Metabolome_Coverage", "Proteome_Coverage",
                                            "Metabolome_CI_Width", "Proteome_CI_Width")
+
+# Select just the first four columns
+library(xtable)
+
+hiv_copd_imputation_results %>%
+  select(Model, Missingness, Metabolome_MSE, Proteome_MSE) %>%
+  arrange(Missingness) %>%
+  xtable() %>%
+  print(include.rownames = FALSE)
