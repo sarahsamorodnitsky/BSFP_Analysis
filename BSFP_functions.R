@@ -1504,7 +1504,7 @@ match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burn
 }
 
 # -----------------------------------------------------------------------------
-# UNIFAC/BIDIFAC functions
+# UNIFAC/BIDIFAC functions (Credit to Jun Young Park (2020))
 # -----------------------------------------------------------------------------
 
 BIDIFAC=function(data,rmt=T, sigma=NULL,
