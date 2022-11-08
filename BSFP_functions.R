@@ -91,6 +91,15 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
   p <- sum(p.vec) # Total number of features
   n <- ncol(data[[1,1]]) # Number of subjects
   
+  # Initialize the indices of features in each source 
+  p.ind <- lapply(1:q, function(s) {
+    if (s == 1) {
+      1:p.vec[s]
+    } else {
+      (p.vec[s-1] + 1):cumsum(p.vec)[s]
+    }
+  })
+  
   # ---------------------------------------------------------------------------
   # Is there a response vector?
   # ---------------------------------------------------------------------------
@@ -218,6 +227,9 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
     for (s in 1:q) {
       data[[s,1]] <- data[[s,1]]/sigma.mat[s,]
     }
+    
+    # Saving the rank vector
+    ranks <- c(r, r.vec)
   }
   
   if (!nninit) {
@@ -238,6 +250,15 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
     beta_vars <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
     diag(Sigma_beta) <- beta_vars
   }
+  
+  # Save the indices for the factors from each source
+  rank.inds <- lapply(1:(q+1), function(s) {
+    if (s == 1) {
+      1:ranks[s]
+    } else {
+      (cumsum(ranks[1:(s-1)])[s-1] + 1):cumsum(ranks[1:s])[s]
+    }
+  })
   
   # ---------------------------------------------------------------------------
   # Storing the posterior samples
@@ -963,33 +984,851 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
   # Combining the results into a list
   BSFP.fit <-   list(data = data, # Returning the scaled version of the data
                      Y = Y, # Return the response vector
-                     sigma.mat = sigma.mat, # Scaling factors
                      V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
-                     VStar.draw = VStar.draw, # Components that predict Y,
-                     Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
-                     scores = scores, # Scores if provided by another method 
-                     ranks = c(r, r.vec), # Ranks
-                     tau2.draw = tau2.draw, beta.draw = beta.draw) # Regression parameters
+                     beta.draw = beta.draw,
+                     ranks = c(r, r.vec)) # Ranks
   
   # Put Y back into the matrix-list format
   new_Y <- matrix(list(), nrow = 1, ncol = 1)
   new_Y[[1,1]] <- Y
   
   # Applying the Match Align algorithm to undo rotational invariance in the results
-  aligned_results <- match_align_bpmf(BSFP.fit, y = new_Y,
+  aligned_results <- match_align_bsfp(BSFP.fit, y = new_Y,
                                       model_params = model_params, p.vec = p.vec, 
                                       iters_burnin = iters_burnin)
   
+  # Save the aligned results
+  joint.scores.final <- aligned_results$joint.scores.final
+  joint.loadings.final <- aligned_results$joint.loadings.final
+  joint.betas.final <- aligned_results$joint.betas.final
+  
+  individual.scores.final <- aligned_results$individual.scores.final
+  individual.loadings.final <- aligned_results$individual.loadings.final
+  individual.betas.final <- aligned_results$individual.betas.final
+  
+  # Save the pivot indices if a pivot was needed
+  pivot.indices <- c(aligned_results$joint_pivot_index, unlist(aligned_results$individual_pivot_index))
+  
+  # ---------------------------------------------------------------------------
+  # Calculate posterior summaries for the factors: 
+  # Posterior summaries: posterior mean and 95% credible interval
+  # ---------------------------------------------------------------------------
+  
+  # ---------------------------------------------------------------------------
+  # Joint factors
+  # ---------------------------------------------------------------------------
+  
+  # Scores
+  joint.scores.summary <- lapply(1:ranks[1], function(r) {
+    score.matrix <- do.call(cbind, lapply(joint.scores.final, function(iter) iter[,r,drop=FALSE]))
+    summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                    Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                    Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+    rownames(summary.mat) <- paste("Sample", 1:n)
+    summary.mat
+  })
+  names(joint.scores.summary) <- paste0("Joint.Factor.", 1:ranks[1])
+  
+  # Loadings
+  joint.loadings.summary <- lapply(1:ranks[1], function(r) {
+    lapply(1:q, function(s) {
+      load.matrix <- do.call(cbind, lapply(joint.loadings.final, function(iter) iter[p.ind[[s]],r,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                      Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+      rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+      summary.mat
+    })
+  })
+  
+  # Regression coefficients
+  joint.betas.summary <- lapply(1:ranks[1], function(r) {
+    beta.mat <- do.call(cbind, lapply(joint.betas.final, function(iter) iter[r,,drop=FALSE]))
+    summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                    Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                    Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+    summary.mat
+  })
+  names(joint.betas.summary) <- paste0("Joint.Factor.Regression.Coefficient.", 1:ranks[1])
+  
+  # ---------------------------------------------------------------------------
+  # Individual factors
+  # ---------------------------------------------------------------------------
+  
+  # Scores
+  individual.scores.summary <- lapply(1:q, function(s) {
+    source.scores.list <- lapply(1:ranks[s+1], function(rs) {
+      score.matrix <- do.call(cbind, lapply(individual.scores.final[[s]], function(iter) iter[,rs,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                      Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+      rownames(summary.mat) <- paste("Sample", 1:n)
+      summary.mat
+    })
+    names(source.scores.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
+    source.scores.list
+  })
+  names(individual.scores.summary) <- paste0("Source.", 1:q)
+  
+  # Loadings
+  individual.loadings.summary <- lapply(1:q, function(s) {
+    source.load.list <- lapply(1:ranks[s+1], function(rs) {
+        load.matrix <- do.call(cbind, lapply(individual.loadings.final[[s]], function(iter) iter[,rs,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                        Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+        rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+        summary.mat
+      })
+    names(source.load.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
+    source.load.list
+  })
+  names(individual.loadings.summary) <- paste0("Source.", 1:q)
+  
+  # Regression coefficients
+  individual.betas.summary <- lapply(1:q, function(s) {
+    source.beta.list <- lapply(1:ranks[s+1], function(rs) {
+      beta.mat <- do.call(cbind, lapply(individual.betas.final[[s]], function(iter) iter[rs,,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                      Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+      summary.mat
+    })
+    names(source.beta.list) <- paste0("Source.", s, ".Individual.Factor.Regression.Coefficient.", 1:ranks[s+1])
+  })
+  names(individual.betas.summary) <- paste0("Source.", 1:q)
+  
+  # ---------------------------------------------------------------------------
+  # Summarizing the outcome variance
+  # ---------------------------------------------------------------------------
+   
+  tau2.summary <- cbind.data.frame(Post.Mean = mean(unlist(tau2.draw)),
+                                   Lower.95.CI = quantile(unlist(tau2.draw), 0.025),
+                                   Upper.95.CI = quantile(unlist(tau2.draw), 0.975))
+  
+  # ---------------------------------------------------------------------------
+  # Summarizing the imputed values
+  # ---------------------------------------------------------------------------
+  
+  # ---------------------------------------------------------------------------
   # Return
-  list(data = data, # Returning the scaled version of the data
-       Y = Y, # Return the response vector
+  # ---------------------------------------------------------------------------
+  
+  list(
+       # The data used in the analysis
+       data = data, # Scaled data
+       Y = Y, # Response vector
        sigma.mat = sigma.mat, # Scaling factors
-       J.draw = J.draw, A.draw = A.draw, S.draw = S.draw, EY.draw = EY.draw, # Underlying structure
-       V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
-       VStar.draw = VStar.draw, # Components that predict Y,
-       Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
+       
+       # Summaries of the joint factors
+       joint.scores.summary = joint.scores.summary,
+       joint.loadings.summary = joint.loadings.summary,
+       
+       # Summaries of the individual factors
+       individual.scores.summary = individual.scores.summary,
+       individual.loadings.summary = individual.loadings.summary,
+       
+       # Summaries of the factor contributions in predictive model
+       joint.betas.summary = joint.betas.summary,
+       individual.betas.summary = individual.betas.summary,
+       
+       # Summaries of the imputed values
+       Xm.draw = Xm.draw, Ym.draw = Ym.draw, # Missing data imputation
        scores = scores, # Scores if provided by another method 
        ranks = c(r, r.vec), # Ranks
-       tau2.draw = tau2.draw, beta.draw = beta.draw) # Regression parameters
+       tau2.draw = tau2.draw) # Regression parameters
   
+}
+
+# -----------------------------------------------------------------------------
+# Alignment functions
+# -----------------------------------------------------------------------------
+
+#' MatchAlign Algorithm (code adapted from infinitefactor package by Evan Poworoznek (2021))
+#' 
+#' Given results from BSFP, apply Varimax rotation and greedy alignment
+#' using the MatchAlign algorithm to adjust for rotational, permutation,
+#' and sign invariance. This function is used within the match_align_bsfp
+#' function only.
+#' @param lambda (list): list of loadings matrices. For BSFP, this will be combined
+#'                loadings and betas. 
+#' @param eta (list): list of scores matrices
+#' @param var_betas (matrix): prior variance matrix for regression coefficients, if
+#'                      considering an outcome
+#' @param piv (matrix OR int): user-provided pivot. If NULL, use median largest singular value. 
+#'                      If matrix, use as pivot. If integer, use corresponding Varimax-rotated posterior sample 
+#' @param index (int): allows user to choose a different pivot for sensitivity analysis. 
+#'                     0 uses the default pivot. Could be positive or negative. 
+#' @export              
+
+jointRot_multi <- function(lambda, eta, piv = NULL, y = NULL, var_betas = NULL, index = 0) {
+  
+  # Apply the Varimax rotation to the loadings
+  vari = lapply(lambda, varimax)
+  
+  # Save the resulting Varimax-rotated loadings
+  loads = lapply(vari, `[[`, 1)
+  
+  # Save the resulting rotation matrix
+  rots = lapply(vari, `[[`, 2)
+  
+  # Apply the rotation matrix to the corresponding scores
+  rotfact = mapply(`%*%`, eta, rots, SIMPLIFY = FALSE)
+  
+  # If no user-provided pivot is given, use default
+  if (is.null(piv)) {
+    norms = sapply(loads, norm, "2")
+    piv = loads[order(norms)][[round(length(lambda)/2) + index]]
+    
+    # Save the posterior sample after burn-in that was used as pivot
+    piv_index_to_return <- c(1:length(loads))[order(norms)][round(length(lambda)/2) + index]
+  }
+  
+  # If user-provided pivot is given
+  if (is.matrix(piv)) {
+    piv_index_to_return <- NULL
+  }
+  
+  if (!is.matrix(piv)) {
+    piv = loads[[piv]]
+    
+    # Save the posterior sample after burn-in that was used as pivot
+    piv_index_to_return <- piv
+  }
+  
+  # Match to the defined pivot
+  matches = lapply(loads, msfOUT, piv)
+  lamout = mapply(aplr, loads, matches, SIMPLIFY = FALSE)
+  etaout = mapply(aplr, rotfact, matches, SIMPLIFY = FALSE)
+  
+  # Return
+  return(list(lambda = lamout, eta = etaout, pivot_index = piv_index_to_return))
+}
+
+#' match_align_bsfp
+#' 
+#' Correcting for rotation, permutation, and sign invariance by applying the 
+#' MatchAlign algorithm (Poworoznek et al. (2021)) to results from BSFP fit.
+#' 
+#' @param BSFP.fit (list): a list of results from the BPMF model fit 
+#' @param y (matrix of lists): outcome vector if available
+#' @param model_params (list): model parameters used in model fitting
+#' @param p.vec (vector): vector with number of variables in each source
+#' @param iters_burnin (vector): indices for posterior samples after burn-in
+#' @param piv.list (list of matrices or ints): list of pivot matrices for joint then 
+#' individual structures or indices for pivots from posterior samples
+
+match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burnin, piv.list = NULL, index = 0) {
+  
+  # Save the ranks from the model fit
+  ranks <- BSFP.fit$ranks
+  joint.rank <- ranks[1]
+  indiv.ranks <- ranks[-1]
+  
+  # Save the number of datasets
+  q <- nrow(BSFP.fit$data)
+  
+  # Save the number of posterior samples
+  nsample <- length(BSFP.fit$V.draw)
+  
+  # Save the burnin
+  burnin <- length(iters_burnin)
+  
+  # If no response is given
+  if (is.null(y)) {
+    joint.betas.final <- individual.betas.final <- joint_var_betas <- NULL
+    indiv_var_betas <- lapply(1:q, function(s) NULL)
+  }
+  
+  # Create a vector for the indices of each rank
+  if (!is.null(y)) {
+    beta.ind <- lapply(1:length(ranks), function(i) {
+      if (i == 1) { 
+        (1:ranks[i]) + 1
+      } else {
+        ((sum(ranks[1:(i-1)])+1):sum(ranks[1:i])) + 1
+      }
+    })
+  }
+  
+  # Checking if a pivot was provided
+  if (is.null(piv.list)) {
+    piv.list <- lapply(1:(q+1), function(i) NULL)
+  }
+  
+  # Joint structure (plus joint regression coefficients) --
+  
+  # Save the overall number of features
+  p <- sum(p.vec)
+  
+  # Combine joint loadings and betas
+  if (!is.null(y)) {
+    joint.loadings <- lapply(iters_burnin, function(iter) {
+      rbind(do.call(rbind, BSFP.fit$U.draw[[iter]]), # Joint loadings  
+            t(BSFP.fit$beta.draw[[iter]][[1,1]][beta.ind[[1]],])) # Joint regression coefficients
+    })
+  }
+  
+  if (is.null(y)) {
+    joint.loadings <- lapply(iters_burnin, function(iter) {
+      rbind(do.call(rbind, BSFP.fit$U.draw[[iter]])) 
+    })
+  }
+  
+  # Save joint scores
+  joint.scores <- lapply(iters_burnin, function(iter) BSFP.fit$V.draw[[iter]][[1,1]])
+  
+  # Save the prior variance on the betas for joint factors
+  if (!is.null(y)) {
+    joint_var_betas <- diag(rep(model_params$beta_vars[2], ranks[1]))
+  }
+  
+  # If we estimated more than 1 factor
+  if (joint.rank > 1) {
+    # Apply the factor switching method to the joint structure
+    joint.results.rotate <- jointRot_multi(joint.loadings, joint.scores, y = y, var_betas = joint_var_betas, index = index, piv = piv.list[[1]])
+    
+    # Separate the joint loadings from the joint scores
+    joint.loadings.final <- lapply(joint.results.rotate$lambda, function(iter) iter[1:p,])
+    
+    if (!is.null(y)) {
+      joint.betas.final <- lapply(joint.results.rotate$lambda, function(iter) t(iter[p+1,,drop=FALSE]))
+    }
+    
+    # Applying the permutation and sign switching to the scores
+    joint.scores.final <- joint.results.rotate$eta
+    
+    # Save the pivot index
+    joint_pivot_index <- joint.results.rotate$pivot_index
+  }
+  
+  # If we estimated 1 or fewer factors
+  if (joint.rank <= 1) {
+    joint.scores.final <- joint.scores
+    joint.loadings.final <- lapply(joint.loadings, function(iter) iter[1:p,,drop=FALSE])
+    
+    if (!is.null(y)) {
+      joint.betas.final <- lapply(joint.loadings, function(iter) t(iter[p+1,,drop=FALSE]))
+    }
+    
+    joint_pivot_index <- NULL
+  }
+
+  
+  # Individual structure (plus individual regression coefficients) --
+  
+  # Combine the individual loadings and betas
+  if (!is.null(y)) {
+    individual.loadings <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) {
+      rbind(BSFP.fit$W.draw[[iter]][[s,s]], 
+            BSFP.fit$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
+    }))
+  }
+  
+  if (is.null(y)) {
+    individual.loadings <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) {
+      rbind(BSFP.fit$W.draw[[iter]][[s,s]])
+    }))
+  }
+  
+  individual.scores <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) BSFP.fit$Vs.draw[[iter]][[1,s]]))
+  
+  # Save the prior variance on the betas for the individual factors
+  if (!is.null(y)) {
+    indiv_var_betas <- lapply(1:q, function(s) diag(rep(model_params$beta_vars[s+2], ranks[s+1])))
+  }
+  
+  # Applying the alignment algorithm
+  individual.results.rotate <- lapply(1:q, function(s) {
+    
+    if (indiv.ranks[s] > 1) {
+      out <- jointRot_multi(individual.loadings[[s]], individual.scores[[s]], y = y, var_betas = indiv_var_betas[[s]], index = index, piv = piv.list[[s+1]])
+      out
+    } 
+    
+    else {
+      list(lambda = individual.loadings[[s]], eta = individual.scores[[s]])
+    }
+  })
+  
+  # Save the final individual loadings and betas
+  individual.loadings.final <- lapply(1:q, function(s) lapply(individual.results.rotate[[s]]$lambda, function(iter) iter[1:p.vec[s],,drop=FALSE]))
+  
+  if (!is.null(y)) {
+    individual.betas.final <- lapply(1:q, function(s) lapply(individual.results.rotate[[s]]$lambda, function(iter) t(iter[p.vec[s]+1,,drop=FALSE])))
+  }
+  
+  # Applying the permutation and sign switching to the scores
+  individual.scores.final <- lapply(1:q, function(s) individual.results.rotate[[s]]$eta)
+  
+  # Save the pivot index
+  individual_pivot_index <- lapply(1:q, function(s) {
+    
+    if (indiv.ranks[s] > 1) {
+      individual.results.rotate[[s]]$pivot_index
+    }
+
+  })
+  
+  # ---------------------------------------------------------------------------
+  # Reordering aligned results so that factors are ordered from most-to-least
+  # variance explained. 
+  # ---------------------------------------------------------------------------
+  
+  # Order the components by squared Frobenius-norm of the corresponding rank-1 structure after burn-in --
+  
+  # For each component, calculate the posterior mean of the corresponding rank-1 structure
+  if (!is.null(y)) {
+    joint.rank1.structure <- lapply(1:joint.rank, function(r) {
+      # Calculate the rank-1 structure for the given component at each iteration
+      factor_r_structure <- lapply(1:burnin, function(iter) {
+        rbind(joint.loadings.final[[iter]][,r,drop=FALSE], t(joint.betas.final[[iter]][r,,drop=FALSE])) %*% 
+          t(joint.scores.final[[iter]][,r,drop=FALSE])
+      })
+      
+      # Calculate the posterior mean
+      Reduce("+", factor_r_structure)/length(factor_r_structure)
+    })
+  }
+  
+  if (is.null(y)) {
+    joint.rank1.structure <- lapply(1:joint.rank, function(r) {
+      # Calculate the rank-1 structure for the given component at each iteration
+      factor_r_structure <- lapply(1:burnin, function(iter) {
+        joint.loadings.final[[iter]][,r,drop=FALSE] %*% 
+          t(joint.scores.final[[iter]][,r,drop=FALSE])
+      })
+      
+      # Calculate the posterior mean
+      Reduce("+", factor_r_structure)/length(factor_r_structure)
+    })
+  }
+  
+  # Calculate the norm of each rank-1 structure
+  joint.structure.norm <- sapply(joint.rank1.structure, function(str) frob(str))
+  
+  # Order the factors
+  joint.factor.order <- order(joint.structure.norm, decreasing = TRUE)
+  
+  # Reorder the joint scores, loadings, and betas after burn-in
+  joint.scores.final.order <- lapply(1:burnin, function(iter) {
+    joint.scores.final[[iter]][,joint.factor.order,drop=FALSE]
+  })
+  joint.loadings.final.order <- lapply(1:burnin, function(iter) {
+    joint.loadings.final[[iter]][,joint.factor.order,drop=FALSE]
+  })
+  
+  if (!is.null(y)) {
+    joint.betas.final.order <- lapply(1:burnin, function(iter) {
+      joint.betas.final[[iter]][joint.factor.order,,drop=FALSE]
+    })
+  }
+  
+  # Order the factors in each individual structure by the Frobenius norm of their corresponding rank-1 structure --
+  
+  # For each source and each component, calculate the posterior mean of the corresponding rank-1 structure
+  if (!is.null(y)) {
+    individual.rank1.structure <- lapply(1:q, function(s) {
+      lapply(1:indiv.ranks[s], function(r) {
+        # Calculate the rank-1 structure for the given component at each iteration
+        factor_r_structure <- lapply(1:burnin, function(iter) {
+          rbind(individual.loadings.final[[s]][[iter]][,r,drop=FALSE], t(individual.betas.final[[s]][[iter]][r,,drop=FALSE])) %*% 
+            t(individual.scores.final[[s]][[iter]][,r,drop=FALSE])
+        })
+        
+        # Calculate the posterior mean
+        Reduce("+", factor_r_structure)/length(factor_r_structure)
+      })
+    })
+  }
+  
+  if (is.null(y)) {
+    individual.rank1.structure <- lapply(1:q, function(s) {
+      lapply(1:indiv.ranks[s], function(r) {
+        # Calculate the rank-1 structure for the given component at each iteration
+        factor_r_structure <- lapply(1:burnin, function(iter) {
+          individual.loadings.final[[s]][[iter]][,r,drop=FALSE] %*% 
+            t(individual.scores.final[[s]][[iter]][,r,drop=FALSE])
+        })
+        
+        # Calculate the posterior mean
+        Reduce("+", factor_r_structure)/length(factor_r_structure)
+      })
+    })
+  }
+  
+  # Calculate the norm of each rank-1 structure for each source
+  individual.structure.norm <- lapply(1:q, function(s) {
+    sapply(individual.rank1.structure[[s]], function(str) frob(str))
+  })
+  
+  # Order the factors
+  individual.factor.order <- lapply(1:q, function(s) {
+    order(individual.structure.norm[[s]], decreasing = TRUE)
+  })
+  
+  # Reorder the individual scores, loadings, and betas after burn-in
+  individual.scores.final.order <- lapply(1:q, function(s) {
+    lapply(1:burnin, function(iter) {
+      individual.scores.final[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+    })
+  })
+  individual.loadings.final.order <- lapply(1:q, function(s) {
+    lapply(1:burnin, function(iter) {
+      individual.loadings.final[[s]][[iter]][,individual.factor.order[[s]],drop=FALSE]
+    })
+  })
+  
+  if (!is.null(y)) {
+    individual.betas.final.order <- lapply(1:q, function(s) {
+      lapply(1:burnin, function(iter) {
+        individual.betas.final[[s]][[iter]][individual.factor.order[[s]],,drop=FALSE]
+      })
+    })
+  }
+  
+  # If no response was given
+  if (is.null(y)) {
+    joint.betas.final.order <- individual.final.burnin <- NULL
+  }
+  
+  # Return the final loadings, scores, and betas
+  list(joint.scores.final = joint.scores.final.order, 
+       joint.loadings.final = joint.loadings.final.order, 
+       joint.betas.final = joint.betas.final.order, 
+       joint_pivot_index = joint_pivot_index,
+       individual.scores.final = individual.scores.final.order, 
+       individual.loadings.final = individual.loadings.final.order, 
+       individual.betas.final = individual.betas.final.order,
+       individual_pivot_index = individual_pivot_index)
+}
+
+# -----------------------------------------------------------------------------
+# UNIFAC/BIDIFAC functions
+# -----------------------------------------------------------------------------
+
+BIDIFAC=function(data,rmt=T, sigma=NULL,
+                 start=NULL, out=FALSE,
+                 eps=1e-3, max.iter=1000, pbar=TRUE, seed=NULL, scale_back = TRUE, ...){
+  if (!is.null(seed)){set.seed(seed)}
+  # if (!rmt & class(sigma)!="matrix") stop("sigma must be a matrix.")
+  if (!rmt & !("matrix" %in% class(sigma))) stop("sigma must be a matrix.")
+  
+  fit=data.rearrange(data, rmt, sigma)
+  sigma.mat=fit$sigma.mat
+  X00=fit$out
+  
+  mvec=fit$nrows; nvec=fit$ncols
+  p=length(mvec); q=length(nvec)
+  rm(fit)
+  
+  start.ind.m=c(1, cumsum(mvec)[1:(p-1)]+1)
+  end.ind.m=cumsum(mvec)
+  
+  start.ind.n=c(1, cumsum(nvec)[1:(q-1)]+1)
+  end.ind.n=cumsum(nvec)
+  
+  lambda.G=sqrt(sum(mvec))+sqrt(sum(nvec))
+  lambda.R=sqrt(mvec)+sqrt(sum(nvec))
+  lambda.C=sqrt(sum(mvec))+sqrt(nvec)
+  lambda.I=tcrossprod(sqrt(mvec), rep(1, length(nvec)))+
+    tcrossprod(rep(1, length(mvec)),sqrt(nvec))
+  
+  if (!is.null(start)){
+    G00=start[[1]]; R00=start[[2]]
+    C00=start[[3]]; I00=start[[4]]
+  } else {
+    G00= matrix(0, nrow = sum(mvec), ncol = sum(nvec)) # replicate(sum(nvec),rnorm(sum(mvec)))
+    R00= matrix(0, nrow = sum(mvec), ncol = sum(nvec)) # replicate(sum(nvec),rnorm(sum(mvec)))
+    C00=replicate(sum(nvec),rnorm(sum(mvec)))
+    I00=replicate(sum(nvec),rnorm(sum(mvec)))
+  }
+  
+  G00.nuc=NA; R00.nuc=rep(NA, p)
+  C00.nuc=rep(NA, q); I00.nuc=matrix(NA,p,q)
+  
+  bool=TRUE
+  count=1;crit0=0
+  if (pbar) pb = txtProgressBar(min = 0, max=max.iter, initial=0, char="-", style = 3)
+  while (bool){
+    if (pbar){  setTxtProgressBar(pb, count)  }
+    crit0.old = crit0
+    
+    #Update G to 0
+    fit1=softSVD(X00-R00-C00-I00,lambda.G)
+    G00 <- matrix(0, nrow = sum(mvec), ncol = sum(nvec)) # G00=fit1$out; 
+    G00.nuc=fit1$nuc
+    
+    #update R to 0
+    for (i in 1:p){
+      ind=start.ind.m[i]:end.ind.m[i]
+      fit1=softSVD(X00[ind,]-G00[ind,]-C00[ind,]-I00[ind,], lambda.R[i])
+      # R00[ind,]=fit1$out; 
+      R00 <- matrix(0, nrow = sum(mvec), ncol = sum(nvec))
+      R00.nuc[i]=fit1$nuc
+    }
+    
+    for (j in 1:q){
+      ind=start.ind.n[j]:end.ind.n[j]
+      fit1=softSVD(X00[,ind]-G00[,ind]-R00[,ind]-I00[,ind], lambda.C[j])
+      C00[,ind]=fit1$out; C00.nuc[j]=fit1$nuc
+    }
+    
+    for (i in 1:p){
+      for (j in 1:q){
+        ind1= start.ind.m[i]:end.ind.m[i]
+        ind2=start.ind.n[j]:end.ind.n[j]
+        fit1=softSVD(X00[ind1,ind2]-G00[ind1,ind2]-R00[ind1,ind2]-C00[ind1,ind2], lambda.I[i,j])
+        I00[ind1,ind2]=fit1$out; I00.nuc[i,j]=fit1$nuc
+      }
+    }
+    
+    crit0 = frob(X00-G00-R00-C00-I00)+
+      2*lambda.G*G00.nuc+2*sum(lambda.R*R00.nuc)+
+      2*sum(lambda.C*C00.nuc)+2*sum(lambda.I*I00.nuc)
+    
+    if (abs(crit0.old-crit0)<eps){ bool=FALSE }
+    else if (count==max.iter){ bool=FALSE}
+    else{ count = count+1 }
+  }
+  
+  if (scale_back) {
+    S00.mat=G00.mat=R00.mat=C00.mat=I00.mat=data
+    for (i in 1:p){
+      ind1= start.ind.m[i]:end.ind.m[i]
+      for (j in 1:q){
+        ind2=start.ind.n[j]:end.ind.n[j]
+        G00.mat[[i,j]]=G00[ind1,ind2] *sigma.mat[i,j] 
+        R00.mat[[i,j]]=R00[ind1,ind2] *sigma.mat[i,j]
+        C00.mat[[i,j]]=C00[ind1,ind2] *sigma.mat[i,j]
+        I00.mat[[i,j]]=I00[ind1,ind2] *sigma.mat[i,j]
+        S00.mat[[i,j]]=G00.mat[[i,j]]+R00.mat[[i,j]]+C00.mat[[i,j]]+I00.mat[[i,j]]
+      }
+    }
+  }
+  
+  if (!scale_back) {
+    S00.mat=G00.mat=R00.mat=C00.mat=I00.mat=data
+    for (i in 1:p){
+      ind1= start.ind.m[i]:end.ind.m[i]
+      for (j in 1:q){
+        ind2=start.ind.n[j]:end.ind.n[j]
+        G00.mat[[i,j]]=G00[ind1,ind2] #*sigma.mat[i,j] Remove the scaling back by the error variance
+        R00.mat[[i,j]]=R00[ind1,ind2] #*sigma.mat[i,j]
+        C00.mat[[i,j]]=C00[ind1,ind2] #*sigma.mat[i,j]
+        I00.mat[[i,j]]=I00[ind1,ind2] #*sigma.mat[i,j]
+        S00.mat[[i,j]]=G00.mat[[i,j]]+R00.mat[[i,j]]+C00.mat[[i,j]]+I00.mat[[i,j]]
+      }
+    }
+  }
+  
+  return(list(X=data, S=S00.mat,
+              G=G00.mat, R=R00.mat, C=C00.mat, I=I00.mat,
+              sigma.mat=sigma.mat, n.vec=nvec,m.vec=mvec))
+}
+
+impute.BIDIFAC=function(data, 
+                        rmt=T, sigma=NULL,
+                        pbar=TRUE,
+                        start=NULL, max.iter.impute=100, 
+                        eps.impute=1e-3, scale_back=TRUE,...){
+  dim.data=dim(data)
+  p=dim.data[1]; q=dim.data[2]
+  
+  dim.list=do.call(cbind,lapply(data, dim))
+  mvec=apply(matrix(dim.list[1,],p),1,unique)
+  nvec=apply(matrix(dim.list[2,],p),2,unique)
+  if (class(mvec)=="list" ) stop("the number of rows do not match")
+  if (class(nvec)=="list" ) stop("the number of columns do not match")
+  
+  impute.index=matrix(list(), nrow = p, ncol=q)
+  if (is.null(sigma)) sigma=matrix(1,p,q)
+  
+  for (i in 1:p){
+    for (j in 1:q){
+      fillmat=fill.matrix(data[[i,j]])
+      impute.index[[i,j]]=fillmat$na.ind
+      if (rmt) sigma[i,j]=sigma.rmt(fillmat$X.fill)
+      data[[i,j]]=fillmat$X.fill/sigma[i,j]
+    }
+  }
+  
+  bool2=TRUE
+  count2=1; impute.vec=0
+  if (pbar) pb = txtProgressBar(min = 0, max=max.iter.impute, initial=0, char="-", style = 3)
+  while (bool2){
+    if (pbar){  setTxtProgressBar(pb, count2)  }
+    impute.vec.old=impute.vec
+    fit=BIDIFAC(data, rmt=F, sigma=matrix(1,p,q),start=start, pbar = F)
+    
+    start=list(
+      data.rearrange(fit$G)$out, data.rearrange(fit$R)$out,
+      data.rearrange(fit$C)$out, data.rearrange(fit$I)$out)
+    
+    impute.vec=NULL
+    for (i in 1:p){
+      for (j in 1:q){
+        imp=fit$S[[i,j]][impute.index[[i,j]]]
+        data[[i,j]][impute.index[[i,j]]]=imp
+        impute.vec=c(impute.vec,imp)
+      }
+    }
+    
+    crit2=frob(impute.vec.old-impute.vec)/length(impute.vec)
+    if (crit2<eps.impute){ bool2=FALSE }
+    else if (count2==max.iter.impute){ 
+      bool2=FALSE 
+      cat("\n The algorithm did not converge. \n")
+      cat("Try to increase max.iter.impute or relax eps/eps.impute.")
+    }
+    else{ count2=count2+1 }
+  }
+  
+  if (scale_back) {
+    for (i in 1:p){
+      for (j in 1:q){
+        fit$X[[i,j]]=fit$X[[i,j]]*sigma[i,j]
+        fit$S[[i,j]]=fit$S[[i,j]]*sigma[i,j]
+        fit$G[[i,j]]=fit$G[[i,j]]*sigma[i,j]
+        fit$R[[i,j]]=fit$R[[i,j]]*sigma[i,j]
+        fit$C[[i,j]]=fit$C[[i,j]]*sigma[i,j]
+        fit$I[[i,j]]=fit$I[[i,j]]*sigma[i,j]
+      }
+    }
+  }
+  
+  if (!scale_back) {
+    for (i in 1:p){
+      for (j in 1:q){
+        fit$X[[i,j]]=fit$X[[i,j]]#*sigma[i,j]
+        fit$S[[i,j]]=fit$S[[i,j]]#*sigma[i,j]
+        fit$G[[i,j]]=fit$G[[i,j]]#*sigma[i,j]
+        fit$R[[i,j]]=fit$R[[i,j]]#*sigma[i,j]
+        fit$C[[i,j]]=fit$C[[i,j]]#*sigma[i,j]
+        fit$I[[i,j]]=fit$I[[i,j]]#*sigma[i,j]
+      }
+    }
+  }
+  
+  fit$sigma.mat=sigma
+  
+  return(fit)
+}
+
+data.rearrange=function(data,rmt=F,sigma=NULL){
+  out=NULL
+  p=nrow(data)
+  q=ncol(data)
+  
+  m.vec=rep(NA,p)
+  n.vec= ncol(data[[1,1]]) # do.call(c, lapply(data[1,], ncol))
+  
+  if (is.null(sigma)) sigma=matrix(1,p,q)
+  
+  for (i in 1:p){
+    dimm=do.call(cbind, lapply(data[i,],dim))
+    m1=unique(dimm[1,])
+    if (length(m1)==1 ){m.vec[i]=m1 } 
+    else{ stop("the number of rows do not match.") }
+    if (!all(dimm[2,], n.vec)){ stop("the number of columns do not match")}
+    
+    for (j in 1:q){
+      if (rmt) sigma[i,j]=sigma.rmt(data[[i,j]])
+      data[[i,j]]=data[[i,j]]/sigma[i,j]
+    }
+    
+    out=rbind(out,do.call(cbind,data[i,]))
+  }
+  
+  return(list(out=out, nrows=m.vec, ncols=n.vec, sigma.mat=sigma))
+}
+
+frob <- function(X){ sum(X^2,na.rm=T) }
+
+diag2 <- function(x) {
+  if (length(x)==1) return(as.matrix(x))
+  else if (length(x)>1) return(diag(x))
+}
+
+sample2 <- function(x) {
+  if (length(x)==1) return(x)
+  else if (length(x)>1) return(sample(x))
+}
+
+sigma.rmt=function(X){ estim_sigma(X,method="MAD") }
+
+softSVD=function(X, lambda){
+  svdX=svd(X)
+  nuc=pmax(svdX$d-lambda,0)
+  out=tcrossprod(svdX$u, tcrossprod( svdX$v,diag(nuc) ))
+  return(list(out=out, nuc=sum(nuc)))
+}
+
+fill.matrix=function(X){
+  na.ind.original=na.ind=which(is.na(X),arr.ind = T)
+  bool=T
+  while (bool){
+    impute.X=rep(NA, nrow(na.ind))
+    for (j in 1:nrow(na.ind)){
+      colmean=mean(X[,na.ind[j,2]], na.rm=T)
+      rowmean=mean(X[na.ind[j,1],], na.rm=T)
+      impute.X[j]=mean(c(colmean,rowmean), na.rm=T)
+    }
+    X[na.ind]=impute.X
+    
+    na.ind=which(is.na(X),arr.ind = T)
+    if (length(na.ind)==0) bool=F
+  }
+  
+  return(list(X.fill=X, na.ind=na.ind.original))
+}
+
+estim_sigma <- function (X, k = NA, method = c("LN", "MAD"), center = "TRUE") {
+  method <- match.arg(method, c("LN", "MAD", "ln", "mad", "Ln", 
+                                "Mad"), several.ok = T)[1]
+  method <- tolower(method)
+  if (inherits(X, "data.frame")) {
+    X <- as.matrix(X)
+  }
+  if (sum(sapply(X, is.numeric)) < ncol(X)) {
+    stop("all the variables must be numeric")
+  }
+  if (center == "TRUE") {
+    X <- scale(X, scale = F)
+  }
+  n = nrow(X)
+  p = ncol(X)
+  svdX = svd(X)
+  if (method == "ln" & is.na(k)) {
+    warning("Since you did not specify k, k was estimated using the FactoMineR estim_ncp function")
+    k <- estim_ncp(X, scale = F)$ncp
+    print(paste("k = ", k))
+  }
+  if (center == "TRUE") {
+    N <- (n - 1)
+  }
+  else {
+    N <- n
+  }
+  if ((k >= min(N, p)) & (method == "ln")) {
+    stop("the number k specified has to be smaller than the minimum of the number of rows or columns")
+  }
+  if (method == "ln") {
+    if (k == 0) {
+      sigma = sqrt(sum(svdX$d^2)/(N * p))
+    }
+    else {
+      sigma <- sqrt(sum(svdX$d[-c(1:k)]^2)/(N * p - N * 
+                                              k - p * k + k^2))
+    }
+  }
+  else {
+    beta <- min(n, p)/max(n, p)
+    lambdastar <- sqrt(2 * (beta + 1) + 8 * beta/((beta + 
+                                                     1 + (sqrt(beta^2 + 14 * beta + 1)))))
+    wbstar <- 0.56 * beta^3 - 0.95 * beta^2 + 1.82 * beta + 
+      1.43
+    sigma <- median(svdX$d)/(sqrt(max(n, p)) * (lambdastar/wbstar))
+  }
+  return(sigma)
 }
