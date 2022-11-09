@@ -12,12 +12,12 @@
 # -----------------------------------------------------------------------------
 
 # Working directories
-data_wd <- "~/BSFP/data/"
-model_wd <- "~/BSFP/"
+data_wd <- "~/BSFP_Analysis/data/"
+model_wd <- "~/BSFP_Analysis/"
 results_wd <- "~/BayesianPMF/04DataApplication/"
 
 # Loading in the model functions
-source(paste0(model_wd, "bpmf.R"))
+source(paste0(model_wd, "bsfp.R"))
 
 # Load in the original, unaligned results 
 load(paste0("~/BayesianPMF/04DataApplication/BPMF/Training_Fit/training_data_fit_V2.rda"), verbose = TRUE)

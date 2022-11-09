@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 
 # Load in the helper functions
-source("~/BayesianPMFWithGit/bpmf.R")
+source("~/BSFP_Analysis/bsfp.R")
 
 # Setting up the data
 n <- 50

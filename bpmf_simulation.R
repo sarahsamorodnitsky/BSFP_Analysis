@@ -9,7 +9,7 @@
 # -----------------------------------------------------------------------------
 
 # Load in helper functions
-source("~/BSFP/bpmf.R")
+source("~/BSFP_Analysis/bsfp.R")
 
 # Number of data sources
 q <- 2
