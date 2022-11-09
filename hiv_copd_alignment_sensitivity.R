@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Applying the BPMF model to the HIV-COPD BALF Biocrates and Somascan data. 
+# Applying the BSFP model to the HIV-COPD BALF Biocrates and Somascan data. 
 # Studying the sensitivity of the results to the alignment by studying the
 # factor loadings and scores summaries after aligning to one posterior 
 # sampling iteration before and after the pivot used in the analysis. 

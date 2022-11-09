@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Comparing the performance of BPMF to other approaches to imputation of 
+# Comparing the performance of BSFP to other approaches to imputation of 
 # missing values in omics data
 # -----------------------------------------------------------------------------
 

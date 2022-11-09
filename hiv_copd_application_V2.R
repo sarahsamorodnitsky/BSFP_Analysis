@@ -1,7 +1,5 @@
 # -----------------------------------------------------------------------------
-# Applying the BPMF model to the HIV-COPD BALF Biocrates and Somascan data. 
-# Comparing the model application when there is no sparsity vs. when
-# there is sparsity. 
+# Applying the BSFP model to the HIV-COPD BALF Biocrates and Somascan data. 
 # * Note on V2: This script runs the data application again with centered and 
 #   data NOT scaled to have overall variance 1. 
 # -----------------------------------------------------------------------------

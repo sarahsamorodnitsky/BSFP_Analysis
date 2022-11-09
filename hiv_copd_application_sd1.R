@@ -1,7 +1,5 @@
 # -----------------------------------------------------------------------------
-# Applying the BPMF model to the HIV-COPD BALF Biocrates and Somascan data. 
-# Comparing the model application when there is no sparsity vs. when
-# there is sparsity. 
+# Applying the BSFP model to the HIV-COPD BALF Biocrates and Somascan data. 
 # * Note on sd1: This is called sd1 because the training data fit used metabolomic
 #   and proteomic data scaled to have overall sd 1. 
 # -----------------------------------------------------------------------------

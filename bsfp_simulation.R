@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Comparing the performance of BPMF to other low-rank factorization 
+# Comparing the performance of BSFP to other low-rank factorization 
 # models. Performance is assessed based on (1) recovery of underlying
 # structure and (2) predictive performance. 
 # -----------------------------------------------------------------------------
@@ -136,39 +136,7 @@ for (s2nX in s2nX.list) {
 names(all_s2n) <- combos
 
 # -----------------------------------------------------------------------------
-# BIDIFAC+ (not sure I will keep this condition)
-# -----------------------------------------------------------------------------
-
-BIDIFAC.plus.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
-ind <- 1
-
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    BIDIFAC.plus.res[[ind]] <- model_comparison(mod = "BIDIFAC+", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_test,
-                                                s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
-    ind <- ind + 1
-  }
-}
-
-# Check that all conditions ran
-all_s2n <- c()
-combos <- c()
-all_files <- list.files("~/BayesianPMF/03Simulations/BIDIFAC+")
-al_files_split <- strsplit(all_files, split = "_")
-ind <- 1
-for (s2nX in s2nX.list) {
-  for (s2nY in s2nY.list) {
-    # Select all the files corresponding to current s2nX and s2nY 
-    files_for_s2nX_s2nY <- all_files[sapply(al_files_split, function(file) (file[5] == s2nX) & (file[7] == paste0(s2nY, ".rda")))]
-    all_s2n[ind] <- length(files_for_s2nX_s2nY) == 100
-    combos[ind] <- paste(s2nX, "&", s2nY)
-    ind <- ind + 1
-  }
-}
-names(all_s2n) <- combos
-
-# -----------------------------------------------------------------------------
-# BIDIFAC
+# UNIFAC/BIDIFAC
 # -----------------------------------------------------------------------------
 
 BIDIFAC.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
@@ -329,7 +297,7 @@ for (s2nX in s2nX.list) {
 names(all_s2n) <- combos
 
 # -----------------------------------------------------------------------------
-# BPMF (Data Mode)
+# BSFP (Data Mode)
 # -----------------------------------------------------------------------------
 
 BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
@@ -361,7 +329,7 @@ for (s2nX in s2nX.list) {
 names(all_s2n) <- combos
 
 # -----------------------------------------------------------------------------
-# BPMF (Data Mode) (Fixed Ranks)
+# BSFP (Data Mode) (Fixed Ranks)
 # -----------------------------------------------------------------------------
 
 BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
@@ -393,16 +361,8 @@ for (s2nX in s2nX.list) {
 names(all_s2n) <- combos
 
 # -----------------------------------------------------------------------------
-# BPMF (TEST - initializing with BIDIFAC+ and Y, no scaling, fixing tau2 at 1)
+# BSFP (TEST - initializing with UNIFAC and Y, no scaling, fixing tau2 at 1)
 # -----------------------------------------------------------------------------
-
-# Setting the model variances
-# model_params_bpmf_test <- list(error_vars = c(X1 = 1, X2 = 1), # Error variance for each source
-#                                joint_var = joint_var_with_y, # Variance for joint structure
-#                                indiv_vars = indiv_vars_with_y, # Variance for each individual structure
-#                                beta_vars = c(intercept = 10, joint  = 1, indiv = rep(1,q)), # Variance of intercept effect and each joint effect 
-#                                response_vars = c(shape = 1, rate = 1) # Hyperparameters for prior on tau2
-# )   
 
 BPMF.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
 ind <- 1
