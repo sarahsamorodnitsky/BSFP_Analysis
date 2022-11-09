@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Helper functions for Bayesian PMF
+# Helper functions for Bayesian Simultaneous Factorization and Prediction
 # -----------------------------------------------------------------------------
 
 # Packages
@@ -13,7 +13,7 @@ library(truncnorm)
 # library(MCMCpack)
 
 # -----------------------------------------------------------------------------
-# Bayesian PMF functions
+# Bayesian Simultaneous Factorization and Prediction functions
 # -----------------------------------------------------------------------------
 
 # This version initializes with BIDIFAC WITHOUT y as a source
