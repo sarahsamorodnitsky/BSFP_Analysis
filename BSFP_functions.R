@@ -251,13 +251,26 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
     diag(Sigma_beta) <- beta_vars
   }
   
-  # Save the indices for the factors from each source
+  # Save the indices for the factors from each source 
   rank.inds <- lapply(1:(q+1), function(s) {
-    if (s == 1) {
-      1:ranks[s]
-    } else {
-      (cumsum(ranks[1:(s-1)])[s-1] + 1):cumsum(ranks[1:s])[s]
+
+    # For any structure,
+    if (ranks[s] == 0) {
+      NULL
     }
+    
+    # For joint structure
+    else if (s == 1) {
+      if (ranks[s] > 0) {
+        1:ranks[s]
+      }
+    }
+    
+    # For each individual structure
+    else if (s > 1) {
+      (sum(ranks[1:(s-1)])+1):sum(ranks[1:s])
+    }
+    
   })
   
   # ---------------------------------------------------------------------------
@@ -989,8 +1002,14 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
                      ranks = c(r, r.vec)) # Ranks
   
   # Put Y back into the matrix-list format
-  new_Y <- matrix(list(), nrow = 1, ncol = 1)
-  new_Y[[1,1]] <- Y
+  if (response_given) {
+    new_Y <- matrix(list(), nrow = 1, ncol = 1)
+    new_Y[[1,1]] <- Y
+  }
+  
+  if (!response_given) {
+    new_Y <- NULL
+  }
   
   # Applying the Match Align algorithm to undo rotational invariance in the results
   aligned_results <- match_align_bsfp(BSFP.fit, y = new_Y,
@@ -1018,38 +1037,80 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
   # Joint factors
   # ---------------------------------------------------------------------------
   
-  # Scores
-  joint.scores.summary <- lapply(1:ranks[1], function(r) {
-    score.matrix <- do.call(cbind, lapply(joint.scores.final, function(iter) iter[,r,drop=FALSE]))
-    summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
-                                    Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
-                                    Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
-    rownames(summary.mat) <- paste("Sample", 1:n)
-    summary.mat
-  })
-  names(joint.scores.summary) <- paste0("Joint.Factor.", 1:ranks[1])
-  
-  # Loadings
-  joint.loadings.summary <- lapply(1:ranks[1], function(r) {
-    lapply(1:q, function(s) {
-      load.matrix <- do.call(cbind, lapply(joint.loadings.final, function(iter) iter[p.ind[[s]],r,drop=FALSE]))
-      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
-                                      Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
-                                      Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
-      rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+  if (ranks[1] > 0) {
+    # Scores
+    joint.scores.summary <- lapply(1:ranks[1], function(r) {
+      score.matrix <- do.call(cbind, lapply(joint.scores.final, function(iter) iter[,r,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                      Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+      rownames(summary.mat) <- paste("Sample", 1:n)
       summary.mat
     })
-  })
+    names(joint.scores.summary) <- paste0("Joint.Factor.", 1:ranks[1])
+    
+    # Loadings
+    joint.loadings.summary <- lapply(1:ranks[1], function(r) {
+      lapply(1:q, function(s) {
+        load.matrix <- do.call(cbind, lapply(joint.loadings.final, function(iter) iter[p.ind[[s]],r,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                        Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+        rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+        summary.mat
+      })
+    })
+    
+    # Regression coefficients
+    if (response_given) {
+      joint.betas.summary <- lapply(1:ranks[1], function(r) {
+        beta.mat <- do.call(cbind, lapply(joint.betas.final, function(iter) iter[r,,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                        Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+        summary.mat
+      })
+      names(joint.betas.summary) <- paste0("Joint.Factor.Regression.Coefficient.", 1:ranks[1])
+    }
+    
+    if (!response_given) {
+      joint.betas.summary <- NULL
+    }
+  }
   
-  # Regression coefficients
-  joint.betas.summary <- lapply(1:ranks[1], function(r) {
-    beta.mat <- do.call(cbind, lapply(joint.betas.final, function(iter) iter[r,,drop=FALSE]))
-    summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
-                                    Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
-                                    Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
-    summary.mat
-  })
-  names(joint.betas.summary) <- paste0("Joint.Factor.Regression.Coefficient.", 1:ranks[1])
+  if (ranks[1] == 0) {
+    # Scores
+    score.matrix <- do.call(cbind, lapply(joint.scores.final, function(iter) iter[,1,drop=FALSE]))
+    joint.scores.summary <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                             Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                             Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+    rownames(joint.scores.summary) <- paste("Sample", 1:n)
+    names(joint.scores.summary) <- paste0("Joint.Factor.", 1:ranks[1])
+    
+    # Loadings
+    joint.loadings.summary <- lapply(1:q, function(s) {
+        load.matrix <- do.call(cbind, lapply(joint.loadings.final, function(iter) iter[p.ind[[s]],1,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                        Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+        rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+        summary.mat
+    })
+    
+    # Regression coefficients
+    if (response_given) {
+      beta.mat <- do.call(cbind, lapply(joint.betas.final, function(iter) iter[1,,drop=FALSE]))
+      joint.betas.summary <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                              Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                              Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+      joint.betas.summary
+    }
+    
+    if (!response_given) {
+      joint.betas.summary <- NULL
+    }
+
+  }
   
   # ---------------------------------------------------------------------------
   # Individual factors
@@ -1057,22 +1118,35 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
   
   # Scores
   individual.scores.summary <- lapply(1:q, function(s) {
-    source.scores.list <- lapply(1:ranks[s+1], function(rs) {
-      score.matrix <- do.call(cbind, lapply(individual.scores.final[[s]], function(iter) iter[,rs,drop=FALSE]))
+    
+    if (ranks[s+1] > 0) {
+      source.scores.list <- lapply(1:ranks[s+1], function(rs) {
+        score.matrix <- do.call(cbind, lapply(individual.scores.final[[s]], function(iter) iter[,rs,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                        Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+        rownames(summary.mat) <- paste("Sample", 1:n)
+        summary.mat
+      })
+      names(source.scores.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
+      source.scores.list
+    } else {
+      score.matrix <- do.call(cbind, lapply(individual.scores.final[[s]], function(iter) iter[,1,drop=FALSE]))
       summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
                                       Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
                                       Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
       rownames(summary.mat) <- paste("Sample", 1:n)
       summary.mat
-    })
-    names(source.scores.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
-    source.scores.list
+    }
+
   })
   names(individual.scores.summary) <- paste0("Source.", 1:q)
   
   # Loadings
   individual.loadings.summary <- lapply(1:q, function(s) {
-    source.load.list <- lapply(1:ranks[s+1], function(rs) {
+    
+    if (ranks[s+1] > 0) {
+      source.load.list <- lapply(1:ranks[s+1], function(rs) {
         load.matrix <- do.call(cbind, lapply(individual.loadings.final[[s]], function(iter) iter[,rs,drop=FALSE]))
         summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
                                         Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
@@ -1080,35 +1154,109 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
         rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
         summary.mat
       })
-    names(source.load.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
-    source.load.list
+      names(source.load.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
+      source.load.list
+    } else {
+      load.matrix <- do.call(cbind, lapply(individual.loadings.final[[s]], function(iter) iter[,1,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                      Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+      rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+      summary.mat
+    }
+
   })
   names(individual.loadings.summary) <- paste0("Source.", 1:q)
   
   # Regression coefficients
-  individual.betas.summary <- lapply(1:q, function(s) {
-    source.beta.list <- lapply(1:ranks[s+1], function(rs) {
-      beta.mat <- do.call(cbind, lapply(individual.betas.final[[s]], function(iter) iter[rs,,drop=FALSE]))
-      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
-                                      Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
-                                      Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
-      summary.mat
+  if (response_given) {
+    individual.betas.summary <- lapply(1:q, function(s) {
+      
+      if (ranks[s+1] > 0) {
+        source.beta.list <- lapply(1:ranks[s+1], function(rs) {
+          beta.mat <- do.call(cbind, lapply(individual.betas.final[[s]], function(iter) iter[rs,,drop=FALSE]))
+          summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                          Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                          Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+          summary.mat
+        })
+        names(source.beta.list) <- paste0("Source.", s, ".Individual.Factor.Regression.Coefficient.", 1:ranks[s+1])
+        source.beta.list
+      } else {
+        beta.mat <- do.call(cbind, lapply(individual.betas.final[[s]], function(iter) iter[1,,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                        Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+        summary.mat
+      }
+      
     })
-    names(source.beta.list) <- paste0("Source.", s, ".Individual.Factor.Regression.Coefficient.", 1:ranks[s+1])
-  })
-  names(individual.betas.summary) <- paste0("Source.", 1:q)
+    names(individual.betas.summary) <- paste0("Source.", 1:q)
+  }
+  
+  if (!response_given) {
+    individual.betas.summary <- NULL 
+  }
   
   # ---------------------------------------------------------------------------
   # Summarizing the outcome variance
   # ---------------------------------------------------------------------------
    
-  tau2.summary <- cbind.data.frame(Post.Mean = mean(unlist(tau2.draw)),
-                                   Lower.95.CI = quantile(unlist(tau2.draw), 0.025),
-                                   Upper.95.CI = quantile(unlist(tau2.draw), 0.975))
+  if (response_given) {
+    tau2.summary <- cbind.data.frame(Post.Mean = mean(unlist(tau2.draw)),
+                                     Lower.95.CI = quantile(unlist(tau2.draw), 0.025),
+                                     Upper.95.CI = quantile(unlist(tau2.draw), 0.975))
+  }
   
+  if (!response_given) {
+    tau2.summary <- NULL
+  }
+
   # ---------------------------------------------------------------------------
   # Summarizing the imputed values
   # ---------------------------------------------------------------------------
+  
+  # For each source
+  Xm.summary <- lapply(1:q, function(s) {
+    
+    if (length(missing_obs[[s]]) > 0) {
+      # Create matrix of imputed values for each missing sample
+      Xm.s <- do.call(cbind, lapply(iters_burnin, function(iter) {
+        Xm.draw[[iter]][[s,1]]
+      }))
+      
+      # Summarize the posterior mean and 95% CI
+      Xm.s.summary <- cbind.data.frame(Post.Mean = rowMeans(Xm.s),
+                                       Lower.95.CI = apply(Xm.s, 1, function(row) quantile(row, 0.025)),
+                                       Upper.95.CI = apply(Xm.s, 1, function(row) quantile(row, 0.975)))
+      
+      # Add rownames
+      rownames(Xm.s.summary) <- paste0("Source ", s, " Sample ", missing_obs[[s]])
+      Xm.s.summary
+    } else {
+      NULL
+    }
+  })
+  
+  # For the response
+  if (response_given) {
+    if (missingness_in_response) {
+      Ym.mat <- do.call(cbind, lapply(iters_burnin, function(iter) Ym.draw[[iter]][[1,1]]))
+      Ym.summary <- cbind.data.frame(Post.Mean = rowMeans(Ym.mat),
+                                     Lower.95.CI = apply(Ym.mat, 1, function(row) quantile(row, 0.025)),
+                                     Upper.95.CI = apply(Ym.mat, 1, function(row) quantile(row, 0.975)))
+      rownames(Ym.summary) <- paste0("Sample ", missing_obs_Y)
+    }
+    
+    if (!missingness_in_response) {
+      Ym.summary <- NULL
+    }
+  }
+  
+  if (!response_given) {
+    Ym.summary <- NULL
+  }
+
   
   # ---------------------------------------------------------------------------
   # Return
@@ -1133,10 +1281,12 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
        individual.betas.summary = individual.betas.summary,
        
        # Summaries of the imputed values
-       Xm.draw = Xm.draw, Ym.draw = Ym.draw, # Missing data imputation
+       Xm.summary = Xm.summary, Ym.summary = Ym.summary, # Missing data imputation
+       
+       # Miscellaneous
        scores = scores, # Scores if provided by another method 
        ranks = c(r, r.vec), # Ranks
-       tau2.draw = tau2.draw) # Regression parameters
+       tau2.summary = tau2.summary) # Regression parameters
   
 }
 
@@ -1242,11 +1392,36 @@ match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burn
   
   # Create a vector for the indices of each rank
   if (!is.null(y)) {
-    beta.ind <- lapply(1:length(ranks), function(i) {
-      if (i == 1) { 
-        (1:ranks[i]) + 1
-      } else {
-        ((sum(ranks[1:(i-1)])+1):sum(ranks[1:i])) + 1
+
+    rank.inds <- lapply(1:(q+1), function(s) {
+      
+      # For any structure,
+      if (ranks[s] == 0) {
+        NULL
+      }
+      
+      # For joint structure
+      else if (s == 1) {
+        if (ranks[s] > 0) {
+          1:ranks[s]
+        }
+      }
+      
+      # For each individual structure
+      else if (s > 1) {
+        (sum(ranks[1:(s-1)])+1):sum(ranks[1:s])
+      }
+      
+    })
+    
+    beta.ind <- lapply(1:(q+1), function(s) {
+      
+      if (is.null(rank.inds[[s]])) {
+        NULL
+      }
+      
+      else {
+        rank.inds[[s]] + 1
       }
     })
   }
@@ -1261,12 +1436,23 @@ match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burn
   # Save the overall number of features
   p <- sum(p.vec)
   
-  # Combine joint loadings and betas
+  # Combine joint loadings and betas (fix betas at 0 if rank is 0)
   if (!is.null(y)) {
-    joint.loadings <- lapply(iters_burnin, function(iter) {
-      rbind(do.call(rbind, BSFP.fit$U.draw[[iter]]), # Joint loadings  
-            t(BSFP.fit$beta.draw[[iter]][[1,1]][beta.ind[[1]],])) # Joint regression coefficients
-    })
+    
+    if (r > 0) {
+      joint.loadings <- lapply(iters_burnin, function(iter) {
+        rbind(do.call(rbind, BSFP.fit$U.draw[[iter]]), # Joint loadings  
+              t(BSFP.fit$beta.draw[[iter]][[1,1]][beta.ind[[1]],])) # Joint regression coefficients
+      })
+    }
+    
+    if (r == 0) {
+      joint.loadings <- lapply(iters_burnin, function(iter) {
+        rbind(do.call(rbind, BSFP.fit$U.draw[[iter]]), # Joint loadings  
+              t(matrix(0, nrow = 1, ncol = 1))) # Joint regression coefficients
+      })
+    }
+
   }
   
   if (is.null(y)) {
@@ -1314,15 +1500,25 @@ match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burn
     joint_pivot_index <- NULL
   }
 
-  
   # Individual structure (plus individual regression coefficients) --
   
   # Combine the individual loadings and betas
   if (!is.null(y)) {
-    individual.loadings <- lapply(1:q, function(s) lapply(iters_burnin, function(iter) {
-      rbind(BSFP.fit$W.draw[[iter]][[s,s]], 
-            BSFP.fit$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
-    }))
+    individual.loadings <- lapply(1:q, function(s) {
+      
+      if (indiv.ranks[s] > 0) {
+        lapply(iters_burnin, function(iter) {
+          rbind(BSFP.fit$W.draw[[iter]][[s,s]], 
+                BSFP.fit$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],])
+        })
+      } else {
+        lapply(iters_burnin, function(iter) {
+          rbind(BSFP.fit$W.draw[[iter]][[s,s]], 
+                matrix(0, nrow = 1, ncol = 1))
+        })
+      }
+
+    })
   }
   
   if (is.null(y)) {
@@ -1344,9 +1540,7 @@ match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burn
     if (indiv.ranks[s] > 1) {
       out <- jointRot_multi(individual.loadings[[s]], individual.scores[[s]], y = y, var_betas = indiv_var_betas[[s]], index = index, piv = piv.list[[s+1]])
       out
-    } 
-    
-    else {
+    } else {
       list(lambda = individual.loadings[[s]], eta = individual.scores[[s]])
     }
   })
@@ -1379,33 +1573,47 @@ match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burn
   
   # For each component, calculate the posterior mean of the corresponding rank-1 structure
   if (!is.null(y)) {
-    joint.rank1.structure <- lapply(1:joint.rank, function(r) {
-      # Calculate the rank-1 structure for the given component at each iteration
-      factor_r_structure <- lapply(1:burnin, function(iter) {
-        rbind(joint.loadings.final[[iter]][,r,drop=FALSE], t(joint.betas.final[[iter]][r,,drop=FALSE])) %*% 
-          t(joint.scores.final[[iter]][,r,drop=FALSE])
+    
+    if (joint.rank > 0) {
+      joint.rank1.structure <- lapply(1:joint.rank, function(r) {
+        # Calculate the rank-1 structure for the given component at each iteration
+        factor_r_structure <- lapply(1:burnin, function(iter) {
+          rbind(joint.loadings.final[[iter]][,r,drop=FALSE], t(joint.betas.final[[iter]][r,,drop=FALSE])) %*% 
+            t(joint.scores.final[[iter]][,r,drop=FALSE])
+        })
+        
+        # Calculate the posterior mean
+        Reduce("+", factor_r_structure)/length(factor_r_structure)
       })
-      
-      # Calculate the posterior mean
-      Reduce("+", factor_r_structure)/length(factor_r_structure)
-    })
+    }
+    
   }
   
   if (is.null(y)) {
-    joint.rank1.structure <- lapply(1:joint.rank, function(r) {
-      # Calculate the rank-1 structure for the given component at each iteration
-      factor_r_structure <- lapply(1:burnin, function(iter) {
-        joint.loadings.final[[iter]][,r,drop=FALSE] %*% 
-          t(joint.scores.final[[iter]][,r,drop=FALSE])
+    
+    if (joint.rank > 0) {
+      joint.rank1.structure <- lapply(1:joint.rank, function(r) {
+        # Calculate the rank-1 structure for the given component at each iteration
+        factor_r_structure <- lapply(1:burnin, function(iter) {
+          joint.loadings.final[[iter]][,r,drop=FALSE] %*% 
+            t(joint.scores.final[[iter]][,r,drop=FALSE])
+        })
+        
+        # Calculate the posterior mean
+        Reduce("+", factor_r_structure)/length(factor_r_structure)
       })
-      
-      # Calculate the posterior mean
-      Reduce("+", factor_r_structure)/length(factor_r_structure)
-    })
+    }
+    
   }
   
   # Calculate the norm of each rank-1 structure
-  joint.structure.norm <- sapply(joint.rank1.structure, function(str) frob(str))
+  if (joint.rank > 0) {
+    joint.structure.norm <- sapply(joint.rank1.structure, function(str) frob(str))
+  }
+  
+  if (joint.rank == 0) {
+    joint.structure.norm <- 1
+  }
   
   # Order the factors
   joint.factor.order <- order(joint.structure.norm, decreasing = TRUE)
@@ -1428,38 +1636,56 @@ match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burn
   
   # For each source and each component, calculate the posterior mean of the corresponding rank-1 structure
   if (!is.null(y)) {
+    
     individual.rank1.structure <- lapply(1:q, function(s) {
-      lapply(1:indiv.ranks[s], function(r) {
-        # Calculate the rank-1 structure for the given component at each iteration
-        factor_r_structure <- lapply(1:burnin, function(iter) {
-          rbind(individual.loadings.final[[s]][[iter]][,r,drop=FALSE], t(individual.betas.final[[s]][[iter]][r,,drop=FALSE])) %*% 
-            t(individual.scores.final[[s]][[iter]][,r,drop=FALSE])
+      
+      if (indiv.ranks[s] > 0) {
+        lapply(1:indiv.ranks[s], function(r) {
+          # Calculate the rank-1 structure for the given component at each iteration
+          factor_r_structure <- lapply(1:burnin, function(iter) {
+            rbind(individual.loadings.final[[s]][[iter]][,r,drop=FALSE], t(individual.betas.final[[s]][[iter]][r,,drop=FALSE])) %*% 
+              t(individual.scores.final[[s]][[iter]][,r,drop=FALSE])
+          })
+          
+          # Calculate the posterior mean
+          Reduce("+", factor_r_structure)/length(factor_r_structure)
         })
-        
-        # Calculate the posterior mean
-        Reduce("+", factor_r_structure)/length(factor_r_structure)
-      })
+      } else {
+        NULL
+      }
+
     })
   }
   
   if (is.null(y)) {
+    
     individual.rank1.structure <- lapply(1:q, function(s) {
-      lapply(1:indiv.ranks[s], function(r) {
-        # Calculate the rank-1 structure for the given component at each iteration
-        factor_r_structure <- lapply(1:burnin, function(iter) {
-          individual.loadings.final[[s]][[iter]][,r,drop=FALSE] %*% 
-            t(individual.scores.final[[s]][[iter]][,r,drop=FALSE])
+      
+      if (indiv.ranks[s] > 0) {
+        lapply(1:indiv.ranks[s], function(r) {
+          # Calculate the rank-1 structure for the given component at each iteration
+          factor_r_structure <- lapply(1:burnin, function(iter) {
+            individual.loadings.final[[s]][[iter]][,r,drop=FALSE] %*% 
+              t(individual.scores.final[[s]][[iter]][,r,drop=FALSE])
+          })
+          
+          # Calculate the posterior mean
+          Reduce("+", factor_r_structure)/length(factor_r_structure)
         })
-        
-        # Calculate the posterior mean
-        Reduce("+", factor_r_structure)/length(factor_r_structure)
-      })
+      } else {
+        NULL
+      }
+
     })
   }
   
   # Calculate the norm of each rank-1 structure for each source
   individual.structure.norm <- lapply(1:q, function(s) {
-    sapply(individual.rank1.structure[[s]], function(str) frob(str))
+    if (indiv.ranks[s] > 0) {
+      sapply(individual.rank1.structure[[s]], function(str) frob(str))
+    } else {
+      1
+    }
   })
   
   # Order the factors
@@ -1646,10 +1872,16 @@ impute.BIDIFAC=function(data,
   
   for (i in 1:p){
     for (j in 1:q){
-      fillmat=fill.matrix(data[[i,j]])
-      impute.index[[i,j]]=fillmat$na.ind
-      if (rmt) sigma[i,j]=sigma.rmt(fillmat$X.fill)
-      data[[i,j]]=fillmat$X.fill/sigma[i,j]
+      
+      if (any(is.na(data[[i,j]]))) {
+        fillmat=fill.matrix(data[[i,j]])
+        impute.index[[i,j]]=fillmat$na.ind
+        if (rmt) sigma[i,j]=sigma.rmt(fillmat$X.fill)
+        data[[i,j]]=fillmat$X.fill/sigma[i,j]
+      } else {
+        data[[i,j]] <- data[[i,j]]/sigma[i,j]
+      }
+
     }
   }
   
