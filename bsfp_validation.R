@@ -124,6 +124,9 @@ save(no_response_no_missing, response_continuous,
      response_continuous_missing0.3,
      file = "~/BayesianPMFWithGit/validation_results/validation_sim_5112022.rda")
 
+save(response_continuous_missing0.5,
+     file = "~/BSFP_Analysis/validation_results/validation_sim_11112022.rda")
+
 # -----------------------------------------------------------------------------
 # Creating the results table
 # -----------------------------------------------------------------------------
