@@ -50,8 +50,8 @@ response_binary <- validation_simulation(nsample = 2000, n_clust = 10, p.vec = p
 
 # Missing continuous response
 response_continuous_missing0.3 <- validation_simulation(nsample = 20000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100,  center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.3)
-response_continuous_missing0.5 <- validation_simulation(nsample = 20000, n_clust = 7, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.5)
-response_continuous_missing0.7 <- validation_simulation(nsample = 20000, n_clust = 7, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.7)
+response_continuous_missing0.5 <- validation_simulation(nsample = 20000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.5)
+response_continuous_missing0.7 <- validation_simulation(nsample = 20000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "continuous", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.7)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Binary response with missingness
