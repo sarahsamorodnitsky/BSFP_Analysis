@@ -983,311 +983,52 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
   }
   
   # ---------------------------------------------------------------------------
-  # Aligning the posterior samples
+  # Calculating the joint and individual structure, scaled to the data
   # ---------------------------------------------------------------------------
   
-  # If a burn-in is not given
-  if (is.null(burnin)) {
-    burnin <- nsample/2
-  }
+  # Storing the structures at each Gibbs sampling iteration
+  J.draw <- A.draw <- S.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = q, ncol = 1))
   
-  # Save the iterations after burn-in
-  iters_burnin <- seq(burnin+1, nsample)
+  # Calculating the structure for Y at each Gibbs sampling iteration
+  EY.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   
-  # Combining the results into a list
-  BSFP.fit <-   list(data = data, # Returning the scaled version of the data
-                     Y = Y, # Return the response vector
-                     V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
-                     beta.draw = beta.draw,
-                     ranks = c(r, r.vec)) # Ranks
-  
-  # Put Y back into the matrix-list format
-  if (response_given) {
-    new_Y <- matrix(list(), nrow = 1, ncol = 1)
-    new_Y[[1,1]] <- Y
-  }
-  
-  if (!response_given) {
-    new_Y <- NULL
-  }
-  
-  # Applying the Match Align algorithm to undo rotational invariance in the results
-  aligned_results <- match_align_bsfp(BSFP.fit, y = new_Y,
-                                      model_params = model_params, p.vec = p.vec, 
-                                      iters_burnin = iters_burnin)
-  
-  # Save the aligned results
-  joint.scores.final <- aligned_results$joint.scores.final
-  joint.loadings.final <- aligned_results$joint.loadings.final
-  joint.betas.final <- aligned_results$joint.betas.final
-  
-  individual.scores.final <- aligned_results$individual.scores.final
-  individual.loadings.final <- aligned_results$individual.loadings.final
-  individual.betas.final <- aligned_results$individual.betas.final
-  
-  # Save the pivot indices if a pivot was needed
-  pivot.indices <- c(aligned_results$joint_pivot_index, unlist(aligned_results$individual_pivot_index))
-  
-  # ---------------------------------------------------------------------------
-  # Calculate posterior summaries for the factors: 
-  # Posterior summaries: posterior mean and 95% credible interval
-  # ---------------------------------------------------------------------------
-  
-  # ---------------------------------------------------------------------------
-  # Joint factors
-  # ---------------------------------------------------------------------------
-  
-  if (ranks[1] > 0) {
-    # Scores
-    joint.scores.summary <- lapply(1:ranks[1], function(r) {
-      score.matrix <- do.call(cbind, lapply(joint.scores.final, function(iter) iter[,r,drop=FALSE]))
-      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
-                                      Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
-                                      Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
-      rownames(summary.mat) <- paste("Sample", 1:n)
-      summary.mat
-    })
-    names(joint.scores.summary) <- paste0("Joint.Factor.", 1:ranks[1])
-    
-    # Loadings
-    joint.loadings.summary <- lapply(1:ranks[1], function(r) {
-      lapply(1:q, function(s) {
-        load.matrix <- do.call(cbind, lapply(joint.loadings.final, function(iter) iter[p.ind[[s]],r,drop=FALSE]))
-        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
-                                        Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
-                                        Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
-        rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
-        summary.mat
-      })
-    })
-    
-    # Regression coefficients
-    if (response_given) {
-      joint.betas.summary <- lapply(1:ranks[1], function(r) {
-        beta.mat <- do.call(cbind, lapply(joint.betas.final, function(iter) iter[r,,drop=FALSE]))
-        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
-                                        Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
-                                        Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
-        summary.mat
-      })
-      names(joint.betas.summary) <- paste0("Joint.Factor.Regression.Coefficient.", 1:ranks[1])
-    }
-    
-    if (!response_given) {
-      joint.betas.summary <- NULL
-    }
-  }
-  
-  if (ranks[1] == 0) {
-    # Scores
-    score.matrix <- do.call(cbind, lapply(joint.scores.final, function(iter) iter[,1,drop=FALSE]))
-    joint.scores.summary <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
-                                             Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
-                                             Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
-    rownames(joint.scores.summary) <- paste("Sample", 1:n)
-    names(joint.scores.summary) <- paste0("Joint.Factor.", 1:ranks[1])
-    
-    # Loadings
-    joint.loadings.summary <- lapply(1:q, function(s) {
-        load.matrix <- do.call(cbind, lapply(joint.loadings.final, function(iter) iter[p.ind[[s]],1,drop=FALSE]))
-        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
-                                        Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
-                                        Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
-        rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
-        summary.mat
-    })
-    
-    # Regression coefficients
-    if (response_given) {
-      beta.mat <- do.call(cbind, lapply(joint.betas.final, function(iter) iter[1,,drop=FALSE]))
-      joint.betas.summary <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
-                                              Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
-                                              Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
-      joint.betas.summary
-    }
-    
-    if (!response_given) {
-      joint.betas.summary <- NULL
-    }
-
-  }
-  
-  # ---------------------------------------------------------------------------
-  # Individual factors
-  # ---------------------------------------------------------------------------
-  
-  # Scores
-  individual.scores.summary <- lapply(1:q, function(s) {
-    
-    if (ranks[s+1] > 0) {
-      source.scores.list <- lapply(1:ranks[s+1], function(rs) {
-        score.matrix <- do.call(cbind, lapply(individual.scores.final[[s]], function(iter) iter[,rs,drop=FALSE]))
-        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
-                                        Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
-                                        Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
-        rownames(summary.mat) <- paste("Sample", 1:n)
-        summary.mat
-      })
-      names(source.scores.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
-      source.scores.list
-    } else {
-      score.matrix <- do.call(cbind, lapply(individual.scores.final[[s]], function(iter) iter[,1,drop=FALSE]))
-      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
-                                      Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
-                                      Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
-      rownames(summary.mat) <- paste("Sample", 1:n)
-      summary.mat
-    }
-
-  })
-  names(individual.scores.summary) <- paste0("Source.", 1:q)
-  
-  # Loadings
-  individual.loadings.summary <- lapply(1:q, function(s) {
-    
-    if (ranks[s+1] > 0) {
-      source.load.list <- lapply(1:ranks[s+1], function(rs) {
-        load.matrix <- do.call(cbind, lapply(individual.loadings.final[[s]], function(iter) iter[,rs,drop=FALSE]))
-        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
-                                        Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
-                                        Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
-        rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
-        summary.mat
-      })
-      names(source.load.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
-      source.load.list
-    } else {
-      load.matrix <- do.call(cbind, lapply(individual.loadings.final[[s]], function(iter) iter[,1,drop=FALSE]))
-      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
-                                      Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
-                                      Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
-      rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
-      summary.mat
-    }
-
-  })
-  names(individual.loadings.summary) <- paste0("Source.", 1:q)
-  
-  # Regression coefficients
-  if (response_given) {
-    individual.betas.summary <- lapply(1:q, function(s) {
-      
-      if (ranks[s+1] > 0) {
-        source.beta.list <- lapply(1:ranks[s+1], function(rs) {
-          beta.mat <- do.call(cbind, lapply(individual.betas.final[[s]], function(iter) iter[rs,,drop=FALSE]))
-          summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
-                                          Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
-                                          Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
-          summary.mat
-        })
-        names(source.beta.list) <- paste0("Source.", s, ".Individual.Factor.Regression.Coefficient.", 1:ranks[s+1])
-        source.beta.list
-      } else {
-        beta.mat <- do.call(cbind, lapply(individual.betas.final[[s]], function(iter) iter[1,,drop=FALSE]))
-        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
-                                        Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
-                                        Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
-        summary.mat
+  if (is.null(scores)) {
+    for (iter in 1:nsample) {
+      for (s in 1:q) {
+        # Calculating the joint structure and scaling by sigma.mat
+        J.draw[[iter]][[s,1]] <- (U.draw[[iter]][[s,1]] %*% t(V.draw[[iter]][[1,1]])) * sigma.mat[s,1]
+        
+        # Calculating the individual structure and scaling by sigma.mat
+        A.draw[[iter]][[s,1]] <- (W.draw[[iter]][[s,s]] %*% t(Vs.draw[[iter]][[1,s]])) * sigma.mat[s,1]
+        
+        # Calculate the overall structure (joint + individual
+        S.draw[[iter]][[s,1]] <- J.draw[[iter]][[s,1]] + A.draw[[iter]][[s,1]]
       }
       
-    })
-    names(individual.betas.summary) <- paste0("Source.", 1:q)
-  }
-  
-  if (!response_given) {
-    individual.betas.summary <- NULL 
-  }
-  
-  # ---------------------------------------------------------------------------
-  # Summarizing the outcome variance
-  # ---------------------------------------------------------------------------
-   
-  if (response_given) {
-    tau2.summary <- cbind.data.frame(Post.Mean = mean(unlist(tau2.draw)),
-                                     Lower.95.CI = quantile(unlist(tau2.draw), 0.025),
-                                     Upper.95.CI = quantile(unlist(tau2.draw), 0.975))
-  }
-  
-  if (!response_given) {
-    tau2.summary <- NULL
-  }
-
-  # ---------------------------------------------------------------------------
-  # Summarizing the imputed values
-  # ---------------------------------------------------------------------------
-  
-  # For each source
-  Xm.summary <- lapply(1:q, function(s) {
-    
-    if (length(missing_obs[[s]]) > 0) {
-      # Create matrix of imputed values for each missing sample
-      Xm.s <- do.call(cbind, lapply(iters_burnin, function(iter) {
-        Xm.draw[[iter]][[s,1]]
-      }))
-      
-      # Summarize the posterior mean and 95% CI
-      Xm.s.summary <- cbind.data.frame(Post.Mean = rowMeans(Xm.s),
-                                       Lower.95.CI = apply(Xm.s, 1, function(row) quantile(row, 0.025)),
-                                       Upper.95.CI = apply(Xm.s, 1, function(row) quantile(row, 0.975)))
-      
-      # Add rownames
-      rownames(Xm.s.summary) <- paste0("Source ", s, " Sample ", missing_obs[[s]])
-      Xm.s.summary
-    } else {
-      NULL
-    }
-  })
-  
-  # For the response
-  if (response_given) {
-    if (missingness_in_response) {
-      Ym.mat <- do.call(cbind, lapply(iters_burnin, function(iter) Ym.draw[[iter]][[1,1]]))
-      Ym.summary <- cbind.data.frame(Post.Mean = rowMeans(Ym.mat),
-                                     Lower.95.CI = apply(Ym.mat, 1, function(row) quantile(row, 0.025)),
-                                     Upper.95.CI = apply(Ym.mat, 1, function(row) quantile(row, 0.975)))
-      rownames(Ym.summary) <- paste0("Sample ", missing_obs_Y)
-    }
-    
-    if (!missingness_in_response) {
-      Ym.summary <- NULL
+      # Calculate the structure for Y
+      if (response_given) {
+        if (response_type == "continuous") {
+          EY.draw[[iter]][[1,1]] <- VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]]
+        }
+        
+        if (response_type == "binary") {
+          EY.draw[[iter]][[1,1]] <- pnorm(VStar.draw[[iter]][[1,1]] %*% beta.draw[[iter]][[1,1]])
+        }
+      }
     }
   }
   
-  if (!response_given) {
-    Ym.summary <- NULL
-  }
-
-  
-  # ---------------------------------------------------------------------------
   # Return
-  # ---------------------------------------------------------------------------
-  
-  list(
-       # The data used in the analysis
-       data = data, # Scaled data
-       Y = Y, # Response vector
+  list(data = data, # Returning the scaled version of the data
+       Y = Y, # Return the response vector
        sigma.mat = sigma.mat, # Scaling factors
-       
-       # Summaries of the joint factors
-       joint.scores.summary = joint.scores.summary,
-       joint.loadings.summary = joint.loadings.summary,
-       
-       # Summaries of the individual factors
-       individual.scores.summary = individual.scores.summary,
-       individual.loadings.summary = individual.loadings.summary,
-       
-       # Summaries of the factor contributions in predictive model
-       joint.betas.summary = joint.betas.summary,
-       individual.betas.summary = individual.betas.summary,
-       
-       # Summaries of the imputed values
-       Xm.summary = Xm.summary, Ym.summary = Ym.summary, # Missing data imputation
-       
-       # Miscellaneous
+       J.draw = J.draw, A.draw = A.draw, S.draw = S.draw, EY.draw = EY.draw, # Underlying structure
+       V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
+       Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
        scores = scores, # Scores if provided by another method 
        ranks = c(r, r.vec), # Ranks
-       tau2.summary = tau2.summary) # Regression parameters
-  
+       model_params = model_params, # Parameters used in model
+       tau2.draw = tau2.draw, beta.draw = beta.draw) # Regression parameters
 }
 
 # -----------------------------------------------------------------------------
@@ -1367,6 +1108,8 @@ jointRot_multi <- function(lambda, eta, piv = NULL, y = NULL, var_betas = NULL, 
 #' @param iters_burnin (vector): indices for posterior samples after burn-in
 #' @param piv.list (list of matrices or ints): list of pivot matrices for joint then 
 #' individual structures or indices for pivots from posterior samples
+#' @param index (int): for sensitivity of the results, choose a pivot that falls
+#' the some indices away from the chosen pivot (index specifies the number of indices)
 
 match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burnin, piv.list = NULL, index = 0) {
   
@@ -1727,6 +1470,927 @@ match_align_bsfp <- function(BSFP.fit, y = NULL, model_params, p.vec, iters_burn
        individual.loadings.final = individual.loadings.final.order, 
        individual.betas.final = individual.betas.final.order,
        individual_pivot_index = individual_pivot_index)
+}
+
+# -----------------------------------------------------------------------------
+# Summary functions
+# -----------------------------------------------------------------------------
+
+#' summarize_factors
+#' 
+#' Calculate posterior summaries of aligned estimated factors from BSFP. 
+#' 
+#' @param data A matrix of lists or a list of matrices that share the same number of
+#' columns. The matrices must be oriented in pxn orientation. May contain NAs if 
+#' there are missing values in the dataset. 
+#' @param Y A matrix of lists or a nx1 matrix of continuous or binary outcome. 
+#' May be NULL if no outcome is given. May contain NAs if there are missing outcomes. 
+#' @param iters_burnin (vector): indices for posterior samples after burn-in
+#' @param aligned_results (list): results from match_align_bsfp
+#' @param ranks Estimated joint and individual ranks from BSFP
+#' @param tau2.draw Posterior samples for error variance in Y if response is given
+#' @param Xm.draw Imputed values for missing values in X
+#' @param Ym.draw Imputed values for unobserved outcomes in Y
+#' @export
+
+summarize_factors <- function(data, Y = NULL, iters_burnin,
+                              aligned_results, ranks, tau2.draw = NULL, Xm.draw = NULL, Ym.draw = NULL) {
+  
+  # ---------------------------------------------------------------------------
+  # Save the aligned results
+  # ---------------------------------------------------------------------------
+  
+  joint.scores.final <- aligned_results$joint.scores.final
+  joint.loadings.final <- aligned_results$joint.loadings.final
+  joint.betas.final <- aligned_results$joint.betas.final
+  
+  individual.scores.final <- aligned_results$individual.scores.final
+  individual.loadings.final <- aligned_results$individual.loadings.final
+  individual.betas.final <- aligned_results$individual.betas.final
+  
+  # ---------------------------------------------------------------------------
+  # Save data attributes
+  # ---------------------------------------------------------------------------
+
+  # Was the data input as a list?
+  if (!("matrix" %in% class(data))) {
+    
+    # Save the number of sources
+    q <- length(data)
+    
+    # Initialize new data matrix
+    new_data <- matrix(list(), nrow = q, ncol = 1)
+    
+    # Add in the sources
+    for (s in 1:q) {
+      new_data[[s,1]] <- data[[s]]
+    }
+    
+    # Rename the new version of the data
+    data <- new_data
+  }
+  
+  # If a response was given, was it input as a matrix of lists or as a matrix?
+  if (!is.null(Y)) {
+    if (class(Y[1,1]) != "list") {
+      
+      # Create a new version of Y
+      new_Y <- matrix(list(), nrow = 1, ncol = 1)
+      
+      # Input the response
+      new_Y[[1,1]] <- Y
+      
+      # Return to the Y variable
+      Y <- new_Y
+    }
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Extracting the dimensions
+  # ---------------------------------------------------------------------------
+  
+  q <- nrow(data) # Number of sources
+  p.vec <- apply(data, 1, function(source) nrow(source[[1]])) # Number of features per source
+  p <- sum(p.vec) # Total number of features
+  n <- ncol(data[[1,1]]) # Number of subjects
+  
+  # Initialize the indices of features in each source 
+  p.ind <- lapply(1:q, function(s) {
+    if (s == 1) {
+      1:p.vec[s]
+    } else {
+      (p.vec[s-1] + 1):cumsum(p.vec)[s]
+    }
+  })
+  
+  # Rank indices
+  rank.inds <- lapply(1:(q+1), function(s) {
+    
+    # For any structure,
+    if (ranks[s] == 0) {
+      NULL
+    }
+    
+    # For joint structure
+    else if (s == 1) {
+      if (ranks[s] > 0) {
+        1:ranks[s]
+      }
+    }
+    
+    # For each individual structure
+    else if (s > 1) {
+      (sum(ranks[1:(s-1)])+1):sum(ranks[1:s])
+    }
+    
+  })
+  
+  # Regression coefficient indices
+  beta.ind <- lapply(1:(q+1), function(s) {
+    
+    if (is.null(rank.inds[[s]])) {
+      NULL
+    }
+    
+    else {
+      rank.inds[[s]] + 1
+    }
+  })
+  
+  # ---------------------------------------------------------------------------
+  # Is there a response vector?
+  # ---------------------------------------------------------------------------
+  
+  response_given <- !is.null(Y[[1,1]]) 
+  
+  # If so, what kind of response is it?
+  if (response_given) {
+    Y <- matrix(unlist(Y))
+    
+    response_type <- if (all(unique(Y) %in% c(0, 1, NA))) "binary" else "continuous"
+    
+    # If there is a response, is there missingness in the outcome?
+    missingness_in_response <- any(is.na(Y))
+    
+    # Which entries are missing?
+    missing_obs_Y <- which(is.na(Y))
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Check for missingness in data
+  # ---------------------------------------------------------------------------
+  
+  # Check for missingness
+  missingness_in_data <- any(sapply(data[,1], function(source) any(is.na(source))))
+  
+  # Which entries are missing?
+  missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
+  
+  # ---------------------------------------------------------------------------
+  # Joint factors
+  # ---------------------------------------------------------------------------
+  
+  if (ranks[1] > 0) {
+    # Scores
+    joint.scores.summary <- lapply(1:ranks[1], function(r) {
+      score.matrix <- do.call(cbind, lapply(joint.scores.final, function(iter) iter[,r,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                      Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+      rownames(summary.mat) <- paste("Sample", 1:n)
+      summary.mat
+    })
+    names(joint.scores.summary) <- paste0("Joint.Factor.", 1:ranks[1])
+    
+    # Loadings
+    joint.loadings.summary <- lapply(1:ranks[1], function(r) {
+      lapply(1:q, function(s) {
+        load.matrix <- do.call(cbind, lapply(joint.loadings.final, function(iter) iter[p.ind[[s]],r,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                        Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+        rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+        summary.mat
+      })
+    })
+    
+    # Regression coefficients
+    if (response_given) {
+      joint.betas.summary <- lapply(1:ranks[1], function(r) {
+        beta.mat <- do.call(cbind, lapply(joint.betas.final, function(iter) iter[r,,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                        Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+        summary.mat
+      })
+      names(joint.betas.summary) <- paste0("Joint.Factor.Regression.Coefficient.", 1:ranks[1])
+    }
+    
+    if (!response_given) {
+      joint.betas.summary <- NULL
+    }
+  }
+  
+  if (ranks[1] == 0) {
+    # Scores
+    score.matrix <- do.call(cbind, lapply(joint.scores.final, function(iter) iter[,1,drop=FALSE]))
+    joint.scores.summary <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                             Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                             Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+    rownames(joint.scores.summary) <- paste("Sample", 1:n)
+    names(joint.scores.summary) <- paste0("Joint.Factor.", 1:ranks[1])
+    
+    # Loadings
+    joint.loadings.summary <- lapply(1:q, function(s) {
+      load.matrix <- do.call(cbind, lapply(joint.loadings.final, function(iter) iter[p.ind[[s]],1,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                      Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+      rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+      summary.mat
+    })
+    
+    # Regression coefficients
+    if (response_given) {
+      beta.mat <- do.call(cbind, lapply(joint.betas.final, function(iter) iter[1,,drop=FALSE]))
+      joint.betas.summary <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                              Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                              Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+      joint.betas.summary
+    }
+    
+    if (!response_given) {
+      joint.betas.summary <- NULL
+    }
+    
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Individual factors
+  # ---------------------------------------------------------------------------
+  
+  # Scores
+  individual.scores.summary <- lapply(1:q, function(s) {
+    
+    if (ranks[s+1] > 0) {
+      source.scores.list <- lapply(1:ranks[s+1], function(rs) {
+        score.matrix <- do.call(cbind, lapply(individual.scores.final[[s]], function(iter) iter[,rs,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                        Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+        rownames(summary.mat) <- paste("Sample", 1:n)
+        summary.mat
+      })
+      names(source.scores.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
+      source.scores.list
+    } else {
+      score.matrix <- do.call(cbind, lapply(individual.scores.final[[s]], function(iter) iter[,1,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(score.matrix),
+                                      Lower.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(score.matrix, 1, function(row) quantile(row, 0.975)))
+      rownames(summary.mat) <- paste("Sample", 1:n)
+      summary.mat
+    }
+    
+  })
+  names(individual.scores.summary) <- paste0("Source.", 1:q)
+  
+  # Loadings
+  individual.loadings.summary <- lapply(1:q, function(s) {
+    
+    if (ranks[s+1] > 0) {
+      source.load.list <- lapply(1:ranks[s+1], function(rs) {
+        load.matrix <- do.call(cbind, lapply(individual.loadings.final[[s]], function(iter) iter[,rs,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                        Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+        rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+        summary.mat
+      })
+      names(source.load.list) <- paste0("Source.", s, ".Individual.Factor.", 1:ranks[s+1])
+      source.load.list
+    } else {
+      load.matrix <- do.call(cbind, lapply(individual.loadings.final[[s]], function(iter) iter[,1,drop=FALSE]))
+      summary.mat <- cbind.data.frame(Post.Mean = rowMeans(load.matrix),
+                                      Lower.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.025)),
+                                      Upper.95.CI = apply(load.matrix, 1, function(row) quantile(row, 0.975)))
+      rownames(summary.mat) <- paste("Source", s, "Feature", 1:p.vec[s])
+      summary.mat
+    }
+    
+  })
+  names(individual.loadings.summary) <- paste0("Source.", 1:q)
+  
+  # Regression coefficients
+  if (response_given) {
+    individual.betas.summary <- lapply(1:q, function(s) {
+      
+      if (ranks[s+1] > 0) {
+        source.beta.list <- lapply(1:ranks[s+1], function(rs) {
+          beta.mat <- do.call(cbind, lapply(individual.betas.final[[s]], function(iter) iter[rs,,drop=FALSE]))
+          summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                          Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                          Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+          summary.mat
+        })
+        names(source.beta.list) <- paste0("Source.", s, ".Individual.Factor.Regression.Coefficient.", 1:ranks[s+1])
+        source.beta.list
+      } else {
+        beta.mat <- do.call(cbind, lapply(individual.betas.final[[s]], function(iter) iter[1,,drop=FALSE]))
+        summary.mat <- cbind.data.frame(Post.Mean = rowMeans(beta.mat),
+                                        Lower.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.025)),
+                                        Upper.95.CI = apply(beta.mat, 1, function(row) quantile(row, 0.975)))
+        summary.mat
+      }
+      
+    })
+    names(individual.betas.summary) <- paste0("Source.", 1:q)
+  }
+  
+  if (!response_given) {
+    individual.betas.summary <- NULL 
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Summarizing the outcome variance
+  # ---------------------------------------------------------------------------
+  
+  if (response_given) {
+    tau2.summary <- cbind.data.frame(Post.Mean = mean(unlist(tau2.draw)[iters_burnin]),
+                                     Lower.95.CI = quantile(unlist(tau2.draw)[iters_burnin], 0.025),
+                                     Upper.95.CI = quantile(unlist(tau2.draw)[iters_burnin], 0.975))
+  }
+  
+  if (!response_given) {
+    tau2.summary <- NULL
+  }
+  
+  # ---------------------------------------------------------------------------
+  # Summarizing the imputed values
+  # ---------------------------------------------------------------------------
+  
+  # For each source
+  Xm.summary <- lapply(1:q, function(s) {
+    
+    if (length(missing_obs[[s]]) > 0) {
+      # Create matrix of imputed values for each missing sample
+      Xm.s <- do.call(cbind, lapply(iters_burnin, function(iter) {
+        Xm.draw[[iter]][[s,1]]
+      }))
+      
+      # Summarize the posterior mean and 95% CI
+      Xm.s.summary <- cbind.data.frame(Post.Mean = rowMeans(Xm.s),
+                                       Lower.95.CI = apply(Xm.s, 1, function(row) quantile(row, 0.025)),
+                                       Upper.95.CI = apply(Xm.s, 1, function(row) quantile(row, 0.975)))
+      
+      # Add rownames
+      rownames(Xm.s.summary) <- paste0("Source ", s, " Sample ", missing_obs[[s]])
+      Xm.s.summary
+    } else {
+      NULL
+    }
+  })
+  
+  # For the response
+  if (response_given) {
+    if (missingness_in_response) {
+      Ym.mat <- do.call(cbind, lapply(iters_burnin, function(iter) Ym.draw[[iter]][[1,1]]))
+      Ym.summary <- cbind.data.frame(Post.Mean = rowMeans(Ym.mat),
+                                     Lower.95.CI = apply(Ym.mat, 1, function(row) quantile(row, 0.025)),
+                                     Upper.95.CI = apply(Ym.mat, 1, function(row) quantile(row, 0.975)))
+      rownames(Ym.summary) <- paste0("Sample ", missing_obs_Y)
+    }
+    
+    if (!missingness_in_response) {
+      Ym.summary <- NULL
+    }
+  }
+  
+  if (!response_given) {
+    Ym.summary <- NULL
+  }
+  
+  
+  # ---------------------------------------------------------------------------
+  # Return
+  # ---------------------------------------------------------------------------
+  
+  list(
+    # Summaries of the joint factors
+    joint.scores.summary = joint.scores.summary,
+    joint.loadings.summary = joint.loadings.summary,
+    
+    # Summaries of the individual factors
+    individual.scores.summary = individual.scores.summary,
+    individual.loadings.summary = individual.loadings.summary,
+    
+    # Summaries of the factor contributions in predictive model
+    joint.betas.summary = joint.betas.summary,
+    individual.betas.summary = individual.betas.summary,
+    
+    # Summaries of the imputed values
+    Xm.summary = Xm.summary, Ym.summary = Ym.summary, # Missing data imputation
+    
+    # Miscellaneous
+    ranks = c(r, r.vec), # Ranks
+    tau2.summary = tau2.summary) # Regression parameters
+  
+}
+
+#' log_joint_density: 
+#' 
+#' Calculate the log-joint density of the estimated model at a given posterior
+#' sampling iteration to facilitate checking convergence. 
+#' 
+#' @param data A matrix of lists or a list of matrices that share the same number of
+#' columns. The matrices must be oriented in pxn orientation. May contain NAs if 
+#' there are missing values in the dataset. 
+#' @param Y A matrix of lists or a nx1 matrix of continuous or binary outcome. 
+#' May be NULL if no outcome is given. May contain NAs if there are missing outcomes. 
+#' @param U.iter Posterior draw for joint loadings, U, at a given iteration
+#' @param V.iter Posterior draw for joint scores, V, at a given iteration
+#' @param W.iter Posterior draw for individual loadings, W, at a given iteration
+#' @param Vs.iter Posterior draw for individual scores, Vs, at a given iteration
+#' @param ranks Estimated joint and individual ranks from BSFP
+#' @param beta.iter Posterior draw for regression coefficients at a given iteration
+#' @param tau2.iter Posterior draw for estimated error variance in Y at a given iteration
+#' @param Xm.iter Imputed values for unobserved X values at a given iteration
+#' @param Ym.iter Imputed values for unobserved Y values at a given iteration
+#' @export
+
+log_joint_density <- function(data, Y = NULL, U.iter, V.iter, W.iter, Vs.iter, model_params, ranks, beta.iter = NULL, tau2.iter = NULL, Xm.iter = NULL, Ym.iter = NULL) {
+  
+  library(invgamma)
+  
+  # How many sources are there?
+  q <- nrow(data)
+  
+  # How many observations?
+  n <- ncol(data[[1,1]])
+  
+  # Saving the model parameters
+  error_vars <- model_params$error_vars # Error variances
+  sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
+  sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
+  beta_vars <- model_params$beta_vars # Variances on betas
+  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
+  
+  r <- ranks[1]
+  r.vec <- ranks[-1]
+  r_total <- r + sum(r.vec)
+  n_beta <- 1 + r_total
+  
+  Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
+  diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+  
+  # Check if there is a response
+  response_given <- !is.null(Y)
+  
+  # If there is a response, what type of response is it?
+  if (response_given) {
+    response_type <- if (all(unique(Y) %in% c(0, 1, NA))) "binary" else "continuous"
+  }
+  
+  # Check if there is missingness
+  missingness_in_data <- any(sapply(data[,1], function(source) any(is.na(source))))
+  
+  # Which entries are missing?
+  missing_obs <- lapply(data[,1], function(source) which(is.na(source)))
+  
+  # If there is missingness, fill in the missing values with the current imputed values
+  if (missingness_in_data) {
+    # Creating the completed matrices. 
+    X_complete <- data
+    
+    # Fill in the completed matrices with the imputed values
+    for (s in 1:q) {
+      X_complete[[s,1]][missing_obs[[s]]] <- Xm.iter[[s,1]]
+    }
+  }
+  
+  # If there is no missingness, rename the data
+  if (!missingness_in_data) {
+    X_complete <- data
+  }
+  
+  # Check if there is missingness in the response
+  missingness_in_response <- any(is.na(Y[[1,1]]))
+  
+  # Which entries are missing?
+  missing_obs_Y <- which(is.na(Y[[1,1]])) 
+  
+  # If there is missingness in the response, fill in the missing values with the current imputed values
+  if (missingness_in_response) {
+    # Create a completed response
+    Y_complete <- Y
+    
+    # Fill in the missing values
+    Y_complete[[1,1]][missing_obs_Y] <- Ym.iter[[1,1]]
+  }
+  
+  # If there is no missingness, rename the response
+  if (!missingness_in_response) {
+    Y_complete <- Y
+  }
+  
+  # Saving the contributions of each term to the joint density
+  like <- 0
+  
+  # Contribution of V to the joint density
+  like <- like + sum(sapply(1:r, function(rs) {
+    dnorm(V.iter[[1,1]][,rs], mean = 0, sd = sqrt(sigma2_joint), log = TRUE)
+  }))
+  
+  for (s in 1:q) {
+    # Contribution of the observed data to the joint density
+    data_s <- X_complete[[s,1]]
+    like <- like + sum(sapply(1:n, function(i) {
+      dnorm(data_s[,i], mean = (U.iter[[s,1]] %*% t(V.iter[[1,1]]) + W.iter[[s,s]] %*% t(Vs.iter[[1,s]]))[,i], sd = sqrt(error_vars[s]), log = TRUE)
+    }))
+    
+    # Contribution of Us to the joint density
+    like <- like + sum(sapply(1:r, function(rs) {
+      dnorm(U.iter[[s,1]][,rs], mean = 0, sd = sqrt(sigma2_joint), log = TRUE)
+    }))
+    
+    # Contribution of Ws to the joint density
+    like <- like + sum(sapply(1:r.vec[s], function(rs) {
+      dnorm(W.iter[[s,s]][,rs], mean = 0, sd = sqrt(sigma2_indiv[s]), log = TRUE)
+    }))
+    
+    # Contribution of Vs to the joint density
+    like <- like + sum(sapply(1:r.vec[s], function(rs) {
+      dnorm(Vs.iter[[1,s]][,rs], mean = 0, sd = sqrt(sigma2_indiv[s]), log = TRUE)
+    }))
+    
+    # If there is a response
+    if (response_given) {
+      VStar.iter <- cbind(1, do.call(cbind, V.iter), do.call(cbind, Vs.iter))
+      
+      # The contribution of beta to the joint density
+      like <- like + sum(sapply(1:n_beta, function(rs) {
+        dnorm(beta.iter[[1,1]][rs,], mean = 0, sd = sqrt(Sigma_beta[rs,rs]), log = TRUE)
+      }))
+
+      if (response_type == "continuous") {
+        # The contribution of the observed response to the joint density
+        like <- like + sum(sapply(1:n, function(i) {
+          dnorm(Y_complete[[1,1]][i,], mean = (VStar.iter %*% beta.iter[[1,1]])[i,], sd = sqrt(tau2.iter[[1,1]]), log = TRUE)
+        }))
+        
+        # The contribution of tau2 to the joint density
+        like <- like + log(dinvgamma(tau2.iter[[1,1]], shape = shape, scale = 1/rate))
+      }
+      
+      if (response_type == "binary") {
+        # The contribution of the observed response to the joint density
+        like <- like + sum(log(sapply(1:n, function(i) {
+          dbinom(Y_complete[[1,1]][i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter[[1,1]]))
+        })))
+      }
+    }
+  }
+  
+  # Return
+  like
+}
+
+# -----------------------------------------------------------------------------
+# Miscellaneous
+# -----------------------------------------------------------------------------
+
+#' bsfp_data
+#' 
+#' Generate fake data according to BSF/BSFP model
+#' 
+#' @param p.vec (vector) vector of with number of features per source
+#' @param n (int) number of samples
+#' @param ranks (vector) vector with joint and individual ranks (first index 
+#' is joint, remaining are individual for each source)
+#' @param s2nX (dbl) signal-to-noise ratio in X (ratio of variance in X to variance
+#' in error). >1 means higher signal in X, <1 means lower signal in X
+#' @param s2nY (dbl) signal-to-noise ratio in Y
+#' @param response NULL if no response is desired, "continuous", or "binary" 
+#' @param missingness NULL if no missingness, or "missingness_in_data" or "missingness_in_response"
+#' @param missing_data_type NULL if missingness = NULL; otherwise, = entrywise 
+#' if randomly sample across sources; columnwise if randomly set samples to missing;
+#'  MNAR is randomly set features below a threshold to missing
+#' @param prop_missing NULL if missingness = NULL; otherwise the proportion of 
+#' entries or columns set to missing
+#' @param sparsity (Boolean) TRUE if generate regression coefficients under 
+#' spike-and-slab prior, FALSE otherwise
+#' @param identically_zero (Boolean) TRUE if generating response with sparsity 
+#' and want spike coefficients to be exactly 0
+#' @param num_in_spike (vector) number of coefficients to be generated from spike 
+#' if generating response with sparsity. NULL if sparsity=FALSE. Should have an 
+#' integer for joint and each individual structure. May be set to NULL and 
+#' the number of factors in the spike will be determined randomly. 
+#' @export
+
+bsfp_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, response = NULL, missingness = NULL, missing_data_type = NULL, prop_missing = NULL, sparsity, identically_zero = FALSE, num_in_spike = NULL) {
+  
+  # -------------------------------------------------------------------------
+  # Setting the dimensions and latent components
+  # -------------------------------------------------------------------------
+  
+  q <- length(p.vec)
+  n_beta <- 1 + sum(ranks)
+  r <- ranks[1]
+  r.vec <- ranks[-1]
+  
+  # Setting the true parameters
+  error_vars <- true_params$error_vars
+  sigma2_joint <- joint_var <- true_params$joint_var
+  sigma2_indiv <- indiv_vars <- true_params$indiv_vars
+  beta_vars <- true_params$beta_vars
+  response_vars <- true_params$response_vars
+  
+  if (!is.null(response_vars)) {
+    shape <- response_vars[1]; rate <- response_vars[2]
+  }
+  
+  # -------------------------------------------------------------------------
+  # Generating the underlying structure
+  # -------------------------------------------------------------------------
+  
+  joint.structure <- indiv.structure <- overall.structure <- matrix(list(), ncol = 1, nrow = q)
+  
+  V <- matrix(list(), nrow = 1, ncol = 1)
+  
+  if (r > 0) V[[1,1]] <- matrix(rnorm(n*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = n, ncol = r)
+  if (r == 0) V[[1,1]] <- matrix(0, nrow = n, ncol = 1)
+  
+  U <- matrix(list(), nrow = q, ncol = 1)
+  Vs <- matrix(list(), nrow = 1, ncol = q)
+  W <- matrix(list(), nrow = q, ncol = q)
+  
+  E <- matrix(list(), nrow = q, ncol = 1)
+  
+  for (s in 1:q) {
+    if (r > 0) U[[s,1]] <- matrix(rnorm(p.vec[s]*r, mean = 0, sd = sqrt(sigma2_joint)), nrow = p.vec[s], ncol = r)
+    if (r == 0) U[[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+    
+    if (r.vec[s] > 0) {
+      Vs[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
+      W[[s,s]] <- matrix(rnorm(p.vec[s]*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = p.vec[s], ncol = r.vec[s])
+      
+      for (ss in 1:q) {
+        if (ss != s) {
+          if (r.vec[ss] > 0) W[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = r.vec[ss])
+          
+          if (r.vec[ss] == 0) W[[s,ss]] <- matrix(0, nrow = p.vec[[s]], ncol = 1)
+        }
+      }
+    }
+    if (r.vec[s] == 0) {
+      Vs[[1,s]] <- matrix(0, nrow = n, ncol = 1)
+      W[[s,s]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+      
+      for (ss in 1:q) {
+        if (ss != s) {
+          if (r.vec[ss] > 0) W[[s,ss]] <- matrix(0, nrow = p.vec[s], ncol = r.vec[ss])
+          
+          if (r.vec[ss] == 0) W[[s,ss]] <- matrix(0, nrow = p.vec[s], ncol = 1)
+        }
+      }
+    }
+    
+    E[[s,1]] <- matrix(rnorm(p.vec[s]*n, sd = sqrt(error_vars[s])), nrow = p.vec[s], ncol = n)
+    
+    joint.structure[[s,1]] <- U[[s,1]] %*% t(V[[1,1]])
+    indiv.structure[[s,1]] <- W[[s,s]] %*% t(Vs[[1,s]])
+    overall.structure[[s,1]] <- joint.structure[[s,1]] + indiv.structure[[s,1]]
+  }
+  
+  # -------------------------------------------------------------------------
+  # Standardizing the variance of the signal in the data
+  # -------------------------------------------------------------------------
+  
+  if (is.null(s2nX)) {
+    s2nX_coef <- NULL
+  }
+  
+  if (!is.null(s2nX)) {
+    # Calculating the scaling coefficient so that the variance of the underlying structure = s2nX * noise variance
+    s2nX_coef <- rep(0, q)
+    
+    for (s in 1:q) {
+      s2nX_coef[s] <- sqrt(s2nX) * sd(c(E[[s,1]]))/sd(c(joint.structure[[s,1]] + indiv.structure[[s,1]]))
+      
+      joint.structure[[s,1]] <- s2nX_coef[s] * joint.structure[[s,1]]
+      indiv.structure[[s,1]] <- s2nX_coef[s] * indiv.structure[[s,1]]
+      overall.structure[[s,1]] <- joint.structure[[s,1]] + indiv.structure[[s,1]]
+    }
+  }
+  
+  # -------------------------------------------------------------------------
+  # Calculating the observed data
+  # -------------------------------------------------------------------------
+  
+  data <- matrix(list(), nrow = q, ncol = 1)
+  
+  for (s in 1:q) {
+    data[[s,1]] <- joint.structure[[s,1]] + indiv.structure[[s,1]] + E[[s,1]]
+  }
+  
+  # -------------------------------------------------------------------------
+  # Adding a response if desired
+  # -------------------------------------------------------------------------
+  
+  if (is.null(response)) {
+    Y <- EY <- Y_missing <- beta <- tau2 <- gamma <- p.prior <- matrix(list(), nrow = 1, ncol = 1)
+    s2nY_coef <- NULL
+  }
+  
+  if (!is.null(response)) {
+    
+    Sigma_beta <- matrix(0, nrow = n_beta, ncol = n_beta)
+    diag(Sigma_beta) <- c(beta_vars[1], rep(beta_vars[-1], c(r, r.vec)))
+    
+    if (!sparsity) {
+      # Generate betas
+      beta <- matrix(list(), nrow = 1, ncol = 1)
+      beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
+      p.prior <- gamma <- matrix(list(), nrow = 1, ncol = 1)
+    }
+    
+    if (sparsity) {
+      
+      p.prior <- matrix(rbeta(1, 1, 1), ncol = 1)
+      
+      # If no prior specification on number of coefficients in spike
+      if (is.null(num_in_spike)) {
+        gamma <- matrix(rbinom(n_beta, size = 1, prob = p.prior), ncol = 1)
+        gamma[1,] <- 1 # Always include the intercept
+      }
+      
+      # If user specifies number of coefficients in spike, randomly choose which
+      if (!is.null(num_in_spike)) {
+        gamma <- matrix(1, nrow = n_beta, ncol = 1) 
+        
+        # Randomly choose which components to be in the spike from each joint and individual structure
+        spike_inds <- c()
+        
+        # Randomly choose joint components for spike
+        joint_spike_inds <- sort(sample(x = c(2:r), size = num_in_spike[1], replace = FALSE))
+        spike_inds <- c(spike_inds, joint_spike_inds) 
+        
+        # Randomly choose which individual components for spike
+        for (s in 1:q) {
+          if (s == 1) {
+            indiv_spike_inds_s <- 1 + r + sort(sample(x = c(1:r.vec[s]), size = num_in_spike[2], replace = FALSE))
+          }
+          
+          if (s != 1) {
+            indiv_spike_inds_s <- 1 + r + sum(r.vec[1:(s-1)]) + sort(sample(x = c(1:r.vec[s]), size = num_in_spike[s], replace = FALSE))
+          }
+          spike_inds <- c(spike_inds, indiv_spike_inds_s)
+        }
+        
+        gamma[spike_inds,] <- 0
+      }
+      
+      diag(Sigma_beta)[gamma == 0] <- 1/1000
+      beta <- matrix(list(), nrow = 1, ncol = 1)
+      beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
+      
+      # If desired, set spike coefficients to be identically 0
+      if (identically_zero) {
+        beta[[1,1]][gamma == 0] <- 0
+      }
+    }
+    
+    # Combine the Vs
+    V.star.joint <- V
+    if (r == 0) {
+      V.star.joint[[1,1]] <- matrix(nrow = n, ncol = r)
+    }
+    
+    Vs.star <- Vs
+    for (s in 1:q) {
+      if (r.vec[s] == 0) Vs.star[[1,s]] <- matrix(nrow = n, ncol = r.vec[s])
+    }
+    
+    VStar <- cbind(1, do.call(cbind, V.star.joint), do.call(cbind, Vs.star))
+    
+    if (response == "binary") {
+      Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
+      EY[[1,1]] <- pnorm(VStar %*% beta[[1,1]]) # True probability of being a case
+      Y[[1,1]] <- matrix(rbinom(n, size = 1, prob = EY[[1,1]]), ncol = 1)
+      tau2 <- matrix(list(), nrow = 1, ncol = 1)
+      s2nY_coef <- NULL
+    }
+    
+    if (response == "continuous") {
+      
+      # If a true error variance is provided, set tau2 to this value
+      if (length(error_vars) > q) {
+        tau2 <- matrix(list(), nrow = 1, ncol = 1)
+        tau2[[1,1]] <- error_vars[q+1]
+      }
+      
+      # If a true error variance is not provided, use prior 
+      if (length(error_vars) == q) {
+        tau2 <- matrix(list(), nrow = 1, ncol = 1)
+        tau2[[1,1]] <- matrix(1/rgamma(1, shape = shape, rate = rate)) 
+      }
+      
+      Y <- EY <- matrix(list(), nrow = 1, ncol = 1)
+      EY[[1,1]] <- VStar %*% beta[[1,1]]
+      error_y <- matrix(rnorm(n, mean = 0, sd = sqrt(tau2[[1,1]])), ncol = 1)
+      
+      # -------------------------------------------------------------------------
+      # Standardizing the variance of the signal in the response
+      # -------------------------------------------------------------------------
+      
+      if (is.null(s2nY)) {
+        s2nY_coef <- NULL
+      }
+      
+      if (!is.null(s2nY)) {
+        # Calculating the scaling coefficient so that the variance of the response = s2nY * noise variance
+        s2nY_coef <- sqrt(s2nY) * sd(error_y)/sd(EY[[1,1]])
+        EY[[1,1]] <- s2nY_coef * EY[[1,1]]
+      }
+      
+      Y[[1,1]] <- EY[[1,1]] + error_y
+    }
+  }
+  
+  # -------------------------------------------------------------------------
+  # Adding missingness if desired
+  # -------------------------------------------------------------------------
+  
+  if (is.null(missingness)) {
+    missing_data <- missing_obs <-  matrix(list(), nrow = q, ncol = 1)
+    missing_obs_Y <- Y_missing <- matrix(list(), nrow = 1, ncol = 1)
+  }
+  
+  if (!is.null(missingness)) {
+    if (missingness != "missingness_in_data" & missingness != "both") { # If missing in response
+      missing_data <- missing_obs <- matrix(list(), nrow = q, ncol = 1)
+    }
+    
+    if (missingness != "missingness_in_response" & missingness != "both") { # If missing in data
+      Y_missing <- missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
+    }
+    
+    if (missingness == "missingness_in_response" | missingness == "both") { # If missing in response
+      missing_obs_Y <- matrix(list(), nrow = 1, ncol = 1)
+      missing_obs_Y[[1,1]] <- sort(sample(1:n, size = prop_missing * n, replace = FALSE))
+      
+      Y_missing <- Y
+      Y_missing[[1,1]][missing_obs_Y[[1,1]],] <- NA
+    }
+    
+    if (missingness == "missingness_in_data" | missingness == "both") { # If missing in data
+      
+      missing_obs <- missing_data <- missing_cols <- missing_rows <- matrix(list(), nrow = q, ncol = 1)
+      
+      if (missing_data_type == "entrywise") { # if removing observations entrywise
+        for (s in 1:q) {
+          # these are counters going down the columns of R. So 9 would be the 9th entry counting down. 
+          missing_obs[[s,1]] <- sort(sample(x = 1:length(data[[s,1]]), size = prop_missing*length(data[[s,1]]), replace = FALSE))
+          
+          # Duplicate Xs so that I have one with the full data and one with the missing data
+          missing_data[[s,1]] <- data[[s,1]]
+          missing_data[[s,1]][missing_obs[[s,1]]] <- NA
+        }
+      } 
+      
+      if (missing_data_type == "columnwise") { # if removing entire columns
+        # Gives the column indices to remove
+        
+        for (s in 1:q) {
+          # These are counters going down the COLUMNS of X. So 9 would be the 9th column.
+          missing_cols[[s,1]] <- sort(sample(x=1:n, size = n*prop_missing, replace = FALSE))
+          
+          if (s != 1) {
+            avail_obs <- c(1:n)[!(c(1:n) %in% unlist(missing_cols[1:(s-1),]))]
+            missing_cols[[s,1]] <- sample(x=avail_obs, size = n*prop_missing, replace = FALSE)
+          }
+          
+          # Duplicate Xs so that I have one with the full data and one with the missing data
+          missing_data[[s,1]] <- data[[s,1]]
+          missing_data[[s,1]][,missing_cols[[s,1]]] <- NA
+          missing_obs[[s,1]] <- sort(which(is.na(missing_data[[s,1]])))
+        }
+      }
+      
+      if (missing_data_type == "MNAR") { # Restrict missing to within features
+        for (s in 1:q) {
+          # Sort the entries in source s
+          sorted_entries_s <- sort(c(data[[s,1]]), decreasing = FALSE)
+          
+          # Calculate the threshold at which the bottom prop_missing are set to NA
+          number_below_lod <- prop_missing * length(sorted_entries_s)
+          LOD <- ceiling(max(sorted_entries_s[1:number_below_lod]))
+          
+          # Duplicate Xs so that I have one with the full data and one with the missing data
+          missing_data[[s,1]] <- data[[s,1]]
+          missing_data[[s,1]][missing_data[[s,1]] < LOD] <- NA
+          missing_obs[[s,1]] <- sort(which(is.na(missing_data[[s,1]])))
+        }
+      }
+    }
+  }
+  
+  # -------------------------------------------------------------------------
+  # Return
+  # -------------------------------------------------------------------------
+  
+  list(data = data, # The "observed data"
+       Y = Y, # The "observed outcome"
+       missing_data = missing_data, # Missing data 
+       missing_obs = missing_obs, # Missing data 
+       Y_missing = Y_missing, missing_obs_Y = missing_obs_Y, # Missing data 
+       s2nX = s2nX, s2nX_coef = s2nX_coef, # Scaling for s2n in data
+       s2nY = s2nY, s2nY_coef = s2nY_coef, # Scaling for the response
+       joint.structure = joint.structure, # Joint structure
+       indiv.structure = indiv.structure, # Individual structure
+       overall.structure = overall.structure, # Joint + Individual structure
+       V = V, U = U, Vs = Vs, W = W, # Components of the structure
+       beta = beta, EY = EY, tau2 = tau2, gamma = gamma, p.prior = p.prior)
 }
 
 # -----------------------------------------------------------------------------
