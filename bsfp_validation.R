@@ -82,6 +82,7 @@ columnwise_missing0.5 <- validation_simulation(nsample = 2000, n_clust = 10, p.v
 
 # Considering columnwise missingness with many Gibbs sampling iterations
 columnwise_missing0.3 <- validation_simulation(nsample = 10000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", missing_data_type = "columnwise", prop_missing = 0.3)
+columnwise_missing0.5 <- validation_simulation(nsample = 10000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", missing_data_type = "columnwise", prop_missing = 0.5)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Continuous response, entrywise missing data
