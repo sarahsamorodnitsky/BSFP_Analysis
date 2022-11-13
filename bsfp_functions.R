@@ -460,9 +460,18 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
   
   # If there is missingness in the data, generate starting values for the missing entries
   if (missingness_in_data) {
-    Xm0 <- matrix(list(), ncol = 1, nrow = q)
-    for (s in 1:q) {
-      Xm0[[s,1]] <- rank_init$X[[s,1]][missing_obs[[s]]]
+    if (nninit) {
+      Xm0 <- matrix(list(), ncol = 1, nrow = q)
+      for (s in 1:q) {
+        Xm0[[s,1]] <- rank_init$X[[s,1]][missing_obs[[s]]]
+      }
+    }
+    
+    if (!nninit) {
+      Xm0 <- matrix(list(), ncol = 1, nrow = q)
+      for (s in 1:q) {
+        Xm0[[s,1]] <- rep(0, length(missing_obs[[s]]))
+      }
     }
   }
   
