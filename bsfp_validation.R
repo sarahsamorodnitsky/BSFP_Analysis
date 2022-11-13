@@ -128,6 +128,9 @@ save(no_response_no_missing, response_continuous,
 save(response_continuous_missing0.5, response_continuous_missing0.7,
      file = "~/BSFP_Analysis/validation_results/validation_sim_11122022.rda")
 
+save(columnwise_missing0.3, 
+     file = "~/BSFP_Analysis/validation_results/validation_sim_11132022.rda")
+
 # -----------------------------------------------------------------------------
 # Creating the results table
 # -----------------------------------------------------------------------------
