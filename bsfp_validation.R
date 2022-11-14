@@ -81,8 +81,8 @@ columnwise_missing0.3 <- validation_simulation(nsample = 2000, n_clust = 10, p.v
 columnwise_missing0.5 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", missing_data_type = "columnwise", prop_missing = 0.5)
 
 # Considering columnwise missingness with many Gibbs sampling iterations
+columnwise_missing0.1 <- validation_simulation(nsample = 10000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", missing_data_type = "columnwise", prop_missing = 0.1)
 columnwise_missing0.3 <- validation_simulation(nsample = 10000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", missing_data_type = "columnwise", prop_missing = 0.3)
-columnwise_missing0.5 <- validation_simulation(nsample = 10000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, missingness = "missingness_in_data", missing_data_type = "columnwise", prop_missing = 0.5)
 
 # -----------------------------------------------------------------------------
 # Coverage simulations - Continuous response, entrywise missing data
@@ -130,6 +130,9 @@ save(response_continuous_missing0.5, response_continuous_missing0.7,
 
 save(columnwise_missing0.3, 
      file = "~/BSFP_Analysis/validation_results/validation_sim_11132022.rda")
+
+save(columnwise_missing0.1, 
+     file = "~/BSFP_Analysis/validation_results/validation_sim_11142022.rda")
 
 # -----------------------------------------------------------------------------
 # Creating the results table
