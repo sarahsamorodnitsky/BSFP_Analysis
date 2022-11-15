@@ -1057,7 +1057,7 @@ bsfp <- function(data, Y, nninit = TRUE, model_params = NULL, ranks = NULL, scor
 #'  nninit = TRUE, init with UNIFAC. If NULL and nninit = FALSE, init from prior. 
 #'  If not NULL, will init with provided starting values unless nninit. 
 
-bsfp.predict <- function(bsfp.fit, test_data, Y_test, nninit = TRUE, model_params, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
+bsfp.predict <- function(bsfp.fit, test_data, Y_test, nninit = TRUE, model_params = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
   
   # ---------------------------------------------------------------------------
   # Extracting the dimensions
@@ -1072,12 +1072,18 @@ bsfp.predict <- function(bsfp.fit, test_data, Y_test, nninit = TRUE, model_param
   # Extracting the model parameters
   # ---------------------------------------------------------------------------
   
-  error_vars <- model_params$error_vars # Error variances
-  sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
-  sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
-  beta_vars <- model_params$beta_vars # Variances on betas
-  response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
+  if (is.null(model_params)) {
+    model_params <- bsfp.fit$model.params
+  }
   
+  if (!is.null(model_params)) {
+    error_vars <- model_params$error_vars # Error variances
+    sigma2_joint <- joint_var <- model_params$joint_var # Variance of joint structure
+    sigma2_indiv <- indiv_vars <- model_params$indiv_vars # Variances of individual structure
+    beta_vars <- model_params$beta_vars # Variances on betas
+    response_vars <- model_params$response_vars; shape <- response_vars[1]; rate <- response_vars[2] # Hyperparameters of variance of response
+  }
+
   # ---------------------------------------------------------------------------
   # Is there a response vector?
   # ---------------------------------------------------------------------------
