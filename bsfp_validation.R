@@ -59,7 +59,7 @@ response_continuous_missing0.7 <- validation_simulation(nsample = 10000, n_clust
 
 # Missing binary response
 response_binary_missing0.3 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.3)
-response_binary_missing0.5 <- validation_simulation(nsample = 2000, n_clust = 10, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.5)
+response_binary_missing0.5 <- validation_simulation(nsample = 10000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.5)
 response_binary_missing0.7 <- validation_simulation(nsample = 10000, n_clust = 5, p.vec, n, true_params, model_params, nsim = 100, center = FALSE, nninit = FALSE, ranks = ranks, response = "binary", missingness = "missingness_in_response", missing_data_type = NULL, prop_missing = 0.7)
 
 # -----------------------------------------------------------------------------
@@ -131,14 +131,17 @@ save(response_continuous_missing0.5, response_continuous_missing0.7,
 save(columnwise_missing0.3, 
      file = "~/BSFP_Analysis/validation_results/validation_sim_11132022.rda")
 
-save(columnwise_missing0.1, 
+save(columnwise_missing0.1, response_binary_missing0.7, response_binary_missing0.5,
      file = "~/BSFP_Analysis/validation_results/validation_sim_11142022.rda")
 
 # -----------------------------------------------------------------------------
 # Creating the results table
 # -----------------------------------------------------------------------------
 
-load("~/BayesianPMFWithGit/validation_results/validation_sim_162022.rda", verbose = TRUE)
+load("~/BSFP_Analysis/validation_results/validation_sim_162022.rda", verbose = TRUE)
+load("~/BSFP_Analysis/validation_results/validation_sim_11122022.rda", verbose = TRUE)
+load("~/BSFP_Analysis/validation_results/validation_sim_11132022.rda", verbose = TRUE)
+load("~/BSFP_Analysis/validation_results/validation_sim_11142022.rda", verbose = TRUE)
 
 # Create the dataframe
 validation_results <- data.frame(Condition = character(), Metric = character(), 
@@ -170,20 +173,19 @@ validation_results <- rbind.data.frame(validation_results, create_validation_tab
 validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.5, condition = "50% Binary Response Missing"))
 validation_results <- rbind.data.frame(validation_results, create_validation_table(response_binary_missing0.7, condition = "70% Binary Response Missing"))
 
-
 # Sparsity
-validation_results <- rbind.data.frame(validation_results, create_validation_table(continuous_response_sparsity, condition = "Continuous Response with Sparsity"))
-validation_results <- rbind.data.frame(validation_results, create_validation_table(binary_response_sparsity, condition = "Binary Response with Sparsity"))
+# validation_results <- rbind.data.frame(validation_results, create_validation_table(continuous_response_sparsity, condition = "Continuous Response with Sparsity"))
+# validation_results <- rbind.data.frame(validation_results, create_validation_table(binary_response_sparsity, condition = "Binary Response with Sparsity"))
 
 # Columnwise missingness
+validation_results <- rbind.data.frame(validation_results, create_validation_table(columnwise_missing0.1, condition = "10% Columnwise Missingness"))
 validation_results <- rbind.data.frame(validation_results, create_validation_table(columnwise_missing0.3, condition = "30% Columnwise Missingness"))
-validation_results <- rbind.data.frame(validation_results, create_validation_table(columnwise_missing0.5, condition = "50% Columnwise Missingness"))
+# validation_results <- rbind.data.frame(validation_results, create_validation_table(columnwise_missing0.5, condition = "50% Columnwise Missingness"))
 
 
 # Exporting the table to LaTeX
 library(xtable)
 library(magrittr)
-library(tidyverse)
 
 # Basic
 print(xtable(validation_results, digits = 4), include.rownames = FALSE)
