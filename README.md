@@ -2,7 +2,7 @@
 
 The files in this repository contain the code to run all analyses used in the article titled "Bayesian Simultaneous Factorization and Prediction Using Multi-Omic Data." 
 
-* bsfp.R contains all functions needed to run the BSFP model. 
+* `bsfp.R` contains all functions needed to run the BSFP model. 
 * bpmf_validation.R contains the validation study. Results from validation simulations can be found in the validation_results folder. 
 * bpmf_simulation.R contains the simulation study to compare models on how they recovery latent variation structure and predict an outcome. 
 * bpmf_imputation.R contains the simulation study to compare different single imputation approaches on how they impute missing values (entrywise missing, blockwise missing, and missing-not-at-random).
