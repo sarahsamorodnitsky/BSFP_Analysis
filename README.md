@@ -1,6 +1,6 @@
-# Analysis Code for ``Bayesian Simultaneous Factorization and Prediction Using Multi-Omic Data"
+# Analysis Code for "Bayesian Simultaneous Factorization and Prediction Using Multi-Omic Data"
 
-The files in this repository contain the code to run all analyses used in the article titled ``Bayesian Simultaneous Factorization and Prediction Using Multi-Omic Data." 
+The files in this repository contain the code to run all analyses used in the article titled "Bayesian Simultaneous Factorization and Prediction Using Multi-Omic Data." 
 
 * bsfp.R contains all functions needed to run the BSFP model. 
 * bpmf_validation.R contains the validation study. Results from validation simulations can be found in the validation_results folder. 
