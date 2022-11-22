@@ -2128,7 +2128,7 @@ bpmf_test_scale <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, 
     # If a response vector is given, scale Y
     if (response_given & rmt.Y) {
       
-      # Save the estimated error variance using the natural lasso
+      # Save the estimated error standard deviation using the natural lasso
       design_lasso <- do.call(rbind, scaled_data)
       nl_cv <- nlasso_cv(x = t(design_lasso)[-c(missing_obs_Y),], y = Y[-c(missing_obs_Y),]) # Remove missing observations
       sigma.mat[s+1,] <- nl_cv$sig_obj
