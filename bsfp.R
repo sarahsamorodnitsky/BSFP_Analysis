@@ -4231,10 +4231,16 @@ impute.BIDIFAC=function(data,
   
   for (i in 1:p){
     for (j in 1:q){
-      fillmat=fill.matrix(data[[i,j]])
-      impute.index[[i,j]]=fillmat$na.ind
-      if (rmt) sigma[i,j]=sigma.rmt(fillmat$X.fill)
-      data[[i,j]]=fillmat$X.fill/sigma[i,j]
+      if (any(is.na(data[[i,j]]))) {
+        fillmat=fill.matrix(data[[i,j]])
+        impute.index[[i,j]]=fillmat$na.ind
+        X.fill <- fillmat$X.fill
+      }
+      if (!any(is.na(data[[i,j]]))) {
+        X.fill <- data[[i,j]]
+      }
+      if (rmt) sigma[i,j]=sigma.rmt(X.fill)
+      data[[i,j]]=X.fill/sigma[i,j]
     }
   }
   
