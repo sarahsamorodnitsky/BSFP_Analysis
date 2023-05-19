@@ -8452,7 +8452,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
 }
 
 # Calculate proportion of variation explained
-var_explained <- function(BPMF.fit, hiv_copd_data, iters_burnin) {
+var_explained <- function(BPMF.fit, iters_burnin) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -8461,6 +8461,9 @@ var_explained <- function(BPMF.fit, hiv_copd_data, iters_burnin) {
   # hiv_copd_data: the data used in model fitting
   # iters_burnin (vec): vector of indices for samples after burn-in
   # ---------------------------------------------------------------------------
+  
+  # Save the standardized data
+  hiv_copd_data <- BPMF.fit$data
   
   # Save the number of sources
   q <- nrow(hiv_copd_data)
