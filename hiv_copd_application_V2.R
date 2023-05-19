@@ -841,7 +841,7 @@ for (i in 1:sum(ranks)) {
 
 # Calculating a summary of the variance explained
 var_exp_summary <- var_explained(BPMF.fit = fev1pp_training_fit_nonsparse_V2,
-                                 hiv_copd_data = hiv_copd_data, iters_burnin = iters_burnin)
+                                 iters_burnin = iters_burnin)
 
 # Joint structure 
 var_exp_summary$Joint
