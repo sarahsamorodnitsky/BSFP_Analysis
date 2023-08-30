@@ -8,7 +8,7 @@ library(foreach)
 library(Matrix)
 library(MASS)
 library(truncnorm)
-# library(natural)
+library(natural)
 # library(RSpectra)
 # library(MCMCpack)
 
