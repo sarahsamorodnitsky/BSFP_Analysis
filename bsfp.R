@@ -103,6 +103,9 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
       if (missingness_in_data) {
         rank_init <- impute.BIDIFAC(data = data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
       }
+      
+      # Save the initialization
+      save(rank_init, file = paste0("BIDIFAC_initialization_", lubridate::today(), ".rda"))
     }
     
     if (!is.null(previous_init)) {
