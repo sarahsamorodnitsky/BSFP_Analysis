@@ -17,7 +17,7 @@ library(natural)
 # -----------------------------------------------------------------------------
 
 # This version initializes with BIDIFAC WITHOUT y as a source
-bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL) {
+bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, scores = NULL, sparsity = FALSE, nsample, progress = TRUE, starting_values = NULL, previous_init = NULL) {
   # Gibbs sampling algorithm for sampling the underlying structure and the 
   # regression coefficient vector for a response vector. 
   
@@ -36,6 +36,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   # starting_values = list of starting values for V, U, W, Vs. If NULL and nninit = TRUE, init with BIDIFAC+,
   #    if NULL and nninit = FALSE, init from prior. If not NULL, will init with provided starting values unless 
   #    nninit. 
+  # previous_init = path for a previous initialization if provided
   # ---------------------------------------------------------------------------
   
   # ---------------------------------------------------------------------------
@@ -92,14 +93,20 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   
   if (nninit) {
     
-    # If there is not missing data
-    if (!missingness_in_data) {
-      rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
+    if (is.null(previous_init)) {
+      # If there is not missing data
+      if (!missingness_in_data) {
+        rank_init <- BIDIFAC(data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
+      }
+      
+      # If there is missing data
+      if (missingness_in_data) {
+        rank_init <- impute.BIDIFAC(data = data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
+      }
     }
     
-    # If there is missing data
-    if (missingness_in_data) {
-      rank_init <- impute.BIDIFAC(data = data, rmt = TRUE, pbar = FALSE, scale_back = FALSE)
+    if (!is.null(previous_init)) {
+      load(previous_init)
     }
     
     # Print when finished
@@ -5611,7 +5618,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
   
   # If there is a response, what type of response is it?
   if (response_given) {
-    response_type <- if (all(unique(Y) %in% c(0, 1, NA))) "binary" else "continuous"
+    response_type <- if (all(unique(Y[[1,1]]) %in% c(0, 1, NA))) "binary" else "continuous"
   }
   
   # Check if there is missingness
