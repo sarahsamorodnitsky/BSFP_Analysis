@@ -8127,6 +8127,448 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   }
 }
 
+# Running each model with cross validation
+run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds, model_params, nsample, results_wd = "~/BayesianPMF/04DataApplication/TCGA_BRCA/") {
+  
+  # ---------------------------------------------------------------------------
+  # For a given model, run cross validation in parallel
+  #
+  # Arguments:
+  # mod (character): in c(JIVE, BIDIFAC, MOFA, sJIVE, BIP)
+  # hiv_copd_data (list): data for the model
+  # outcome (double): response vector for Bayesian modeling
+  # outcome_name (character): name of the outcome for saving files
+  # ind_of_pairs (list): indices to cross validate over
+  # model_params (list): model parameters for the Bayesian model
+  # nsample (int): how many Gibbs samples to generate
+  # ---------------------------------------------------------------------------
+  
+  # Set the functions and packages for the parallel computation
+  funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "bpmf_test", "bpmf_test_scale", "get_results", "BIDIFAC",
+             "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
+             "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
+             "bidifac.plus.impute", "bidifac.plus.given")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive", "glmnet", "multiview")
+  
+  # Load in the full training data fit
+  results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/", mod, "_training_data_fit.rda") 
+  
+  # Check if the full training data fit is available and load in if so (since we don't have full training fit for BIP)
+  training_fit_avail <- paste0(mod, "_training_data_fit.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/"))
+
+  if (training_fit_avail) {
+    out <- load(results_path, verbose = TRUE)
+  }
+  
+  # For JIVE
+  if (mod == "JIVE") {
+    # Saving the joint structure
+    mod.joint <- get(out)$joint
+    
+    # Saving the individual structure
+    mod.individual <- get(out)$individual
+    
+    # Saving the joint rank
+    joint.rank <- get(out)$rankJ
+    
+    # Saving the individual ranks
+    indiv.rank <- get(out)$rankA
+    
+    # Obtaining the joint scores
+    if (joint.rank != 0)  {
+      svd.joint <- svd(mod.joint[[1]])
+      joint.scores <- (svd.joint$v[,1:joint.rank,drop=FALSE]) %*% diag(svd.joint$d[1:joint.rank], nrow = joint.rank)
+    }
+    if (joint.rank == 0) {
+      joint.scores <- NULL
+    }
+    
+    # Obtaining the individual scores
+    indiv.scores <- lapply(1:q, function(s) {
+      if (indiv.rank[s] != 0) {
+        svd.source <- svd(mod.individual[[s]])
+        (svd.source$v[,1:indiv.rank[s],drop=FALSE]) %*% diag(svd.source$d[1:indiv.rank[s]], nrow = indiv.rank[s])
+      }
+    })
+  }
+  
+  # For BIDIFAC
+  if (mod == "BIDIFAC") {
+    # Saving the column structure (the joint structure)
+    mod.joint <- lapply(1:q, function(s) {
+      get(out)$C[[s,1]]
+    })
+    
+    # Saving the individual structure 
+    mod.individual <- lapply(1:q, function(s) {
+      get(out)$I[[s,1]]
+    })
+    
+    # Saving the joint rank
+    joint.rank <- rankMatrix(get(out)$C[[1,1]])[1]
+    
+    # Saving the individual ranks
+    indiv.rank <- sapply(get(out)$I, function(s) {
+      rankMatrix(s)[1]
+    }) 
+    
+    # Obtaining the joint scores
+    if (joint.rank != 0)  {
+      svd.joint <- svd(mod.joint[[1]])
+      joint.scores <- (svd.joint$v[,1:joint.rank,drop=FALSE]) %*% diag(svd.joint$d[1:joint.rank], nrow = joint.rank)
+    }
+    if (joint.rank == 0) {
+      joint.scores <- NULL
+    }
+    
+    # Obtaining the individual scores
+    indiv.scores <- lapply(1:q, function(s) {
+      if (indiv.rank[s] != 0) {
+        svd.source <- svd(mod.individual[[s]])
+        (svd.source$v[,1:indiv.rank[s],drop=FALSE]) %*% diag(svd.source$d[1:indiv.rank[s]], nrow = indiv.rank[s])
+      }
+    })
+  }
+  
+  # For MOFA
+  if (mod == "MOFA") {
+    # Load in the MOFA library
+    library(MOFA2)
+    
+    # Getting the variance explained in each source by each factor
+    mod.var.exp <- get_variance_explained(get(out))$r2_per_factor$group1 # variance explained by factor per view
+    
+    # Save which views each factor applies to
+    joint_or_individual <- lapply(1:nrow(mod.var.exp), function(factor) {
+      # Save variance explained for current factor
+      row <- mod.var.exp[factor,]
+      
+      ind.max <- which.max(row) # Highest var explained
+      ind.min <- which.min(row) # Minimum var explained
+      
+      # First, check that factor explains at least 1% of variation in each source
+      greater_than_1p <- any(row > 1)
+      
+      # If explains more than 1% variation in at least one source
+      if (greater_than_1p) {
+        
+        # If factor explains substantial (max var is less than 2 * min var) variation in both sources, it is joint
+        if (row[ind.max] < 2*row[-ind.max]) { 
+          c(1:q)
+        } else { # If factor explains substantial variation in just one source, it is individual
+          ind.max
+        }
+        
+      }
+      
+    })
+    
+    # Save the joint factors
+    joint.factors <- c(1:length(joint_or_individual))[sapply(joint_or_individual, function(factor) length(factor) == q)]
+    
+    # Save the individual factors
+    indiv.factors <- lapply(1:q, function(s) {
+      c(1:length(joint_or_individual))[sapply(joint_or_individual, function(factor) all(factor %in% s) & length(factor) > 0)]
+    })
+    
+    # Saving the joint rank
+    joint.rank <- length(joint.factors)
+    
+    # Saving the individual rank
+    indiv.rank <- sapply(indiv.factors, length)
+    
+    # Save the underlying structure
+    mod.joint <- lapply(1:q, function(s) {
+      t(get(out)@expectations$Z$group1[, joint.factors, drop = FALSE] %*% t(get(out)@expectations$W[[s]][, joint.factors, drop = FALSE]))
+    })
+    mod.individual <- lapply(1:q, function(s) {
+      t(get(out)@expectations$Z$group1[, indiv.factors[[s]], drop = FALSE] %*% t(get(out)@expectations$W[[s]][, indiv.factors[[s]], drop = FALSE]))
+    })
+    
+    # Save the MOFA scores (all.equal(get_factors(mod.out)$group1, mod.out@expectations$Z$group1[, joint.factors, drop = FALSE]) # TRUE!)
+    mofa.scores <- get_factors(get(out))$group1
+    
+    # Save the joint scores
+    if (joint.rank != 0) {
+      joint.scores <- mofa.scores[,joint.factors, drop = FALSE]
+    }
+    if (joint.rank == 0) {
+      joint.scores <- NULL
+    }
+    
+    # Save the individual scores
+    indiv.scores <- lapply(1:q, function(s) {
+      if (indiv.rank[s] != 0) {
+        indiv.scores <- mofa.scores[,unlist(indiv.factors[[s]]), drop = FALSE]
+      }
+    })
+  }
+  
+  # For BIDIFAC, JIVE, and MOFA, which we use to estimate scores:
+  if (mod %in% c("JIVE", "BIDIFAC", "MOFA")) {
+    # Combine the scores together
+    all.scores <- cbind(joint.scores, do.call(cbind, indiv.scores))
+    colnames(all.scores) <- c(rep("joint", joint.rank), rep("indiv", sum(indiv.rank)))
+    
+    # Running in parallel
+    cl <- makeCluster(5)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      # Save the sample indices in the test fold
+      test_fold <- test_folds[[fold]]
+      
+      # Create a new vector of the outcome with the current pair set to NA
+      outcome_cv <- outcome
+      outcome_cv[[1,1]][test_fold,] <- NA
+      
+      # Fitting the Bayesian linear model
+      mod.bayes <- bpmf_data_mode(data = tcga_brca_data, Y = outcome_cv, nninit = FALSE, model_params = model_params, 
+                                  ranks = c(joint.rank, indiv.rank), scores = all.scores, nsample = nsample)
+      
+      # Save the imputed outcomes
+      Ym.draw_pair <- mod.bayes$Ym.draw
+      
+      # Save just the relevant output
+      ranks <- c(joint.rank, indiv.rank)
+      save(Ym.draw_pair, ranks, file = paste0(results_wd, "/Cross_Validation/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
+      
+      # Remove large objects
+      rm(mod.bayes)
+      
+      # Garbage collection
+      gc()
+    }
+    stopCluster(cl)
+  }
+  
+  # For sesJIVE
+  if (mod == "sesJIVE") {
+    
+    # Creating a list for the data
+    q <- nrow(tcga_brca_data)
+    tcga_brca_data_list <- lapply(1:q, function(s) tcga_brca_data[[s,1]])
+    
+    # In parallel, fit each model on n-2 samples, predict on the held-out pair
+    cl <- makeCluster(5)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Save the sample indices in the test fold
+      test_fold <- test_folds[[fold]]
+      
+      # Create a new version of the data with just the training samples
+      tcga_brca_data_list <- lapply(1:q, function(s) tcga_brca_data[[s]])
+      tcga_brca_data_list_training <- tcga_brca_data_list
+      
+      # Remove the current pair of samples
+      tcga_brca_data_list_training <- lapply(1:q, function(s) tcga_brca_data_list[[s]][,-test_fold])
+      
+      # Remove the pair from the outcome vector
+      outcome_train <- outcome
+      outcome_train[[1,1]] <- outcome[[1,1]][-test_fold,,drop=FALSE]
+      
+      # Create the test dataset
+      tcga_brca_data_list_test <- tcga_brca_data_list
+      tcga_brca_data_list_test <- lapply(1:q, function(s) tcga_brca_data_list[[s]][,test_fold])
+      
+      outcome_test <- outcome
+      outcome_test[[1,1]] <- outcome[[1,1]][test_fold,,drop=FALSE]
+      
+      # Fit on the training data
+      mod.out <- sesJIVE(X = tcga_brca_data_list_training, 
+                         Y = c(outcome_train[[1,1]]), 
+                         rankA = NULL, rankJ = NULL, 
+                         threshold = 0.001, 
+                         max.iter = 3000)
+      
+      # Fitting the model on test data
+      mod.test <- stats::predict(mod.out, newdata = tcga_brca_data_list_test)
+      Ym.draw_pair <- mod.test$Ypred
+      
+      # Save the results
+      ranks <- c(mod.out$rankJ, mod.out$rankA)
+      save(Ym.draw_pair, ranks, file = paste0(results_wd,"/Cross_Validation/", "mod/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+      
+      # Remove large objects
+      rm(mod.out, tcga_brca_data_list_training, tcga_brca_data_list_test)
+    }
+    stopCluster(cl)
+  }
+  
+  # For LASSO
+  if (mod == "LASSO_Combined_Sources") {
+    
+    # Combine the datasets together
+    data_combined <- t(data.rearrange(data)$out)
+    
+    for (fold in seq(length(test_folds))) {
+      
+      # Save the sample indices in the test fold
+      test_fold <- test_folds[[fold]]
+      
+      # Find optimal penalty
+      cv.fit <- cv.glmnet(x = data_combined[-test_fold,],
+                          y = outcome[[1,1]][-test_fold],
+                          family = "binomial",
+                          alpha = 1)
+      
+      # Save optimal penalty
+      lambda.min <- cv.fit$lambda.min
+      
+      # Refit model with penalty
+      fit <- glmnet(x = data_combined[-test_fold,],
+                    y = outcome[[1,1]][-test_fold],
+                    family = "binomial", 
+                    alpha = 1,
+                    lambda = lambda.min)
+      
+      # Save the predicted outcomes
+      Ym.draw_pair <- predict(fit, newx = data_combined[test_fold,], type = "response")
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd, "/Cross_Validation/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
+    }
+  }
+  
+  if (mod == "LASSO_Expression_Only") {
+    
+    for (fold in seq(length(test_folds))) {
+      
+      # Save the sample indices in the test fold
+      test_fold <- test_folds[[fold]]
+      
+      # Saving just the expression data
+      tcga_brca_expression <- t(data[[1,1]])
+      
+      # Find optimal penalty
+      cv.fit <- cv.glmnet(x = tcga_brca_expression[-test_fold,],
+                          y = outcome[[1,1]][-test_fold],
+                          family = "binomial",
+                          alpha = 1)
+      
+      # Save optimal penalty
+      lambda.min <- cv.fit$lambda.min
+      
+      # Refit model with penalty
+      fit <- glmnet(x = tcga_brca_expression[-test_fold,],
+                    y = outcome[[1,1]][-test_fold],
+                    family = "binomial", 
+                    alpha = 1,
+                    lambda = lambda.min)
+      
+      # Save the predicted outcomes
+      Ym.draw_pair <- predict(fit, newx = tcga_brca_expression[test_fold,], type = "response")
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd,"/Cross_Validation/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
+    }
+  }
+  
+  if (mod == "LASSO_Methylation_Only") {
+    
+    for (fold in seq(length(test_folds))) {
+      
+      # Saving just the methylation data
+      tcga_brca_methylation <- t(data[[2,1]])
+      
+      # Find optimal penalty
+      cv.fit <- cv.glmnet(x = tcga_brca_methylation[-test_fold,],
+                          y = outcome[[1,1]][-test_fold],
+                          family = "binomial",
+                          alpha = 1)
+      
+      # Save optimal penalty
+      lambda.min <- cv.fit$lambda.min
+      
+      # Refit model with penalty
+      fit <- glmnet(x = tcga_brca_methylation[-test_fold,],
+                    y = outcome[[1,1]][-test_fold],
+                    family = "binomial", 
+                    alpha = 1,
+                    lambda = lambda.min)
+      
+      # Save the predicted outcomes
+      Ym.draw_pair <- predict(fit, newx = tcga_brca_methylation[test_fold,], type = "response")
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd,"/Cross_Validation/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
+    }
+  }
+  
+  if (mod == "LASSO_miRNA_Only") {
+    
+    for (fold in seq(length(test_folds))) {
+      
+      # Saving just the miRNA data
+      tcga_brca_miRNA <- t(data[[3,1]])
+      
+      # Find optimal penalty
+      cv.fit <- cv.glmnet(x = tcga_brca_miRNA[-test_fold,],
+                          y = outcome[[1,1]][-test_fold],
+                          family = "binomial",
+                          alpha = 1)
+      
+      # Save optimal penalty
+      lambda.min <- cv.fit$lambda.min
+      
+      # Refit model with penalty
+      fit <- glmnet(x = tcga_brca_miRNA[-test_fold,],
+                    y = outcome[[1,1]][-test_fold],
+                    family = "binomial", 
+                    alpha = 1,
+                    lambda = lambda.min)
+      
+      # Save the predicted outcomes
+      Ym.draw_pair <- predict(fit, newx = tcga_brca_miRNA[test_fold,], type = "response")
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd,"/Cross_Validation/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
+    }
+  }
+  
+  # For multiview
+  if (mod == "multiview") {
+    
+    # Create a dataset list
+    data_list <- lapply(1:q, function(s) t(data[[s,1]]))
+    
+    cl <- makeCluster(5)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Save the sample indices in the test fold
+      test_fold <- test_folds[[fold]]
+      
+      # Remove the test samples
+      data_list_training <- lapply(1:q, function(s) data_list[[s]][-test_fold,])
+      
+      # Increase the number of iterations
+      multiview.control(mxitnr = 500)
+      
+      # Save the indices that belong to this fold
+      cvfit <- cv.multiview(x_list = data_list_training, 
+                            y = outcome[[1,1]][-test_fold,], 
+                            rho = 0.5, family = binomial(),
+                            type.measure = "mse", 
+                            nfolds = 10)
+      
+      # Save the optimal penalty
+      lambda.min <- cvfit$lambda.min
+      
+      # Save the test samples
+      data_list_test <- lapply(1:q, function(s) data_list[[s]][test_fold,])
+      
+      # Make predictions based on the optimal penalty
+      Ym.draw_pair <- predict(cvfit, newx = data_list_test, s = "lambda.min", type = "response")
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd, "/Cross_Validation/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
+    }
+    stopCluster(cl)
+    
+  }
+}
+
 # Imputing missing data in the HIV-COPD application
 model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_params = NULL, nsample = NULL, nsim, prop_missing, entrywise = TRUE, ranks = NULL, results_wd = "~/BayesianPMF/04DataApplication/", nclust = 5) {
   
