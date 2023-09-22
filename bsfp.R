@@ -5768,7 +5768,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # ---------------------------------------------------------------------------
   # Arguments:
   #
-  # mod = string in c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF")
+  # mod = string in c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF", "multiview")
   # p.vec = number of features per source
   # n = sample size
   # ranks = vector of joint and individual ranks = c(joint rank, indiv rank 1, indiv rank 2, ...)
@@ -5791,9 +5791,10 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # library(natural)
   # library(RSpectra)
   library(BIPnet)
+  library(multiview)
   
   # The model options
-  models <- c("sJIVE", "BIDIFAC", "JIVE", "MOFA", "BPMF_Data_Mode", "BIP", "BPMF_test", "BPMF_test_scale")
+  models <- c("sJIVE", "BIDIFAC", "JIVE", "MOFA", "BPMF_Data_Mode", "BIP", "BPMF_test", "BPMF_test_scale", "multiview")
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
@@ -5801,7 +5802,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "BIPnet")
+  packs <- c("Matrix", "MASS", "truncnorm", "BIPnet", "multiview")
              # "BIPnet", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
@@ -6625,6 +6626,39 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       sigma.mat <- mod.out$sigma.mat
     }
     
+    if (mod == "multiview") {
+      
+      # Rotate the datasets so the rows are the samples
+      training_data_list_transpose <- lapply(1:q, function(s) t(training_data_list[[s]]))
+      test_data_list_transpose <- lapply(1:q, function(s) t(test_data_list[[s]]))
+      
+      # Use cross validation
+      cvfit <- cv.multiview(x_list = training_data_list_transpose, 
+                            y = Y_train[[1,1]],
+                            rho = 0.5, family = gaussian(),
+                            standardize = FALSE,
+                            type.measure = "mse", 
+                            nfolds = 10)
+      
+      # Save the optimal penalty
+      lambda.min <- cvfit$lambda.min
+
+      # Make predictions based on the optimal penalty
+      EY.fit.train <- predict(cvfit, newx = training_data_list_transpose, s = "lambda.min", type = "response")
+      EY.fit.test <- predict(cvfit, newx = test_data_list_transpose, s = "lambda.min", type = "response")
+      
+      # Save together
+      EY.fit <- matrix(c(EY.fit.train, EY.fit.test), ncol = 1)
+      
+      # Do not compute ranks
+      joint.rank <- NA
+      indiv.rank <- rep(NA, q)
+      
+      # Do not compute results for coverage
+      coverage_EY_train <- coverage_EY_test <- NA
+      coverage_Y_train <- coverage_Y_test <- NA
+    }
+    
     # Combining the ranks
     mod.ranks <- c(joint.rank, indiv.rank)
     
@@ -6774,11 +6808,11 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # Assess recovery of underlying joint and individual structure
     # -------------------------------------------------------------------------
     
-    if (mod == "test") {
+    if (mod == "test" | mod == "multiview") {
       joint.recovery.structure.train <- joint.recovery.structure.test <- indiv.recovery.structure.train <- indiv.recovery.structure.test <- NA
     }
     
-    if (mod != "test") {
+    if (!(mod %in% c("test", "multiview"))) {
       # Training data --
       
       # Joint structure
@@ -8148,13 +8182,13 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive", "glmnet", "multiview")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "glmnet", "multiview")
   
   # Load in the full training data fit
-  results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/", mod, "_training_data_fit.rda") 
+  results_path <- paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/", mod, "/", mod, "_training_data_fit_no_missing.rda") 
   
   # Check if the full training data fit is available and load in if so (since we don't have full training fit for BIP)
-  training_fit_avail <- paste0(mod, "_training_data_fit.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/"))
+  training_fit_avail <- paste0(mod, "_training_data_fit_no_missing.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/", mod))
 
   if (training_fit_avail) {
     out <- load(results_path, verbose = TRUE)
@@ -8231,7 +8265,7 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
   }
   
   # For MOFA
-  if (mod == "MOFA") {
+  if (mod == "MOFA") { # Need to come up with a new decision rule because we have 3 sources
     # Load in the MOFA library
     library(MOFA2)
     
@@ -8244,7 +8278,6 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
       row <- mod.var.exp[factor,]
       
       ind.max <- which.max(row) # Highest var explained
-      ind.min <- which.min(row) # Minimum var explained
       
       # First, check that factor explains at least 1% of variation in each source
       greater_than_1p <- any(row > 1)
@@ -8252,8 +8285,8 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
       # If explains more than 1% variation in at least one source
       if (greater_than_1p) {
         
-        # If factor explains substantial (max var is less than 2 * min var) variation in both sources, it is joint
-        if (row[ind.max] < 2*row[-ind.max]) { 
+        # If factor explains substantial (max var is less than 2 * min var) variation in all sources, it is joint
+        if (all(row[ind.max] < 2*row[-ind.max])) { 
           c(1:q)
         } else { # If factor explains substantial variation in just one source, it is individual
           ind.max
@@ -8322,7 +8355,7 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
       outcome_cv[[1,1]][test_fold,] <- NA
       
       # Fitting the Bayesian linear model
-      mod.bayes <- bpmf_data_mode(data = tcga_brca_data, Y = outcome_cv, nninit = FALSE, model_params = model_params, 
+      mod.bayes <- bpmf_data_mode(data = data, Y = outcome_cv, nninit = FALSE, model_params = model_params, 
                                   ranks = c(joint.rank, indiv.rank), scores = all.scores, nsample = nsample)
       
       # Save the imputed outcomes
@@ -8330,7 +8363,7 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
       
       # Save just the relevant output
       ranks <- c(joint.rank, indiv.rank)
-      save(Ym.draw_pair, ranks, file = paste0(results_wd, "/Cross_Validation/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
+      save(Ym.draw_pair, ranks, file = paste0(results_wd, mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
       
       # Remove large objects
       rm(mod.bayes)
@@ -8343,52 +8376,52 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
   
   # For sesJIVE
   if (mod == "sesJIVE") {
-    
+
     # Creating a list for the data
-    q <- nrow(tcga_brca_data)
-    tcga_brca_data_list <- lapply(1:q, function(s) tcga_brca_data[[s,1]])
-    
+    q <- nrow(data)
+    data_list <- lapply(1:q, function(s) data[[s,1]])
+
     # In parallel, fit each model on n-2 samples, predict on the held-out pair
     cl <- makeCluster(5)
     registerDoParallel(cl)
     fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
-      
+
       # Save the sample indices in the test fold
       test_fold <- test_folds[[fold]]
-      
+
       # Create a new version of the data with just the training samples
-      tcga_brca_data_list <- lapply(1:q, function(s) tcga_brca_data[[s]])
-      tcga_brca_data_list_training <- tcga_brca_data_list
-      
+      data_list_training <- data_list
+
       # Remove the current pair of samples
-      tcga_brca_data_list_training <- lapply(1:q, function(s) tcga_brca_data_list[[s]][,-test_fold])
-      
+      data_list_training <- lapply(1:q, function(s) t(scale(t(data_list[[s]][,-test_fold]))))
+
       # Remove the pair from the outcome vector
       outcome_train <- outcome
       outcome_train[[1,1]] <- outcome[[1,1]][-test_fold,,drop=FALSE]
-      
+
       # Create the test dataset
-      tcga_brca_data_list_test <- tcga_brca_data_list
-      tcga_brca_data_list_test <- lapply(1:q, function(s) tcga_brca_data_list[[s]][,test_fold])
-      
+      data_list_test <- data_list
+      data_list_test <- lapply(1:q, function(s) t(scale(t(data_list[[s]][,test_fold]))))
+
       outcome_test <- outcome
       outcome_test[[1,1]] <- outcome[[1,1]][test_fold,,drop=FALSE]
-      
+
       # Fit on the training data
-      mod.out <- sesJIVE(X = tcga_brca_data_list_training, 
-                         Y = c(outcome_train[[1,1]]), 
-                         rankA = NULL, rankJ = NULL, 
-                         threshold = 0.001, 
-                         max.iter = 3000)
-      
+      mod.out <- sesJIVE(X = data_list_training,
+                         Y = c(outcome_train[[1,1]]),
+                         rankA = NULL, rankJ = NULL,
+                         threshold = 0.001,
+                         max.iter = 3000,
+                         family.y = "binomial")
+
       # Fitting the model on test data
       mod.test <- stats::predict(mod.out, newdata = tcga_brca_data_list_test)
       Ym.draw_pair <- mod.test$Ypred
-      
+
       # Save the results
       ranks <- c(mod.out$rankJ, mod.out$rankA)
       save(Ym.draw_pair, ranks, file = paste0(results_wd,"/Cross_Validation/", "mod/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
-      
+
       # Remove large objects
       rm(mod.out, tcga_brca_data_list_training, tcga_brca_data_list_test)
     }
@@ -8532,6 +8565,9 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
     # Create a dataset list
     data_list <- lapply(1:q, function(s) t(data[[s,1]]))
     
+    # Remove packages
+    packs <- packs[!(packs %in% c("r.jive", "sup.r.jive", "MOFA2"))]
+    
     cl <- makeCluster(5)
     registerDoParallel(cl)
     fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
@@ -8540,7 +8576,7 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
       test_fold <- test_folds[[fold]]
       
       # Remove the test samples
-      data_list_training <- lapply(1:q, function(s) data_list[[s]][-test_fold,])
+      data_list_training <- lapply(1:q, function(s) scale(data_list[[s]][-test_fold,]))
       
       # Increase the number of iterations
       multiview.control(mxitnr = 500)
@@ -8549,6 +8585,7 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
       cvfit <- cv.multiview(x_list = data_list_training, 
                             y = outcome[[1,1]][-test_fold,], 
                             rho = 0.5, family = binomial(),
+                            standardize = FALSE,
                             type.measure = "mse", 
                             nfolds = 10)
       
@@ -8556,13 +8593,13 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
       lambda.min <- cvfit$lambda.min
       
       # Save the test samples
-      data_list_test <- lapply(1:q, function(s) data_list[[s]][test_fold,])
+      data_list_test <- lapply(1:q, function(s) scale(data_list[[s]][test_fold,]))
       
       # Make predictions based on the optimal penalty
       Ym.draw_pair <- predict(cvfit, newx = data_list_test, s = "lambda.min", type = "response")
       
       # Save the predicted values on the held-out dataset
-      save(Ym.draw_pair, file = paste0(results_wd, "/Cross_Validation/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
+      save(Ym.draw_pair, file = paste0(results_wd, "/", mod, "/", outcome_name, "_CV_", mod, "_Fold_", fold, ".rda"))
     }
     stopCluster(cl)
     
