@@ -7800,7 +7800,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   # For a given model, run cross validation in parallel
   #
   # Arguments:
-  # mod (character): in c(JIVE, BIDIFAC, MOFA, sJIVE, BIP)
+  # mod (character): in c(JIVE, BIDIFAC, MOFA, sJIVE, BIP, multiview)
   # hiv_copd_data (list): data for the model
   # outcome (double): response vector for Bayesian modeling
   # outcome_name (character): name of the outcome for saving files
@@ -7814,7 +7814,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive", "glmnet")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive", "glmnet", "multiview")
   
   # Load in the full training data fit
   results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/", mod, "_training_data_fit.rda") 
@@ -8159,6 +8159,61 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
     stopCluster(cl)
     
   }
+  
+  # For multiview
+  if (mod == "multiview") {
+    
+    # Creating a list for the data
+    q <- nrow(hiv_copd_data)
+    hiv_copd_data_list <- lapply(1:q, function(s) t(hiv_copd_data[[s,1]]))
+    
+    # Remove packages
+    packs <- packs[!(packs %in% c("r.jive", "sup.r.jive", "MOFA2"))]
+    
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Create a new version of the data with just the training samples
+      hiv_copd_data_list_training <- hiv_copd_data_list
+      
+      # Remove the current pair of samples
+      hiv_copd_data_list_training <- lapply(1:q, function(s) hiv_copd_data_list[[s]][-c(pair:(pair+1)),])
+      
+      # Remove the pair from the outcome vector
+      outcome_train <- outcome
+      outcome_train[[1,1]] <- outcome[[1,1]][-c(pair:(pair+1)),,drop=FALSE]
+      
+      # Create the test dataset
+      hiv_copd_data_list_test <- hiv_copd_data_list
+      hiv_copd_data_list_test <- lapply(1:q, function(s) hiv_copd_data_list[[s]][c(pair:(pair+1)),])
+      
+      outcome_test <- outcome
+      outcome_test[[1,1]] <- outcome[[1,1]][c(pair:(pair+1)),,drop=FALSE]
+      
+      # Increase the number of iterations
+      multiview.control(mxitnr = 500)
+      
+      # Save the indices that belong to this fold
+      cvfit <- cv.multiview(x_list = hiv_copd_data_list_training, 
+                            y = outcome_train[[1,1]],
+                            rho = 0.5, family = gaussian(),
+                            standardize = FALSE,
+                            type.measure = "mse", 
+                            nfolds = 10)
+      
+      # Save the optimal penalty
+      lambda.min <- cvfit$lambda.min
+
+      # Make predictions based on the optimal penalty
+      Ym.draw_pair <- predict(cvfit, newx = hiv_copd_data_list_test, s = "lambda.min", type = "response")
+      
+      # Save the predicted values on the held-out dataset
+      save(Ym.draw_pair, file = paste0(results_wd, mod,"/Cross_Validation/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+    }
+    stopCluster(cl)
+  }
+  
 }
 
 # Running each model with cross validation
