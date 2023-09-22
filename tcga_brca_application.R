@@ -57,7 +57,7 @@ all(clin.data.matched$`Complete TCGA ID` == sample.ids) # TRUE!
 # Log(1+x) transformation of miRNA data
 # Center the features but do not scale. 
 
-# Center the data
+# Center the data, do not scale the data
 Data$Expression <- t(scale(t(Data$Expression), center = TRUE, scale = FALSE))
 Data$Methylation <- t(scale(t(Data$Methylation), center = TRUE, scale = FALSE))
 Data$miRNA <- t(scale(t(Data$miRNA), center = TRUE, scale = FALSE))
@@ -112,7 +112,7 @@ lambda_indiv3 <- sqrt(p3) + sqrt(n)
 sigma2_indiv3 <- 1/(lambda_indiv3)
 
 # For the regression coefficients, beta
-lambda2_intercept <- 1e6
+lambda2_intercept <- 4
 lambda2_joint <- 1
 lambda2_indiv1 <- 1
 lambda2_indiv2 <- 1
@@ -142,125 +142,96 @@ thinned_iters_burnin <- seq(burnin, nsample, by = 10)
 # Training Data Model Fit 
 # -----------------------------------------------------------------------------
 
-# Fitting BPMF
-tcga_brca_er_training <- bpmf_data_mode(
+# Fitting BSFP
+tcga_brca_er_training <- BSFP::bsfp(
   data = tcga_brca_data,
   Y = er_status,
   nninit = TRUE,
+  previous_init = NULL,
   model_params = model_params,
-  sparsity = FALSE,
+  save_structures = TRUE,
+  save_loadings_scores = TRUE,
+  save_predictive_model = TRUE,
+  save_imputations = TRUE,
   nsample = nsample,
-  progress = TRUE
+  thinning = 10,
+  progress = TRUE,
+  save_last_sample = TRUE
 )
-
-# Fitting BIDIFAC
-BIDIFAC_training_fit <- BIDIFAC(tcga_brca_data, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
-save(BIDIFAC_training_fit, file = paste0(results_wd, "/BIDIFAC/BIDIFAC_training_data_fit.rda"))
-
-# Fitting JIVE
-tcga_brca_data_list <- lapply(1:q, function(s) tcga_brca_data[[s,1]])
-JIVE_training_fit <- jive(tcga_brca_data_list, center = FALSE, scale = TRUE, method = "perm")
-save(JIVE_training_fit, file = paste0(results_wd, "/JIVE/JIVE_training_data_fit.rda"))
-
-# Fitting MOFA
-colnames(tcga_brca_data_list[[1]]) <- 
-  colnames(tcga_brca_data_list[[2]]) <-
-  colnames(tcga_brca_data_list[[3]]) <- clin.data.matched$`Complete TCGA ID`
-  
-mofa_pre_train <- create_mofa(tcga_brca_data_list)
-
-# Set the data options so that the data is not additionally centered and fix the ranks if desired
-data_opts <- get_default_data_options(mofa_pre_train)
-model_opts <- get_default_model_options(mofa_pre_train)
-
-# No centering
-data_opts$center_groups <- FALSE
-
-# Create the MOFA object
-MOFAobject <- prepare_mofa(
-  object = mofa_pre_train,
-  model_options = model_opts
-)
-
-# Train the MOFA model
-MOFA_training_fit <- run_mofa(MOFAobject)
-save(MOFA_training_fit, file = paste0(results_wd, "/MOFA/MOFA_training_data_fit.rda"))
-
 
 # Save
 save(tcga_brca_er_training,
-     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/TCGA_BRCA_Training.rda")
-
-# Add thinning to training data results
-tcga_brca_er_training_thinned <- list(
-  data = tcga_brca_er_training$data,
-  Y = tcga_brca_er_training$Y,
-  sigma.mat = tcga_brca_er_training$sigma.mat,
-  J.draw = tcga_brca_er_training$J.draw[thinned_iters_burnin],
-  A.draw = tcga_brca_er_training$A.draw[thinned_iters_burnin],
-  S.draw = tcga_brca_er_training$S.draw[thinned_iters_burnin],
-  EY.draw = tcga_brca_er_training$EY.draw[thinned_iters_burnin],
-  V.draw = tcga_brca_er_training$V.draw[thinned_iters_burnin],
-  U.draw = tcga_brca_er_training$U.draw[thinned_iters_burnin],
-  W.draw = tcga_brca_er_training$W.draw[thinned_iters_burnin],
-  Vs.draw = tcga_brca_er_training$Vs.draw[thinned_iters_burnin],
-  VStar.draw = tcga_brca_er_training$VStar.draw[thinned_iters_burnin],
-  Ym.draw = tcga_brca_er_training$Ym.draw[thinned_iters_burnin],
-  Z.draw = tcga_brca_er_training$Z.draw[thinned_iters_burnin],
-  scores = NULL,
-  ranks = tcga_brca_er_training$ranks,
-  beta.draw = tcga_brca_er_training$beta.draw[thinned_iters_burnin]
-)
-
-# Save
-save(tcga_brca_er_training_thinned,
-     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/TCGA_BRCA_Training_Thinned.rda")
+     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/TCGA_BRCA_Training_V2_thinned.rda")
 
 # -----------------------------------------------------------------------------
 # Assessing convergence 
 # -----------------------------------------------------------------------------
 
 # Use trace plots
-plot(sapply(seq(length(tcga_brca_er_training_thinned$J.draw)), function(i) 
-  tcga_brca_er_training_thinned$J.draw[[i]][[1,1]][1,1]))
-plot(sapply(seq(length(tcga_brca_er_training_thinned$J.draw)), function(i) 
-  tcga_brca_er_training_thinned$J.draw[[i]][[2,1]][50,101]))
-plot(sapply(seq(length(tcga_brca_er_training_thinned$J.draw)), function(i) 
-  tcga_brca_er_training_thinned$J.draw[[i]][[3,1]][10,101]))
+plot(sapply(seq(length(tcga_brca_er_training$J.draw)), function(i) 
+  tcga_brca_er_training$J.draw[[i]][[1,1]][1,1]))
+plot(sapply(seq(length(tcga_brca_er_training$J.draw)), function(i) 
+  tcga_brca_er_training$J.draw[[i]][[2,1]][50,101]))
+plot(sapply(seq(length(tcga_brca_er_training$J.draw)), function(i) 
+  tcga_brca_er_training$J.draw[[i]][[3,1]][10,101]))
 
-plot(sapply(seq(length(tcga_brca_er_training_thinned$U.draw)), function(i) 
-  tcga_brca_er_training_thinned$U.draw[[i]][[1,1]][1,1]))
-plot(sapply(seq(length(tcga_brca_er_training_thinned$U.draw)), function(i) 
-  tcga_brca_er_training_thinned$U.draw[[i]][[2,1]][50,10]))
-plot(sapply(seq(length(tcga_brca_er_training_thinned$U.draw)), function(i) 
-  tcga_brca_er_training_thinned$U.draw[[i]][[3,1]][10,20]))
+plot(sapply(seq(length(tcga_brca_er_training$A.draw)), function(i) 
+  tcga_brca_er_training$A.draw[[i]][[1,1]][1,1]))
+plot(sapply(seq(length(tcga_brca_er_training$A.draw)), function(i) 
+  tcga_brca_er_training$A.draw[[i]][[2,1]][50,10]))
+plot(sapply(seq(length(tcga_brca_er_training$A.draw)), function(i) 
+  tcga_brca_er_training$A.draw[[i]][[3,1]][10,20]))
 
-plot(sapply(seq(length(tcga_brca_er_training_thinned$W.draw)), function(i) 
-  tcga_brca_er_training_thinned$W.draw[[i]][[1,1]][1,1]))
-plot(sapply(seq(length(tcga_brca_er_training_thinned$W.draw)), function(i) 
-  tcga_brca_er_training_thinned$W.draw[[i]][[2,2]][1,1]))
-plot(sapply(seq(length(tcga_brca_er_training_thinned$W.draw)), function(i) 
-  tcga_brca_er_training_thinned$W.draw[[i]][[3,3]][1,1]))
+plot(sapply(seq(length(tcga_brca_er_training$Z.draw))[-1], function(i) 
+  tcga_brca_er_training$Z.draw[[i]][1,1]))
+plot(sapply(seq(length(tcga_brca_er_training$Z.draw))[-1], function(i) 
+  tcga_brca_er_training$Z.draw[[i]][2,1]))
+plot(sapply(seq(length(tcga_brca_er_training$Z.draw))[-1], function(i) 
+  tcga_brca_er_training$Z.draw[[i]][10,1]))
+
+# Check prediction accuracy
+EY.draw <- do.call(cbind, lapply(tcga_brca_er_training$EY.draw, function(i) i[[1,1]]))
+
+# Compare the number of 0s and 1s in truth vs. predicted (about the same)
+table(er_status)
+table(ifelse(rowMeans(EY.draw)<0.5, 0, 1))
+
+# Plot as comparison
+plot(rowMeans(EY.draw), er_status[[1,1]])
+
+# Using log-joint density
+fev1pp_training_nonsparse_conv_V2 <- sapply(1:nsample, function(sim_iter) {
+  # Calculate the log-joint density at each thinned iterations
+  log_joint_density(data = tcga_brca_data, 
+                    U.iter = tcga_brca_er_training_thinned$U.draw[[sim_iter]], 
+                    V.iter = tcga_brca_er_training_thinned$V.draw[[sim_iter]], 
+                    W.iter = tcga_brca_er_training_thinned$W.draw[[sim_iter]], 
+                    Vs.iter = tcga_brca_er_training_thinned$Vs.draw[[sim_iter]],
+                    model_params = model_params,
+                    ranks = tcga_brca_er_training_thinned$ranks,
+                    Y = er_status,
+                    beta.iter = tcga_brca_er_training_thinned$beta.draw[[sim_iter]])
+})
 
 # -----------------------------------------------------------------------------
 # Alignment
 # -----------------------------------------------------------------------------
 
 # Save the ranks
-ranks <- tcga_brca_er_training_thinned$ranks
-joint.rank <- tcga_brca_er_training_thinned$ranks[1]
-indiv.ranks <- tcga_brca_er_training_thinned$ranks[-1]
+ranks <- tcga_brca_er_training$ranks
+joint.rank <- tcga_brca_er_training$ranks[1]
+indiv.ranks <- tcga_brca_er_training$ranks[-1]
 
 # Applying the Match Align algorithm to undo rotational invariance in the results
-er_status_training_fit_aligned <- match_align_bpmf(tcga_brca_er_training_thinned, 
+er_status_training_fit_aligned <- match_align_bpmf(tcga_brca_er_training, 
                                                    y = er_status,
                                                    model_params = model_params,
                                                    p.vec = p.vec, 
-                                                   iters_burnin = seq(length(tcga_brca_er_training_thinned$J.draw)))
+                                                   iters_burnin = seq(length(tcga_brca_er_training$J.draw)))
 
 # Save the results
 save(er_status_training_fit_aligned, 
-     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/TCGA_BRCA_Training_Thinned_Aligned.rda")
+     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/TCGA_BRCA_Training_Thinned_Aligned_V2.rda")
 
 # Exact the scores
 joint.scores.final <- er_status_training_fit_aligned$joint.scores.final
@@ -321,13 +292,78 @@ library(BSFP)
 # Save the working directory where the summaries will go
 exploring_factors_wd <- "~/BayesianPMF/04DataApplication/TCGA_BRCA/"
 
-# Save the joint and individual ranks
-ranks <- tcga_brca_er_training_thinned$ranks
+# Calculate the summaries
+summaries <- summarize_factors(data = tcga_brca_data, Y = er_status,
+                               iters_burnin = 1:length(tcga_brca_er_training$J.draw), 
+                               aligned_results = er_status_training_fit_aligned,
+                               ranks = tcga_brca_er_training$ranks,
+                               Ym.draw = tcga_brca_er_training$Ym.draw,
+                               tau2.draw = NULL)
 
-BSFP::summarize_factors(data = tcga_brca_data, Y = er_status,
-                        iters_burnin = thinned_iters_burnin, 
-                        aligned_results = er_status_training_fit_aligned,
-                        ranks = tcga_brca_er_training_thinned$ranks)
+# Save results
+save(summaries, er_status,
+     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/Exploring_Factors/TCGA_BRCA_Factor_Summaries_Burnin_Aligned_V2.rda")
+
+# -----------------------------------------------------------------------------
+# Calculating variance expained 
+# -----------------------------------------------------------------------------
+
+# Calculating a summary of the variance explained
+var_exp_summary <- var_explained(BPMF.fit = tcga_brca_er_training,
+                                 iters_burnin = 1:length(tcga_brca_er_training$J.draw))
+
+# Joint structure 
+var_exp_summary$Joint
+
+# Individual structure
+var_exp_summary$Individual
+
+# -----------------------------------------------------------------------------
+# Contributions of each factor (joint, individual) to predicting Y
+# -----------------------------------------------------------------------------
+
+# Calculating the contribution of the joint factors to predicting FEV1pp
+joint_contribution_to_er <- sapply(1:length(tcga_brca_er_training$J.draw), function(iter) {
+  var(joint.scores.final[[iter]] %*% joint.betas.final[[iter]])/var(er_status[[1,1]], na.rm = TRUE)
+})
+
+# Calculating the contribution of the individual factors to predicting FEV1pp
+individual_contribution_to_er <- lapply(1:q, function(s) {
+  sapply(1:length(tcga_brca_er_training$J.draw), function(iter) {
+    var(individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]])/var(er_status[[1,1]], na.rm = TRUE)
+  })
+})
+
+# Overall of Joint 
+mean(joint_contribution_to_er)
+c(quantile(joint_contribution_to_er, 0.025), quantile(joint_contribution_to_er, 0.975))
+
+# Overall contribution of Indiviudal
+sapply(individual_contribution_to_fev1pp, mean)
+sapply(individual_contribution_to_fev1pp, function(indiv) {
+  c(quantile(indiv, 0.025), quantile(indiv, 0.975))
+})
+
+# Calculate the contribution of the joint structure to predicting FEV1pp for each sample
+joint_contribution_to_fev1pp_by_sample <- sapply(1:nsample_after_burnin, function(iter) {
+  joint.scores.final[[iter]] %*% joint.betas.final[[iter]]
+})
+
+# Calculate the contribution of the individual structures to predicting FEV1pp for each sample
+individual_contribution_to_fev1pp_by_sample <- lapply(1:q, function(s) {
+  sapply(1:nsample_after_burnin, function(iter) {
+    individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]]
+  })
+})
+
+# Calculate the overall contribution of the factors in explaining FEV1pp
+overall_contribution_to_fev1pp <- sapply(1:nsample_after_burnin, function(iter) {
+  fev1pp_training_fit_nonsparse_V2$beta.draw[iters_burnin][[iter]][[1,1]][1,] +  # Intercept
+    joint.scores.final[[iter]] %*% joint.betas.final[[iter]] +                     # Joint
+    individual.scores.final[[1]][[iter]] %*% individual.betas.final[[1]][[iter]] + # Metabolome
+    individual.scores.final[[2]][[iter]] %*% individual.betas.final[[2]][[iter]]   # Proteome
+})
+
 
 # -----------------------------------------------------------------------------
 # 5-fold Cross Validation with BSFP
@@ -358,6 +394,10 @@ all(sample.ids.no.missing == rownames(er_status_no_missing[[1,1]]))
 all(sample.ids.no.missing == rownames(er_status_no_missing[[1,1]]))
 all(sample.ids.no.missing == rownames(er_status_no_missing[[1,1]]))
 
+# Fit BIDIFAC to the subsetted data
+# rank_init <- BIDIFAC(tcga_brca_data_no_missing, rmt = TRUE, pbar = TRUE, scale_back = FALSE)
+# save(rank_init, file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/Cross_Validation/TCGA_BRCA_BIDIFAC_Init_No_Missing_CV.rda")
+
 # Set up the folds
 # set.seed(1)
 # test_folds <- createFolds(er_status_no_missing[[1,1]], k = 5, list = TRUE, returnTrain = FALSE)
@@ -368,59 +408,71 @@ all(sample.ids.no.missing == rownames(er_status_no_missing[[1,1]]))
 # Load in folds
 load(paste0(results_wd, "/Cross_Validation/ER_Status_Test_Folds_09072023.rda"), verbose = TRUE)
 
-# # Run cross validation 
-# for (test_fold in 3:length(test_folds)) {
-#   
-#   # Save the indices for the test fold 
-#   inds <- test_folds[[test_fold]]
-#   
-#   # Create a new vector of the outcome with the current pair set to NA
-#   er_status_cv <- er_status_no_missing
-#   er_status_cv[[1,1]][inds,] <- NA
-#   
-#   # Run the model with the above pair's continuous outcome missing
-#   er_status_cv_fit <- bpmf_data_mode(
-#     data = tcga_brca_data_no_missing,
-#     Y = er_status_cv,
-#     nninit = TRUE,
-#     model_params = model_params,
-#     sparsity = FALSE,
-#     nsample = nsample,
-#     progress = TRUE
-#   )
-#   
-#   # Save the imputed outcomes
-#   Ym.draw_pair <- er_status_cv_fit$Ym.draw
-#   
-#   # Save just the relevant output
-#   save(Ym.draw_pair, file = paste0(results_wd, "/Cross_Validation/ER_Status_CV_Fold", test_fold, ".rda"))
-#   
-#   # Remove large objects
-#   rm(er_status_cv_fit)
-#   
-#   # Garbage collection
-#   gc()
-# }
+# Run cross validation
+for (test_fold in 1:length(test_folds)) {
+
+  # Save the indices for the test fold
+  inds <- test_folds[[test_fold]]
+
+  # Create a new vector of the outcome with the current pair set to NA
+  er_status_cv <- er_status_no_missing
+  er_status_cv[[1,1]][inds,] <- NA
+
+  # Run the model with the above pair's continuous outcome missing
+  er_status_cv_fit <- BSFP::bsfp(
+    data = tcga_brca_data_no_missing,
+    Y = er_status_cv,
+    nninit = TRUE,
+    previous_init = "~/BayesianPMF/04DataApplication/TCGA_BRCA/Cross_Validation/TCGA_BRCA_BIDIFAC_Init_No_Missing_CV.rda",
+    model_params = model_params,
+    save_structures = FALSE,
+    save_loadings_scores = FALSE,
+    save_predictive_model = FALSE,
+    save_imputations = TRUE,
+    nsample = nsample,
+    thinning = 10,
+    progress = TRUE,
+    save_last_sample = TRUE
+  )
+
+  # Save the imputed outcomes
+  Ym.draw_pair <- er_status_cv_fit$Ym.draw
+  
+  # Save the last iteration
+  last.iter <- er_status_cv_fit$last.iter
+
+  # Save just the relevant output
+  save(Ym.draw_pair, last.iter, file = paste0(results_wd, "/Cross_Validation/ER_Status_CV_Fold", test_fold, "_V2.rda"))
+
+  # Remove large objects
+  rm(er_status_cv_fit)
+
+  # Garbage collection
+  gc()
+}
 
 # -------------------------------------
 # Results
 # -------------------------------------
 
 # Create a matrix with the estimated outcome for each sample
-pred.out <- matrix(nrow = length(thinned_iters_burnin), ncol = nrow(er_status_no_missing[[1,1]]))
-colnames(pred.out) <- rownames(er_status_no_missing[[1,1]])
+pred.out <- rep(NA, length(unlist(test_folds)))
+names(pred.out) <- rownames(er_status_no_missing[[1,1]])
 
 # Load in the results for each fold and calculate the posterior mean after burn-in
 for (test_fold in 1:length(test_folds)) {
  
   # Load in the results
-  load(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/Cross_Validation/ER_Status_CV_Fold", test_fold, ".rda"), verbose = TRUE)
+  load(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/Cross_Validation/ER_Status_CV_Fold", test_fold, "_V2.rda"), verbose = TRUE)
   
   # Save the patient IDs for this test fold
   current_fold <- rownames(er_status_no_missing[[1,1]])[test_folds[[test_fold]]]
   
   # Create a list of vectors from the results
-  Ym.draw_pair_burnin_thinned_list <- sapply(thinned_iters_burnin, function(iter) Ym.draw_pair[[iter]][1,1])
+  Ym.draw_pair_burnin_thinned_list <- lapply(101:500, function(iter) Ym.draw_pair[[iter]])
+  
+  # For testing
+  test <- er_status_no_missing[[1,1]][rownames(er_status_no_missing[[1,1]]) %in% current_fold,]
   
   # Aggregate results into a matrix
   Ym.draw_pair_burnin_thinned_matrix <- t(do.call(cbind, Ym.draw_pair_burnin_thinned_list))
@@ -430,20 +482,17 @@ for (test_fold in 1:length(test_folds)) {
   Ym.draw_pair_burnin_thinned_mean <- colMeans(Ym.draw_pair_burnin_thinned_matrix)
   
   # Check
-  all(colnames(pred.out[,colnames(pred.out) %in% current_fold]) == colnames(Ym.draw_pair_burnin_thinned_matrix)) # TRUE!
+  all(colnames(pred.out[names(pred.out) %in% current_fold]) == colnames(Ym.draw_pair_burnin_thinned_matrix)) # TRUE!
   
   # Save these in the matrix
-  pred.out[,colnames(pred.out) %in% current_fold] <- Ym.draw_pair_burnin_thinned_matrix
+  pred.out[names(pred.out) %in% current_fold] <- Ym.draw_pair_burnin_thinned_mean
 }
 
-# Calculate the mean predicted outcome
-pred.out.mean <- colMeans(pred.out)
-
 # Check
-all(rownames(er_status_no_missing[[1,1]]) == names(pred.out.mean)) # TRUE!
+all(rownames(er_status_no_missing[[1,1]][unlist(test_folds[1:3])]) == names(pred.out)) # TRUE!
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.mean)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]]- pred.out)/frob(er_status_no_missing[[1,1]])
 
 # -----------------------------------------------------------------------------
 # 5-fold Cross Validation with other models
@@ -457,13 +506,162 @@ frob(er_status_no_missing[[1,1]] - pred.out.mean)/frob(er_status_no_missing[[1,1
 # JIVE
 # -------------------------------------
 
+# Fitting JIVE
+# tcga_brca_data_no_missing_list <- lapply(1:q, function(s) tcga_brca_data_no_missing[[s,1]])
+# JIVE_training_fit <- jive(tcga_brca_data_no_missing_list, center = FALSE, scale = TRUE, method = "perm")
+# save(JIVE_training_fit, file = paste0(results_wd, "/JIVE/JIVE_training_data_fit_no_missing.rda"))
+
+# Running with cross validation
+run_model_with_cv_tcga(mod = "JIVE", data = tcga_brca_data_no_missing,
+                       outcome = er_status_no_missing, outcome_name = "ER_Status",
+                       test_folds = test_folds, model_params = model_params,
+                       nsample = 5000)
+
+# Load in the results for each fold and calculate the posterior mean after burn-in
+pred.out.jive <- rep(NA, nrow(er_status_no_missing[[1,1]]))
+names(pred.out.jive) <- rownames(er_status_no_missing[[1,1]])
+
+for (test_fold in 1:length(test_folds)) {
+  
+  # Load in the results
+  load(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/JIVE/ER_Status_CV_JIVE_Fold_", test_fold, ".rda"), verbose = TRUE)
+  
+  # Save the patient IDs for this test fold
+  current_fold <- rownames(er_status_no_missing[[1,1]])[test_folds[[test_fold]]]
+  
+  # CHECK
+  all(names(pred.out.jive[names(pred.out.jive) %in% current_fold]) == current_fold) # TRUE!
+  
+  # Create a list of vectors from the results
+  Ym.draw_pair_burnin_thinned_list <- lapply(thinned_iters_burnin, function(iter) Ym.draw_pair[[iter]][[1,1]])
+  
+  # Aggregate results into a matrix
+  Ym.draw_pair_burnin_thinned_matrix <- t(do.call(cbind, Ym.draw_pair_burnin_thinned_list))
+  colnames(Ym.draw_pair_burnin_thinned_matrix) <- current_fold
+  
+  # Calculate the mean response
+  Ym.draw_pair_burnin_thinned_mean <- colMeans(Ym.draw_pair_burnin_thinned_matrix)
+  
+  # Save these in the matrix
+  pred.out.jive[names(pred.out.jive) %in% current_fold] <- Ym.draw_pair_burnin_thinned_mean
+}
+
+# Compare to the truth
+frob(er_status_no_missing[[1,1]] - pred.out.jive)/frob(er_status_no_missing[[1,1]])
+
 # -------------------------------------
-# MOFA
+# MOFA -- NEED TO CHECK HOW I'VE DEFINED JOINT AND INDIVIDUAL FACTORS
 # -------------------------------------
+
+library(MOFA2)
+
+# # Fitting MOFA
+# colnames(tcga_brca_data_no_missing_list[[1]]) <-
+#   colnames(tcga_brca_data_no_missing_list[[2]]) <-
+#   colnames(tcga_brca_data_no_missing_list[[3]]) <- colnames(tcga_brca_data_no_missing_list[[1]])
+# 
+# mofa_pre_train <- create_mofa(tcga_brca_data_no_missing_list)
+# 
+# # Set the data options so that the data is not additionally centered and fix the ranks if desired
+# data_opts <- get_default_data_options(mofa_pre_train)
+# model_opts <- get_default_model_options(mofa_pre_train)
+# 
+# # No centering
+# data_opts$center_groups <- FALSE
+# 
+# # Create the MOFA object
+# MOFAobject <- prepare_mofa(
+#   object = mofa_pre_train,
+#   model_options = model_opts
+# )
+# 
+# # Train the MOFA model
+# MOFA_training_fit <- run_mofa(MOFAobject)
+# save(MOFA_training_fit, file = paste0(results_wd, "/MOFA/MOFA_training_data_fit_no_missing.rda"))
+
+# Run with cross validation
+run_model_with_cv_tcga(mod = "MOFA", data = tcga_brca_data_no_missing,
+                       outcome = er_status_no_missing, outcome_name = "ER_Status",
+                       test_folds = test_folds, model_params = model_params,
+                       nsample = 5000)
+
+# Load in the results for each fold and calculate the posterior mean after burn-in
+pred.out.mofa <- rep(NA, nrow(er_status_no_missing[[1,1]]))
+names(pred.out.mofa) <- rownames(er_status_no_missing[[1,1]])
+
+for (test_fold in 1:length(test_folds)) {
+  
+  # Load in the results
+  load(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/MOFA/ER_Status_CV_MOFA_Fold_", test_fold, ".rda"), verbose = TRUE)
+  
+  # Save the patient IDs for this test fold
+  current_fold <- rownames(er_status_no_missing[[1,1]])[test_folds[[test_fold]]]
+  
+  # CHECK
+  all(names(pred.out.mofa[names(pred.out.mofa) %in% current_fold]) == current_fold) # TRUE!
+  
+  # Create a list of vectors from the results
+  Ym.draw_pair_burnin_thinned_list <- lapply(thinned_iters_burnin, function(iter) Ym.draw_pair[[iter]][[1,1]])
+  
+  # Aggregate results into a matrix
+  Ym.draw_pair_burnin_thinned_matrix <- t(do.call(cbind, Ym.draw_pair_burnin_thinned_list))
+  colnames(Ym.draw_pair_burnin_thinned_matrix) <- current_fold
+  
+  # Calculate the mean response
+  Ym.draw_pair_burnin_thinned_mean <- colMeans(Ym.draw_pair_burnin_thinned_matrix)
+  
+  # Save these in the matrix
+  pred.out.mofa[names(pred.out.mofa) %in% current_fold] <- Ym.draw_pair_burnin_thinned_mean
+}
+
+# Compare to the truth
+frob(er_status_no_missing[[1,1]] - pred.out.mofa)/frob(er_status_no_missing[[1,1]])
 
 # -------------------------------------
 # BIDIFAC
 # -------------------------------------
+
+# Fitting BIDIFAC
+# BIDIFAC_training_fit <- BIDIFAC(tcga_brca_data_no_missing, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
+# save(BIDIFAC_training_fit, file = paste0(results_wd, "/BIDIFAC/BIDIFAC_training_data_fit_no_missing.rda"))
+
+# Run with cross validation
+run_model_with_cv_tcga(mod = "BIDIFAC", data = tcga_brca_data_no_missing,
+                       outcome = er_status_no_missing, outcome_name = "ER_Status",
+                       test_folds = test_folds, model_params = model_params,
+                       nsample = 5000)
+
+# Load in the results for each fold and calculate the posterior mean after burn-in
+pred.out.bidifac <- rep(NA, nrow(er_status_no_missing[[1,1]]))
+names(pred.out.bidifac) <- rownames(er_status_no_missing[[1,1]])
+
+for (test_fold in 1:length(test_folds)) {
+  
+  # Load in the results
+  load(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/BIDIFAC/ER_Status_CV_BIDIFAC_Fold_", test_fold, ".rda"), verbose = TRUE)
+  
+  # Save the patient IDs for this test fold
+  current_fold <- rownames(er_status_no_missing[[1,1]])[test_folds[[test_fold]]]
+  
+  # CHECK
+  all(names(pred.out.bidifac[names(pred.out.bidifac) %in% current_fold]) == current_fold) # TRUE!
+  
+  # Create a list of vectors from the results
+  Ym.draw_pair_burnin_thinned_list <- lapply(thinned_iters_burnin, function(iter) Ym.draw_pair[[iter]][[1,1]])
+  
+  # Aggregate results into a matrix
+  Ym.draw_pair_burnin_thinned_matrix <- t(do.call(cbind, Ym.draw_pair_burnin_thinned_list))
+  colnames(Ym.draw_pair_burnin_thinned_matrix) <- current_fold
+  
+  # Calculate the mean response
+  Ym.draw_pair_burnin_thinned_mean <- colMeans(Ym.draw_pair_burnin_thinned_matrix)
+  
+  # Save these in the matrix
+  pred.out.bidifac[names(pred.out.bidifac) %in% current_fold] <- Ym.draw_pair_burnin_thinned_mean
+}
+
+# Compare to the truth
+frob(er_status_no_missing[[1,1]] - pred.out.bidifac)/frob(er_status_no_missing[[1,1]])
 
 # -------------------------------------
 # LASSO (combined)
@@ -588,3 +786,34 @@ for (test_fold in 1:length(test_folds)) {
 
 # Compare to the truth
 frob(er_status_no_missing[[1,1]] - pred.out.lasso.miRNA)/frob(er_status_no_missing[[1,1]])
+
+# -------------------------------------
+# multiview
+# -------------------------------------
+
+run_model_with_cv_tcga(mod = "multiview", data = tcga_brca_data_no_missing,
+                       outcome = er_status_no_missing, outcome_name = "ER_Status",
+                       test_folds = test_folds, model_params = model_params,
+                       nsample = 5000)
+
+# Load in the results for each fold and calculate the posterior mean after burn-in
+pred.out.multiview <- rep(NA, nrow(er_status_no_missing[[1,1]]))
+names(pred.out.multiview) <- rownames(er_status_no_missing[[1,1]])
+
+for (test_fold in 1:length(test_folds)) {
+  
+  # Load in the results
+  load(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/multiview/ER_Status_CV_multiview_Fold_", test_fold, ".rda"), verbose = TRUE)
+  
+  # Save the patient IDs for this test fold
+  current_fold <- rownames(er_status_no_missing[[1,1]])[test_folds[[test_fold]]]
+  
+  # CHECK
+  all(names(pred.out.multiview[names(pred.out.multiview) %in% current_fold]) == current_fold) # TRUE!
+  
+  # Save these in the matrix
+  pred.out.multiview[names(pred.out.multiview) %in% current_fold] <- Ym.draw_pair
+}
+
+# Compare to the truth
+frob(er_status_no_missing[[1,1]] - pred.out.multiview)/frob(er_status_no_missing[[1,1]])
