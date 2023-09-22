@@ -454,6 +454,21 @@ for (s2nX in s2nX.list) {
 }
 names(all_s2n) <- combos
 
+# -----------------------------------------------------------------------------
+# multiview 
+# -----------------------------------------------------------------------------
+
+multiview.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    multiview.res[[ind]] <- model_comparison(mod = "multiview", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
+                                             s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+    ind <- ind + 1
+  }
+}
+
 
 # -----------------------------------------------------------------------------
 # Results
