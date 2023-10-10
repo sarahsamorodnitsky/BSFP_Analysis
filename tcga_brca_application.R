@@ -77,6 +77,10 @@ er_status[[1,1]][er_status[[1,1]] == "Negative"] <- 0
 er_status[[1,1]] <- matrix(as.numeric(er_status[[1,1]]), ncol = 1)
 rownames(er_status[[1,1]]) <- clin.data.matched$`Complete TCGA ID`
 
+# Check which are NAs before and after
+which(!(clin.data.matched$`ER Status` %in% c("Positive", "Negative")))
+which(is.na(er_status[[1,1]]))
+
 # -----------------------------------------------------------------------------
 # Model parameters
 # -----------------------------------------------------------------------------
@@ -143,6 +147,7 @@ thinned_iters_burnin <- seq(burnin, nsample, by = 10)
 # -----------------------------------------------------------------------------
 
 # Fitting BSFP
+start <- Sys.time()
 tcga_brca_er_training <- BSFP::bsfp(
   data = tcga_brca_data,
   Y = er_status,
@@ -158,6 +163,8 @@ tcga_brca_er_training <- BSFP::bsfp(
   progress = TRUE,
   save_last_sample = TRUE
 )
+end <- Sys.time()
+end-start
 
 # Save
 save(tcga_brca_er_training,
@@ -178,7 +185,11 @@ plot(sapply(seq(length(tcga_brca_er_training$J.draw)), function(i)
 plot(sapply(seq(length(tcga_brca_er_training$A.draw)), function(i) 
   tcga_brca_er_training$A.draw[[i]][[1,1]][1,1]))
 plot(sapply(seq(length(tcga_brca_er_training$A.draw)), function(i) 
+  tcga_brca_er_training$A.draw[[i]][[2,1]][15,10]))
+plot(sapply(seq(length(tcga_brca_er_training$A.draw)), function(i) 
   tcga_brca_er_training$A.draw[[i]][[2,1]][50,10]))
+plot(sapply(seq(length(tcga_brca_er_training$A.draw)), function(i) 
+  tcga_brca_er_training$A.draw[[i]][[2,1]][100,10]))
 plot(sapply(seq(length(tcga_brca_er_training$A.draw)), function(i) 
   tcga_brca_er_training$A.draw[[i]][[3,1]][10,20]))
 
@@ -189,6 +200,13 @@ plot(sapply(seq(length(tcga_brca_er_training$Z.draw))[-1], function(i)
 plot(sapply(seq(length(tcga_brca_er_training$Z.draw))[-1], function(i) 
   tcga_brca_er_training$Z.draw[[i]][10,1]))
 
+plot(sapply(seq(length(tcga_brca_er_training$EY.draw)), function(i) 
+  tcga_brca_er_training$EY.draw[[i]][[1,1]][1,1]))
+plot(sapply(seq(length(tcga_brca_er_training$Z.draw)), function(i) 
+  tcga_brca_er_training$EY.draw[[i]][[1,1]][300,1]))
+plot(sapply(seq(length(tcga_brca_er_training$Z.draw)), function(i) 
+  tcga_brca_er_training$EY.draw[[i]][[1,1]][200,1]))
+
 # Check prediction accuracy
 EY.draw <- do.call(cbind, lapply(tcga_brca_er_training$EY.draw, function(i) i[[1,1]]))
 
@@ -198,20 +216,26 @@ table(ifelse(rowMeans(EY.draw)<0.5, 0, 1))
 
 # Plot as comparison
 plot(rowMeans(EY.draw), er_status[[1,1]])
+mean(er_status[[1,1]] - rowMeans(EY.draw), na.rm = TRUE)
 
 # Using log-joint density
-fev1pp_training_nonsparse_conv_V2 <- sapply(1:nsample, function(sim_iter) {
+er_training_conv_V2 <- sapply(1:500, function(sim_iter) {
   # Calculate the log-joint density at each thinned iterations
   log_joint_density(data = tcga_brca_data, 
-                    U.iter = tcga_brca_er_training_thinned$U.draw[[sim_iter]], 
-                    V.iter = tcga_brca_er_training_thinned$V.draw[[sim_iter]], 
-                    W.iter = tcga_brca_er_training_thinned$W.draw[[sim_iter]], 
-                    Vs.iter = tcga_brca_er_training_thinned$Vs.draw[[sim_iter]],
+                    U.iter = tcga_brca_er_training$U.draw[[sim_iter]], 
+                    V.iter = tcga_brca_er_training$V.draw[[sim_iter]], 
+                    W.iter = tcga_brca_er_training$W.draw[[sim_iter]], 
+                    Vs.iter = tcga_brca_er_training$Vs.draw[[sim_iter]],
                     model_params = model_params,
-                    ranks = tcga_brca_er_training_thinned$ranks,
+                    ranks = tcga_brca_er_training$ranks,
                     Y = er_status,
-                    beta.iter = tcga_brca_er_training_thinned$beta.draw[[sim_iter]])
+                    beta.iter = tcga_brca_er_training$beta.draw[[sim_iter]],
+                    Ym.iter = tcga_brca_er_training$Ym.draw[[sim_iter]])
 })
+
+# Save the results
+save(er_training_conv_V2, 
+     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/TCGA_BRCA_BSFP_ER_Training_Convergence_V2.rda")
 
 # -----------------------------------------------------------------------------
 # Alignment
@@ -227,11 +251,11 @@ er_status_training_fit_aligned <- match_align_bpmf(tcga_brca_er_training,
                                                    y = er_status,
                                                    model_params = model_params,
                                                    p.vec = p.vec, 
-                                                   iters_burnin = seq(length(tcga_brca_er_training$J.draw)))
+                                                   iters_burnin = thinned_iters_burnin/10)
 
 # Save the results
 save(er_status_training_fit_aligned, 
-     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/TCGA_BRCA_Training_Thinned_Aligned_V2.rda")
+     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/TCGA_BRCA_Training_Thinned_Aligned_V3.rda")
 
 # Exact the scores
 joint.scores.final <- er_status_training_fit_aligned$joint.scores.final
@@ -241,46 +265,6 @@ joint.betas.final <- er_status_training_fit_aligned$joint.betas.final
 individual.scores.final <- er_status_training_fit_aligned$individual.scores.final
 individual.loadings.final <- er_status_training_fit_aligned$individual.loadings.final
 individual.betas.final <- er_status_training_fit_aligned$individual.betas.final
-
-# -----------------------------------------------------------------------------
-# Heatmaps using sup.r.jive
-# -----------------------------------------------------------------------------
-
-# Load in the plotting library
-source("~/BayesianPMF/04DataApplication/BPMF/Figures/plotHeatmap.R")
-
-# Save the posterior mean of the joint scores
-S_J <- t(Reduce("+", joint.scores.final)/burnin)
-
-# Posterior mean of individual scores
-S_I <- lapply(1:q, function(s) t(Reduce("+", individual.scores.final[[s]])/burnin))
-
-# Posterior mean of joint loadings
-inds <- cumsum(p.vec)
-U_I_full <- Reduce("+", joint.loadings.final)/ burnin
-U_I <- list(U_I_full[1:inds[1],,drop=FALSE],
-            U_I_full[(inds[1]+1):inds[2],,drop=FALSE],
-            U_I_full[(inds[2]+1):inds[3],,drop=FALSE])
-
-# Posterior mean of the individual loadings
-W_I <- lapply(1:q, function(s) Reduce("+", individual.loadings.final[[s]])/burnin)
-
-# Posterior mean of joint betas
-theta1 <- t(Reduce("+", joint.betas.final)/burnin)
-
-# Posterior mean of individual betas
-theta2 <- lapply(1:q, function(s) t(Reduce("+", individual.betas.final[[s]]))/burnin)
-
-# Combine into list
-tcga_brca_data_list_er_status <- list(X = list(tcga_brca_data[[1]], tcga_brca_data[[2]], tcga_brca_data[[3]]), 
-                                      Y = unlist(er_status[[1,1]]))
-
-heatmap_sup.r.jive <- list(data = tcga_brca_data_list_er_status,
-                           S_J = S_J, S_I = S_I,
-                           U_I = U_I, W_I = W_I,
-                           theta1 = theta1, theta2 = theta2)
-
-plotHeatmap(heatmap_sup.r.jive)
 
 # -----------------------------------------------------------------------------
 # Plot the credible intervals for the factors
@@ -293,16 +277,16 @@ library(BSFP)
 exploring_factors_wd <- "~/BayesianPMF/04DataApplication/TCGA_BRCA/"
 
 # Calculate the summaries
-summaries <- summarize_factors(data = tcga_brca_data, Y = er_status,
-                               iters_burnin = 1:length(tcga_brca_er_training$J.draw), 
-                               aligned_results = er_status_training_fit_aligned,
-                               ranks = tcga_brca_er_training$ranks,
-                               Ym.draw = tcga_brca_er_training$Ym.draw,
-                               tau2.draw = NULL)
+summaries <- BSFP::summarize_factors(data = tcga_brca_data, Y = er_status,
+                                     iters_burnin = 1:length(er_status_training_fit_aligned$joint.scores.final), 
+                                     aligned_results = er_status_training_fit_aligned,
+                                     ranks = tcga_brca_er_training$ranks,
+                                     Ym.draw = tcga_brca_er_training$Ym.draw,
+                                     tau2.draw = NULL)
 
 # Save results
 save(summaries, er_status,
-     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/Exploring_Factors/TCGA_BRCA_Factor_Summaries_Burnin_Aligned_V2.rda")
+     file = "~/BayesianPMF/04DataApplication/TCGA_BRCA/Exploring_Factors/TCGA_BRCA_Factor_Summaries_Burnin_Aligned_V3.rda")
 
 # -----------------------------------------------------------------------------
 # Calculating variance expained 
@@ -310,7 +294,8 @@ save(summaries, er_status,
 
 # Calculating a summary of the variance explained
 var_exp_summary <- var_explained(BPMF.fit = tcga_brca_er_training,
-                                 iters_burnin = 1:length(tcga_brca_er_training$J.draw))
+                                 iters_burnin = 100:length(tcga_brca_er_training$J.draw),
+                                 source.names = c("Expression", "Methylation", "miRNA"))
 
 # Joint structure 
 var_exp_summary$Joint
@@ -322,15 +307,26 @@ var_exp_summary$Individual
 # Contributions of each factor (joint, individual) to predicting Y
 # -----------------------------------------------------------------------------
 
-# Calculating the contribution of the joint factors to predicting FEV1pp
-joint_contribution_to_er <- sapply(1:length(tcga_brca_er_training$J.draw), function(iter) {
-  var(joint.scores.final[[iter]] %*% joint.betas.final[[iter]])/var(er_status[[1,1]], na.rm = TRUE)
+# Calculating the denominator
+# denom <- sapply(1:length(tcga_brca_er_training$J.draw), function(iter) {
+#   frob(pnorm(joint.scores.final[[iter]] %*% joint.betas.final[[iter]] +
+#              Reduce("+", lapply(1:q, function(s) individual.scores.final[[s]][[iter]] %*%
+#                                   individual.betas.final[[s]][[iter]]))))
+# })
+
+denom <- sapply(seq(length(tcga_brca_er_training$J.draw)), function(iter) {
+  frob(tcga_brca_er_training$EY.draw[[iter]][[1,1]])
+})
+
+# Calculating the contribution of the joint factors to predicting ER status
+joint_contribution_to_er <- sapply(thinned_iters_burnin/10, function(iter) {
+  frob(pnorm(joint.scores.final[[iter]] %*% joint.betas.final[[iter]]))/denom[[iter]]
 })
 
 # Calculating the contribution of the individual factors to predicting FEV1pp
 individual_contribution_to_er <- lapply(1:q, function(s) {
-  sapply(1:length(tcga_brca_er_training$J.draw), function(iter) {
-    var(individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]])/var(er_status[[1,1]], na.rm = TRUE)
+  sapply(thinned_iters_burnin/10, function(iter) {
+    frob(pnorm(individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]]))/denom[[iter]]
   })
 })
 
@@ -339,31 +335,10 @@ mean(joint_contribution_to_er)
 c(quantile(joint_contribution_to_er, 0.025), quantile(joint_contribution_to_er, 0.975))
 
 # Overall contribution of Indiviudal
-sapply(individual_contribution_to_fev1pp, mean)
-sapply(individual_contribution_to_fev1pp, function(indiv) {
+sapply(individual_contribution_to_er, mean)
+sapply(individual_contribution_to_er, function(indiv) {
   c(quantile(indiv, 0.025), quantile(indiv, 0.975))
 })
-
-# Calculate the contribution of the joint structure to predicting FEV1pp for each sample
-joint_contribution_to_fev1pp_by_sample <- sapply(1:nsample_after_burnin, function(iter) {
-  joint.scores.final[[iter]] %*% joint.betas.final[[iter]]
-})
-
-# Calculate the contribution of the individual structures to predicting FEV1pp for each sample
-individual_contribution_to_fev1pp_by_sample <- lapply(1:q, function(s) {
-  sapply(1:nsample_after_burnin, function(iter) {
-    individual.scores.final[[s]][[iter]] %*% individual.betas.final[[s]][[iter]]
-  })
-})
-
-# Calculate the overall contribution of the factors in explaining FEV1pp
-overall_contribution_to_fev1pp <- sapply(1:nsample_after_burnin, function(iter) {
-  fev1pp_training_fit_nonsparse_V2$beta.draw[iters_burnin][[iter]][[1,1]][1,] +  # Intercept
-    joint.scores.final[[iter]] %*% joint.betas.final[[iter]] +                     # Joint
-    individual.scores.final[[1]][[iter]] %*% individual.betas.final[[1]][[iter]] + # Metabolome
-    individual.scores.final[[2]][[iter]] %*% individual.betas.final[[2]][[iter]]   # Proteome
-})
-
 
 # -----------------------------------------------------------------------------
 # 5-fold Cross Validation with BSFP
@@ -492,15 +467,12 @@ for (test_fold in 1:length(test_folds)) {
 all(rownames(er_status_no_missing[[1,1]][unlist(test_folds[1:3])]) == names(pred.out)) # TRUE!
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]]- pred.out)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]]- pred.out)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]]- pred.out)/length(pred.out)
 
 # -----------------------------------------------------------------------------
 # 5-fold Cross Validation with other models
 # -----------------------------------------------------------------------------
-
-# -------------------------------------
-# esJIVE
-# -------------------------------------
 
 # -------------------------------------
 # JIVE
@@ -547,10 +519,11 @@ for (test_fold in 1:length(test_folds)) {
 }
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.jive)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]] - pred.out.jive)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]]- pred.out.jive)/length(pred.out.jive)
 
 # -------------------------------------
-# MOFA -- NEED TO CHECK HOW I'VE DEFINED JOINT AND INDIVIDUAL FACTORS
+# MOFA
 # -------------------------------------
 
 library(MOFA2)
@@ -615,7 +588,8 @@ for (test_fold in 1:length(test_folds)) {
 }
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.mofa)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]] - pred.out.mofa)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]]- pred.out.mofa)/length(pred.out.mofa)
 
 # -------------------------------------
 # BIDIFAC
@@ -661,7 +635,8 @@ for (test_fold in 1:length(test_folds)) {
 }
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.bidifac)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]] - pred.out.bidifac)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]] - pred.out.bidifac)/length(pred.out.bidifac)
 
 # -------------------------------------
 # LASSO (combined)
@@ -692,7 +667,8 @@ for (test_fold in 1:length(test_folds)) {
 }
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.lasso.combined)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]] - pred.out.lasso.combined)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]] - pred.out.lasso.combined)/length(pred.out.lasso.combined)
 
 # -------------------------------------
 # LASSO (expression only)
@@ -723,7 +699,8 @@ for (test_fold in 1:length(test_folds)) {
 }
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.lasso.expression)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]] - pred.out.lasso.expression)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]] - pred.out.lasso.expression)/length(pred.out.lasso.expression)
 
 # -------------------------------------
 # LASSO (methylation only)
@@ -754,7 +731,8 @@ for (test_fold in 1:length(test_folds)) {
 }
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.lasso.methylation)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]] - pred.out.lasso.methylation)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]] - pred.out.lasso.methylation)/length(pred.out.lasso.methylation)
 
 # -------------------------------------
 # LASSO (miRNA only)
@@ -785,7 +763,8 @@ for (test_fold in 1:length(test_folds)) {
 }
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.lasso.miRNA)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]] - pred.out.lasso.miRNA)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]] - pred.out.lasso.miRNA)/length(pred.out.lasso.miRNA)
 
 # -------------------------------------
 # multiview
@@ -816,4 +795,5 @@ for (test_fold in 1:length(test_folds)) {
 }
 
 # Compare to the truth
-frob(er_status_no_missing[[1,1]] - pred.out.multiview)/frob(er_status_no_missing[[1,1]])
+# frob(er_status_no_missing[[1,1]] - pred.out.multiview)/frob(er_status_no_missing[[1,1]])
+frob(er_status_no_missing[[1,1]] - pred.out.multiview)/length(pred.out.multiview)
