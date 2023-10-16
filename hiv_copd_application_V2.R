@@ -129,6 +129,7 @@ thinned_iters_burnin <- seq(burnin, nsample, by = 10)
 # -----------------------------------------------------------------------------
 
 # Fitting BPMF
+start <- Sys.time()
 fev1pp_training_fit_nonsparse_V2 <- bpmf_data_mode(
   data = hiv_copd_data,
   Y = fev1pp,
@@ -138,6 +139,8 @@ fev1pp_training_fit_nonsparse_V2 <- bpmf_data_mode(
   nsample = nsample,
   progress = TRUE
 )
+end <- Sys.time()
+end-start
 
 # Save the results
 save(fev1pp_training_fit_nonsparse_V2, file = paste0(results_wd, "BPMF/Training_Fit/training_data_fit_V2.rda"))
@@ -841,7 +844,8 @@ for (i in 1:sum(ranks)) {
 
 # Calculating a summary of the variance explained
 var_exp_summary <- var_explained(BPMF.fit = fev1pp_training_fit_nonsparse_V2,
-                                 iters_burnin = iters_burnin)
+                                 iters_burnin = iters_burnin,
+                                 source.names = c("Metabolomics", "Proteomics"))
 
 # Joint structure 
 var_exp_summary$Joint
@@ -1135,11 +1139,19 @@ run_model_with_cv(mod = "LASSO_Protein_Only", hiv_copd_data = hiv_copd_data, out
                   model_params = model_params, nsample = nsample)
 
 # -------------------------------------
+# Running multiview with cross validation
+# -------------------------------------
+
+run_model_with_cv(mod = "multiview", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = nsample)
+
+# -------------------------------------
 # Cross-Validated Model Fit Results
 # -------------------------------------
 
 # Create a vector with model names
-models <- c("BPMF", "BIDIFAC", "JIVE", "MOFA", "sJIVE", "LASSO_Combined_Sources", "LASSO_Metabolite_Only", "LASSO_Protein_Only")
+models <- c("BPMF", "BIDIFAC", "JIVE", "MOFA", "sJIVE", "LASSO_Combined_Sources", "LASSO_Metabolite_Only", "LASSO_Protein_Only", "multiview")
 
 # Create a vector of cross-validated FEV1pp results for each model
 fev1pp_cv <- lapply(models, function(mod) c())
@@ -1175,9 +1187,12 @@ for (mod in models) {
     if (mod == "LASSO_Protein_Only") {
       load(paste0(results_wd, "LASSO_Protein_Only/Cross_Validation/FEV1pp_CV_LASSO_Protein_Only_Pair_", pair, ".rda"), verbose = TRUE)
     }
+    if (mod == "multiview") {
+      load(paste0(results_wd, "multiview/Cross_Validation/FEV1pp_CV_multiview_Pair_", pair, ".rda"), verbose = TRUE)
+    }
     
     # Combine the samples
-    if (mod != "sJIVE" & !grepl("LASSO", mod)) {
+    if (mod != "sJIVE" & !grepl("LASSO", mod) & mod != "multiview") {
       samps <- do.call(cbind, do.call(cbind, Ym.draw_pair))
       
       # Take a burn-in
@@ -1191,7 +1206,7 @@ for (mod in models) {
       fev1pp_cv_ci[[mod]][pair+1,] <- c(quantile(samps_burnin[2,], 0.025), quantile(samps_burnin[2,], 0.975))
     }
     
-    if (mod == "sJIVE" | grepl("LASSO", mod)) {
+    if (mod %in% c("sJIVE", "multiview") | grepl("LASSO", mod)) {
       # Save in the vector
       fev1pp_cv[[mod]][pair:(pair+1)] <- Ym.draw_pair
     }
@@ -1203,9 +1218,10 @@ plot(fev1pp_cv$BPMF, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observ
 points(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]]), col = 2, pch = 16) # BIDIFAC
 points(fev1pp_cv$JIVE, c(fev1pp[[1,1]]), col = 3, pch = 16) # JIVE
 points(fev1pp_cv$MOFA, c(fev1pp[[1,1]]), col = 4, pch = 16) # MOFA
-points(fev1pp_cv$sJIVE, c(fev1pp[[1,1]]), col = 4, pch = 16) # sJIVE
+points(fev1pp_cv$sJIVE, c(fev1pp[[1,1]]), col = 5, pch = 16) # sJIVE
+points(fev1pp_cv$multiview, c(fev1pp[[1,1]]), col = 6, pch = 16) # multiview
 abline(a=0, b=1, lwd = 2)
-legend("bottomright", legend = c("BPMF", "BIDIFAC", "JIVE", "MOFA"), col = c(1, 2, 3, 4), pch = rep(16, 4), cex = 0.5)
+legend("bottomright", legend = c("BPMF", "BIDIFAC", "JIVE", "MOFA", "sJIVE", "multiview"), col = c(1, 2, 3, 4, 5, 6), pch = rep(16, 4), cex = 0.5)
 
 # Calculating a correlation test for each cross validated outcome vs. true FEV1pp
 cor.test(fev1pp_cv$BPMF, c(fev1pp[[1,1]])) # BPMF
@@ -1216,6 +1232,7 @@ cor.test(fev1pp_cv$MOFA, c(fev1pp[[1,1]])) # MOFA
 cor.test(fev1pp_cv$LASSO_Combined_Sources, c(fev1pp[[1,1]])) # LASSO Combined Sources
 cor.test(fev1pp_cv$LASSO_Metabolite_Only, c(fev1pp[[1,1]])) # LASSO Combined Sources
 cor.test(fev1pp_cv$LASSO_Protein_Only, c(fev1pp[[1,1]])) # LASSO Combined Sources
+cor.test(fev1pp_cv$multiview, c(fev1pp[[1,1]])) # LASSO Combined Sources
 
 # Compare the coverage rates for FEV1pp
 mean(sapply(1:n, function(i) fev1pp_cv_ci$BPMF[i,1] <= fev1pp[[1,1]][i] & fev1pp[[1,1]][i] <= fev1pp_cv_ci$BPMF[i,2])) # BPMF
