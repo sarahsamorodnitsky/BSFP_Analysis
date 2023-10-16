@@ -5736,9 +5736,9 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
       
       if (response_type == "binary") {
         # The contribution of the observed response to the joint density
-        like <- like + sum(log(sapply(1:n, function(i) {
-          dbinom(Y_complete[[1,1]][i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter[[1,1]]))
-        })))
+        like <- like + sum(sapply(1:n, function(i) {
+          dbinom(Y_complete[[1,1]][i,], size = 1, prob = pnorm(VStar.iter %*% beta.iter[[1,1]])[i,], log = TRUE)
+        }))
       }
       
       # The contribution of the gammas and the prior probability of inclusion, p, to the likelihood
@@ -5790,7 +5790,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # library(sup.r.jive)
   # library(natural)
   # library(RSpectra)
-  library(BIPnet)
+  # library(BIPnet)
   library(multiview)
   
   # The model options
@@ -5798,11 +5798,11 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
-  funcs <- c("bpmf_data", "center_data", "bpmf_full_mode", "bpmf_data_mode", "bpmf_test", "bpmf_test_scale", "get_results", "BIDIFAC",
+  funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "bpmf_test", "bpmf_test_scale", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
-             "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "BIPnet", "multiview")
+             "bidifac.plus.impute", "bidifac.plus.given") # "bpmf_full_mode", 
+  packs <- c("Matrix", "MASS", "truncnorm", "multiview")
              # "BIPnet", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
@@ -8320,7 +8320,7 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
   }
   
   # For MOFA
-  if (mod == "MOFA") { # Need to come up with a new decision rule because we have 3 sources
+  if (mod == "MOFA") { 
     # Load in the MOFA library
     library(MOFA2)
     
@@ -8428,60 +8428,60 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
     }
     stopCluster(cl)
   }
-  
-  # For sesJIVE
-  if (mod == "sesJIVE") {
 
-    # Creating a list for the data
-    q <- nrow(data)
-    data_list <- lapply(1:q, function(s) data[[s,1]])
-
-    # In parallel, fit each model on n-2 samples, predict on the held-out pair
-    cl <- makeCluster(5)
-    registerDoParallel(cl)
-    fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
-
-      # Save the sample indices in the test fold
-      test_fold <- test_folds[[fold]]
-
-      # Create a new version of the data with just the training samples
-      data_list_training <- data_list
-
-      # Remove the current pair of samples
-      data_list_training <- lapply(1:q, function(s) t(scale(t(data_list[[s]][,-test_fold]))))
-
-      # Remove the pair from the outcome vector
-      outcome_train <- outcome
-      outcome_train[[1,1]] <- outcome[[1,1]][-test_fold,,drop=FALSE]
-
-      # Create the test dataset
-      data_list_test <- data_list
-      data_list_test <- lapply(1:q, function(s) t(scale(t(data_list[[s]][,test_fold]))))
-
-      outcome_test <- outcome
-      outcome_test[[1,1]] <- outcome[[1,1]][test_fold,,drop=FALSE]
-
-      # Fit on the training data
-      mod.out <- sesJIVE(X = data_list_training,
-                         Y = c(outcome_train[[1,1]]),
-                         rankA = NULL, rankJ = NULL,
-                         threshold = 0.001,
-                         max.iter = 3000,
-                         family.y = "binomial")
-
-      # Fitting the model on test data
-      mod.test <- stats::predict(mod.out, newdata = tcga_brca_data_list_test)
-      Ym.draw_pair <- mod.test$Ypred
-
-      # Save the results
-      ranks <- c(mod.out$rankJ, mod.out$rankA)
-      save(Ym.draw_pair, ranks, file = paste0(results_wd,"/Cross_Validation/", "mod/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
-
-      # Remove large objects
-      rm(mod.out, tcga_brca_data_list_training, tcga_brca_data_list_test)
-    }
-    stopCluster(cl)
-  }
+  # # For sesJIVE
+  # if (mod == "sesJIVE") {
+  # 
+  #   # Creating a list for the data
+  #   q <- nrow(data)
+  #   data_list <- lapply(1:q, function(s) data[[s,1]])
+  # 
+  #   # In parallel, fit each model on n-2 samples, predict on the held-out pair
+  #   cl <- makeCluster(5)
+  #   registerDoParallel(cl)
+  #   fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+  # 
+  #     # Save the sample indices in the test fold
+  #     test_fold <- test_folds[[fold]]
+  # 
+  #     # Create a new version of the data with just the training samples
+  #     data_list_training <- data_list
+  # 
+  #     # Remove the current pair of samples
+  #     data_list_training <- lapply(1:q, function(s) t(scale(t(data_list[[s]][,-test_fold]))))
+  # 
+  #     # Remove the pair from the outcome vector
+  #     outcome_train <- outcome
+  #     outcome_train[[1,1]] <- outcome[[1,1]][-test_fold,,drop=FALSE]
+  # 
+  #     # Create the test dataset
+  #     data_list_test <- data_list
+  #     data_list_test <- lapply(1:q, function(s) t(scale(t(data_list[[s]][,test_fold]))))
+  # 
+  #     outcome_test <- outcome
+  #     outcome_test[[1,1]] <- outcome[[1,1]][test_fold,,drop=FALSE]
+  # 
+  #     # Fit on the training data
+  #     mod.out <- sesJIVE(X = data_list_training,
+  #                        Y = c(outcome_train[[1,1]]),
+  #                        rankA = NULL, rankJ = NULL,
+  #                        threshold = 0.001,
+  #                        max.iter = 3000,
+  #                        family.y = "binomial")
+  # 
+  #     # Fitting the model on test data
+  #     mod.test <- stats::predict(mod.out, newdata = tcga_brca_data_list_test)
+  #     Ym.draw_pair <- mod.test$Ypred
+  # 
+  #     # Save the results
+  #     ranks <- c(mod.out$rankJ, mod.out$rankA)
+  #     save(Ym.draw_pair, ranks, file = paste0(results_wd,"/Cross_Validation/", "mod/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
+  # 
+  #     # Remove large objects
+  #     rm(mod.out, tcga_brca_data_list_training, tcga_brca_data_list_test)
+  #   }
+  #   stopCluster(cl)
+  # }
   
   # For LASSO
   if (mod == "LASSO_Combined_Sources") {
@@ -8996,7 +8996,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
 }
 
 # Calculate proportion of variation explained
-var_explained <- function(BPMF.fit, iters_burnin) {
+var_explained <- function(BPMF.fit, iters_burnin, source.names) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
@@ -9007,10 +9007,15 @@ var_explained <- function(BPMF.fit, iters_burnin) {
   # ---------------------------------------------------------------------------
   
   # Save the standardized data
-  hiv_copd_data <- BPMF.fit$data
+  data <- BPMF.fit$data
+  
+  # Unstandardize
+  # for (s in 1:q) {
+  #   data[[s,1]] <- data[[s,1]] * BPMF.fit$sigma.mat[s,1]
+  # }
   
   # Save the number of sources
-  q <- nrow(hiv_copd_data)
+  q <- nrow(data)
   
   # Save the estimated joint and individual structures and the fitted Y values
   J.draw <- BPMF.fit$J.draw[iters_burnin]
@@ -9019,18 +9024,18 @@ var_explained <- function(BPMF.fit, iters_burnin) {
   # Joint structure --
   joint_var_exp <- lapply(1:q, function(s) {
     var_by_iter <- sapply(1:length(iters_burnin), function(iter) {
-      1 - (frob(hiv_copd_data[[s,1]] - J.draw[[iter]][[s,1]]))/frob(hiv_copd_data[[s,1]])
+      1 - (frob(data[[s,1]] - J.draw[[iter]][[s,1]]))/frob(data[[s,1]])
     })
   })
-  names(joint_var_exp) <- c("Metabolome", "Proteome")
+  names(joint_var_exp) <- source.names
   
   # Individual structure --
   indiv_var_exp <- lapply(1:q, function(s) {
     var_by_iter <- sapply(1:length(iters_burnin), function(iter) {
-      1 - (frob(hiv_copd_data[[s,1]] - A.draw[[iter]][[s,1]]))/frob(hiv_copd_data[[s,1]])
+      1 - (frob(data[[s,1]] - A.draw[[iter]][[s,1]]))/frob(data[[s,1]])
     })
   })
-  names(indiv_var_exp) <- c("Metabolome", "Proteome")
+  names(indiv_var_exp) <- source.names
 
   # Summarizing the results
   joint_summary <- lapply(1:q, function(s) {
@@ -9039,7 +9044,7 @@ var_explained <- function(BPMF.fit, iters_burnin) {
   indiv_summary <- lapply(1:q, function(s) {
     c(Mean = mean(indiv_var_exp[[s]]), Lower = quantile(indiv_var_exp[[s]], 0.025), Upper = quantile(indiv_var_exp[[s]], 0.975))
   })
-  names(joint_summary) <- names(indiv_summary) <- c("Metabolome", "Proteome")
+  names(joint_summary) <- names(indiv_summary) <- source.names
   
   # Return
   list(Joint = joint_summary, Individual = indiv_summary)
@@ -10051,7 +10056,7 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iters_burn
   # 
   # # Check
   # all.equal(joint.structure.original, joint.structure.new)
-  
+
   # Calculate the original structure
   # individual.structure.original <- lapply(1:q, function(s) {
   #   lapply(1:burnin, function(iter) {
@@ -10068,6 +10073,26 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iters_burn
   # 
   # # Check
   # lapply(1:q, function(s) all.equal(individual.structure.original[[s]], individual.structure.new[[s]]))
+  
+  # Calculate contribution to predicting y
+  # ey.original <- lapply(1:burnin, function(iter) {
+  #   BPMF.fit$beta.draw[[iter]][[1,1]][1,] + 
+  #     joint.scores[[iter]] %*% BPMF.fit$beta.draw[[iter]][[1,1]][beta.ind[[1]],,drop=FALSE] +
+  #     Reduce("+", lapply(1:q, function(s) {
+  #       individual.scores[[s]][[iter]] %*% BPMF.fit$beta.draw[[iter]][[1,1]][beta.ind[[s+1]],,drop=FALSE]
+  #     }))
+  # })
+  # 
+  # ey.new <- lapply(1:burnin, function(iter) {
+  #   BPMF.fit$beta.draw[[iter]][[1,1]][1,] + 
+  #     joint.results.rotate$eta[[iter]] %*% joint.betas.final[[iter]] +
+  #     Reduce("+", lapply(1:q, function(s) {
+  #       individual.results.rotate[[s]]$eta[[iter]] %*% individual.betas.final[[s]][[iter]]
+  #     }))
+  # })
+  # 
+  # # Check
+  # all.equal(ey.original, ey.new)
 }
 
 # Calculating the difference between covariance matrices
