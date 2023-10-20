@@ -9009,13 +9009,13 @@ var_explained <- function(BPMF.fit, iters_burnin, source.names) {
   # Save the standardized data
   data <- BPMF.fit$data
   
-  # Unstandardize
-  # for (s in 1:q) {
-  #   data[[s,1]] <- data[[s,1]] * BPMF.fit$sigma.mat[s,1]
-  # }
-  
   # Save the number of sources
   q <- nrow(data)
+  
+  # Unstandardize
+  for (s in 1:q) {
+    data[[s,1]] <- data[[s,1]] * BPMF.fit$sigma.mat[s,1]
+  }
   
   # Save the estimated joint and individual structures and the fitted Y values
   J.draw <- BPMF.fit$J.draw[iters_burnin]
