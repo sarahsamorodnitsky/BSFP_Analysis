@@ -11,6 +11,12 @@ library(truncnorm)
 library(natural)
 # library(RSpectra)
 # library(MCMCpack)
+library(IntegratedLearner)
+library(tidyverse)
+library(SuperLearner)
+library(rJava)
+library(bartMachine)
+
 
 # -----------------------------------------------------------------------------
 # Bayesian Simultaneous Factorization and Prediction functions
@@ -71,7 +77,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   # ---------------------------------------------------------------------------
   # Is there a response vector?
   # ---------------------------------------------------------------------------
-
+  
   response_given <- !is.null(Y[[1,1]]) 
   
   # If so, what kind of response is it?
@@ -187,7 +193,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   
   # If initializing with nuclear norm, set initialize values to posterior mode
   if (nninit) {
-
+    
     V0 <- matrix(list(), nrow = 1, ncol = 1)
     if (r > 0) {
       svd.joint <- svd(rank_init$C[[1,1]])
@@ -320,7 +326,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
       W0 <- starting_values$W
       Vs0 <- starting_values$Vs
     }
-
+    
   }
   
   if (response_given) {
@@ -391,7 +397,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
     Z.draw[[1]][[1,1]] <- Z0
     tau2.draw[[1]][[1,1]] <- tau20
     VStar.draw[[1]][[1,1]] <- VStar0
-
+    
     if (missingness_in_response) {
       Ym.draw[[1]][[1,1]] <- Ym0
     }
@@ -632,7 +638,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
           U.draw[[iter+1]][[s,1]] <- matrix(0, nrow = p.vec[s], ncol = 1)
         }
       }
-  
+      
       U.iter <- U.draw[[iter+1]]
       
       # -------------------------------------------------------------------------
@@ -767,7 +773,7 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
       
       # Update the current value of W
       W.iter <- W.draw[[iter+1]]
-    
+      
     }
     
     # If structure from another method is provided
@@ -962,17 +968,17 @@ bpmf_data_mode <- function(data, Y, nninit = TRUE, model_params, ranks = NULL, s
   
   # Return
   list(data = data, # Returning the scaled version of the data
-        Y = Y, # Return the response vector
-        sigma.mat = sigma.mat, # Scaling factors
-        J.draw = J.draw, A.draw = A.draw, S.draw = S.draw, EY.draw = EY.draw, # Underlying structure
-        V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
-        VStar.draw = VStar.draw, # Components that predict Y,
-        Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
-        scores = scores, # Scores if provided by another method 
-        ranks = c(r, r.vec), # Ranks
-        tau2.draw = tau2.draw, beta.draw = beta.draw, # Regression parameters
-        gamma.draw = gamma.draw, p.draw = p.draw) # Sparsity parameters
-
+       Y = Y, # Return the response vector
+       sigma.mat = sigma.mat, # Scaling factors
+       J.draw = J.draw, A.draw = A.draw, S.draw = S.draw, EY.draw = EY.draw, # Underlying structure
+       V.draw = V.draw, U.draw = U.draw, W.draw = W.draw, Vs.draw = Vs.draw, # Components of the structure
+       VStar.draw = VStar.draw, # Components that predict Y,
+       Xm.draw = Xm.draw, Ym.draw = Ym.draw, Z.draw = Z.draw, # Missing data imputation
+       scores = scores, # Scores if provided by another method 
+       ranks = c(r, r.vec), # Ranks
+       tau2.draw = tau2.draw, beta.draw = beta.draw, # Regression parameters
+       gamma.draw = gamma.draw, p.draw = p.draw) # Sparsity parameters
+  
 }
 
 # Initialize with Y as a source but do not scale the data or Y
@@ -3218,7 +3224,7 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
   
   V.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   Vs.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = q))
-
+  
   if (!response_given) {
     Z.draw <- VStar.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
   }
@@ -3243,17 +3249,17 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
     }
     
     Vs0 <- matrix(list(), nrow = 1, ncol = q)
-
+    
     for (s in 1:q) {
-
+      
       # Initialize W and V
       if (r.vec[s] > 0) {
         Vs0[[1,s]] <- matrix(rnorm(n*r.vec[s], mean = 0, sd = sqrt(sigma2_indiv[s])), nrow = n, ncol = r.vec[s])
-
+        
       } 
       if (r.vec[s] == 0) {
         Vs0[[1,s]] <- matrix(0, nrow = n, ncol = 1)
-
+        
       }
       
     }
@@ -3277,7 +3283,7 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
     
     VStar0 <- cbind(1, do.call(cbind, V0.star), do.call(cbind, Vs0.star))
     Z0 <- matrix(rnorm(n, mean = VStar0 %*% beta.train[[1]][[1,1]], sd = 1))
-
+    
   }
   
   # ---------------------------------------------------------------------------
@@ -3374,7 +3380,7 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
     }
     
     X_complete <- test_data
-
+    
     # -------------------------------------------------------------------------
     # Computing the inverse that changes with tau2
     # -------------------------------------------------------------------------
@@ -3392,7 +3398,7 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
         }
       }
     }
-
+    
     # -------------------------------------------------------------------------
     # Posterior sample for V
     # -------------------------------------------------------------------------
@@ -3550,16 +3556,16 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
     # -------------------------------------------------------------------------
     # Save training sample for W, individual loadings
     # -------------------------------------------------------------------------
-
+    
     # Update the current value of W
     W.iter <- W.train[[iter+1]]
-
+    
     # -------------------------------------------------------------------------
     # Posterior sample for beta
     # -------------------------------------------------------------------------
     
     if (response_given) {
-
+      
       # Update the current value of beta
       beta.iter <- beta.train[[iter+1]][[1,1]]
       
@@ -3624,7 +3630,7 @@ bpmf.predict <- function(bpmf.fit, test_data, Y_test, nninit = TRUE, model_param
   
   # Calculating the structure for Y at each Gibbs sampling iteration
   EY.draw <- lapply(1:nsample, function(i) matrix(list(), nrow = 1, ncol = 1))
-
+  
   for (iter in 1:nsample) {
     for (s in 1:q) {
       # Calculating the joint structure and scaling by sigma.mat
@@ -3842,7 +3848,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
     
     # Generate test data if desired and generate new scores and predictions if desired
     if (predict_test_data) {
-
+      
       # Predicting on test data
       test.res <- bpmf.predict(bpmf.fit = res, test_data = test_data, Y_test = Y_test, nninit = FALSE,
                                model_params = model_params, nsample = nsample, progress = TRUE)
@@ -3867,7 +3873,7 @@ validation_simulation <- function(nsample, n_clust, p.vec, n, true_params, model
       S.draw <- test.res$S.draw
       EY.draw <- test.res$EY.draw
     }
-
+    
     # Results from the training data only
     tau2.draw <- res$tau2.draw
     Xm.draw <- res$Xm.draw
@@ -4676,7 +4682,7 @@ bpmf_data <- function(p.vec, n, ranks, true_params, s2nX = NULL, s2nY = NULL, re
         
         gamma[spike_inds,] <- 0
       }
-  
+      
       diag(Sigma_beta)[gamma == 0] <- 1/1000
       beta <- matrix(list(), nrow = 1, ncol = 1)
       beta[[1,1]] <- matrix(mvrnorm(1, mu = rep(0, n_beta), Sigma = Sigma_beta), ncol = 1)
@@ -5384,8 +5390,8 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
               
               # Save total coverage, MSE, and CI width across sim_iters for entries in structure corresponding to observed X.
               results_compiled_observed <- compile_missing_results(param_by_sim_iter, s, dims = c(p.vec[s], n), nsim, missing_obs_inds, type = "structure", observed = TRUE)
-             
-               # Calculate the average for observed entries
+              
+              # Calculate the average for observed entries
               avg_coverage_observed_source <- results_compiled_observed[[1]]/(denominator[[param]][[s,1]])
               
               # Calculate the average MSE for observed entries
@@ -5396,12 +5402,12 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
               
               # Save the results
               results_for_param[[s,1]] <- list(observed = list(avg_coverage = mean(avg_coverage_observed_source[!is.nan(avg_coverage_observed_source)]),
-                                                          avg_mse = mean(avg_mse_observed_source),
-                                                          avg_ci_width = mean(avg_ci_width_observed_source[!is.nan(avg_ci_width_observed_source)])),
+                                                               avg_mse = mean(avg_mse_observed_source),
+                                                               avg_ci_width = mean(avg_ci_width_observed_source[!is.nan(avg_ci_width_observed_source)])),
                                                missing = list(avg_coverage = mean(avg_coverage_missing_source[!is.nan(avg_coverage_missing_source)]),
                                                               avg_mse = mean(avg_mse_missing_source),
                                                               avg_ci_width = mean(avg_ci_width_missing_source[!is.nan(avg_ci_width_missing_source)])))
-                                               
+              
             }
           }
         }
@@ -5502,13 +5508,13 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
       if (current_param == "tau2") {
         # Calculate the average
         avg_coverage <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[1]]))/(denominator[[param]][[1,1]])
-
+        
         # Calculate the average MSE
         avg_mse <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[2]]))/nsim
-
+        
         # Calculate the average CI width
         avg_ci_width <- Reduce("+", lapply(param_by_sim_iter, function(res) res[[1,1]][[3]]))/(denominator[[param]][[1,1]])
-
+        
         # Save the results
         results_for_param[[1,1]] <- list(avg_coverage = mean(avg_coverage),
                                          avg_mse = mean(avg_mse),
@@ -5523,7 +5529,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
           
           # Save the total coverage, MSE, and CI width for missing observations in X.
           results_compiled <- compile_missing_results(param_by_sim_iter, s, dims = c(p.vec[s], n), nsim, missing_obs_inds, type = "observed_data")
-
+          
           # Calculate the average
           avg_coverage_source <- results_compiled[[1]]/(denominator[[param]][[s,1]])
           
@@ -5539,7 +5545,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
                                            avg_ci_width = mean(avg_ci_width_source[!is.nan(avg_ci_width_source)]))
         }
       }
-        
+      
       # For Ym
       if (current_param == "Ym") {
         missing_obs_inds <- lapply(sim_results, function(sim_iter) sim_iter$any_missing$missing_obs_Y[[1,1]])
@@ -5568,7 +5574,7 @@ average_results <- function(sim_results, denominator, p.vec, n, q, nsim, results
     # Save the overall results
     results_avg[[param]] <- results_for_param
   }
-
+  
   # Return
   results_avg
 }
@@ -5753,7 +5759,7 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
       }
     }
   }
-
+  
   # Return
   like
 }
@@ -5763,12 +5769,12 @@ log_joint_density <- function(data, U.iter, V.iter, W.iter, Vs.iter, model_param
 # -----------------------------------------------------------------------------
 
 # Run each model being compared in model comparison simulation study
-model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust, estim_ranks = TRUE) {
+model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_params, s2nX, s2nY, sparsity, nsim, nsample = 2000, n_clust, estim_ranks = TRUE, base_learner = NULL, stacked = TRUE) {
   
   # ---------------------------------------------------------------------------
   # Arguments:
   #
-  # mod = string in c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF", "multiview")
+  # mod = string in c("sJIVE", "BIDIFAC+", "JIVE", "MOFA", "BPMF", "multiview", "IntegratedLearner")
   # p.vec = number of features per source
   # n = sample size
   # ranks = vector of joint and individual ranks = c(joint rank, indiv rank 1, indiv rank 2, ...)
@@ -5780,6 +5786,8 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # nsample = number of Gibbs sampling iterations to draw for the linear model
   # n_clust = how many clusters to run simulation in parallel?
   # estim_ranks = should the ranks be estimated? Default is TRUE
+  # base_learner = if running IntegratedLearner, what should be the base learning model?
+  # stacked = if running IntegratedLearner, should we use stacked generalization or concatenation?
   # ---------------------------------------------------------------------------
   
   # Loading in the packages
@@ -5792,18 +5800,24 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
   # library(RSpectra)
   # library(BIPnet)
   library(multiview)
+  library(IntegratedLearner)
+  library(tidyverse)
+  library(SuperLearner)
+  library(rJava)
+  library(bartMachine)
+  library(randomForest)
   
   # The model options
-  models <- c("sJIVE", "BIDIFAC", "JIVE", "MOFA", "BPMF_Data_Mode", "BIP", "BPMF_test", "BPMF_test_scale", "multiview")
+  models <- c("sJIVE", "BIDIFAC", "JIVE", "MOFA", "BPMF_Data_Mode", "BIP", "BPMF_test", "BPMF_test_scale", "multiview", "IntegratedLearner")
   
   cl <- makeCluster(n_clust)
   registerDoParallel(cl)
   funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "bpmf_test", "bpmf_test_scale", "get_results", "BIDIFAC",
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
-             "bidifac.plus.impute", "bidifac.plus.given") # "bpmf_full_mode", 
-  packs <- c("Matrix", "MASS", "truncnorm", "multiview")
-             # "BIPnet", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
+             "bidifac.plus.impute", "bidifac.plus.given", "IntegratedLearner2") # "bpmf_full_mode", 
+  packs <- c("Matrix", "MASS", "truncnorm", "multiview", "IntegratedLearner", "tidyverse", "SuperLearner", "rJava", "bartMachine", "randomForest")
+  # "BIPnet", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
     # Set seed
     if (mod == "test") {
@@ -5926,32 +5940,32 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Center the observed training data 
       training_data[[s,1]] <- t(scale(t(training_data[[s,1]]), center = TRUE, scale = FALSE))
       training_data_list[[s]] <- t(scale(t(training_data_list[[s]]), center = TRUE, scale = FALSE))
-
+      
       # Save the means 
       row_means_train <- attr(training_data[[s,1]], "scaled:center")
-
+      
       # Subtract each row by the same mean
       joint.structure_train[[s,1]] <- sweep(joint.structure_train[[s,1]], 1, row_means_train)
       indiv.structure_train[[s,1]] <- sweep(indiv.structure_train[[s,1]], 1, row_means_train)
-
+      
       # Center the observed test data
       test_data[[s,1]] <- t(scale(t(test_data[[s,1]]), center = TRUE, scale = FALSE))
       test_data_list[[s]] <- t(scale(t(test_data_list[[s]]), center = TRUE, scale = FALSE))
-
+      
       # Save the means and variances
       row_means_test <- attr(test_data[[s,1]], "scaled:center")
-
+      
       # Subtract each column by the same mean and divide by the same sd above
       joint.structure_test[[s,1]] <- sweep(joint.structure_test[[s,1]], 1, row_means_test)
       indiv.structure_test[[s,1]] <- sweep(indiv.structure_test[[s,1]], 1, row_means_test)
     }
-
+    
     Y_train[[1,1]] <- scale(Y_train[[1,1]], center = TRUE, scale = FALSE)
     EY_train[[1,1]] <- (EY_train[[1,1]] - attr(Y_train[[1,1]], "scaled:center"))
-
+    
     Y_test[[1,1]] <- scale(Y_test[[1,1]], center = TRUE, scale = FALSE)
     EY_test[[1,1]] <- (EY_test[[1,1]] - attr(Y_test[[1,1]], "scaled:center"))
-
+    
     Y[[1,1]] <- scale(Y[[1,1]], center = TRUE, scale = FALSE)
     EY[[1,1]] <- (EY[[1,1]] - attr(Y[[1,1]], "scaled:center"))
     
@@ -5981,7 +5995,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Saving the individual ranks
       indiv.rank <- mod.out$rankA
-
+      
       # Saving the joint structure
       mod.joint <- lapply(1:q, function(s) {
         training <- mod.out$U_I[[s]] %*% mod.out$S_J
@@ -6148,7 +6162,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       indiv.EY <- lapply(1:q, function(s) {
         t(mod.out$S[[s+1]][p.ind[[q+1]],,drop=FALSE])
       })
-    
+      
       Y.fit <- (joint.EY + Reduce("+", indiv.EY)) * sigma.mat[q+1,]
       
       # Do not compute results for coverage
@@ -6260,7 +6274,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
           } else { # If factor explains substantial variation in just one source, it is individual
             ind.max
           }
-    
+          
         }
         
       })
@@ -6642,7 +6656,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       
       # Save the optimal penalty
       lambda.min <- cvfit$lambda.min
-
+      
       # Make predictions based on the optimal penalty
       EY.fit.train <- predict(cvfit, newx = training_data_list_transpose, s = "lambda.min", type = "response")
       EY.fit.test <- predict(cvfit, newx = test_data_list_transpose, s = "lambda.min", type = "response")
@@ -6657,6 +6671,104 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       # Do not compute results for coverage
       coverage_EY_train <- coverage_EY_test <- NA
       coverage_Y_train <- coverage_Y_test <- NA
+    }
+    
+    if (mod == "IntegratedLearner") {
+      
+      # Name the rows of the features
+      rownames(training_data_list[[1]]) <- paste0("Source 1 Feature ", 1:p.vec[1])
+      rownames(training_data_list[[2]]) <- paste0("Source 2 Feature ", 1:p.vec[2])
+      
+      rownames(test_data_list[[1]]) <- paste0("Source 1 Feature ", 1:p.vec[1])
+      rownames(test_data_list[[2]]) <- paste0("Source 2 Feature ", 1:p.vec[2])
+      
+      # Name the columns for the samples
+      colnames(training_data_list[[1]]) <- colnames(training_data_list[[2]]) <- paste0("Sample ", 1:n)
+      colnames(test_data_list[[1]]) <- colnames(test_data_list[[2]]) <- paste0("Sample ", 1:n)
+      
+      # Combine the data into a single data.frame
+      feature_table <- do.call(rbind, training_data_list)
+      feature_table_valid <- do.call(rbind, test_data_list)
+      
+      # Create a sample metadata data.frame
+      sample_metadata <- data.frame(Y = Y_train[[1,1]], subjectID = colnames(feature_table))
+      rownames(sample_metadata) <- colnames(feature_table)
+      
+      sample_metadata_valid <- data.frame(Y = Y_test[[1,1]], subjectID = colnames(feature_table))
+      rownames(sample_metadata_valid) <- colnames(feature_table)
+      
+      # Create a feature metadata data.frame
+      feature_metadata <- data.frame(featureID = rownames(feature_table),
+                                     featureType = c(rep("Source 1", p.vec[1]), rep("Source 2", p.vec[2])))
+      rownames(feature_metadata) <- rownames(feature_table)
+      
+      # Fit to training data with test data as a validation set
+      mod.out <- IntegratedLearner2(feature_table = feature_table,
+                                    sample_metadata = sample_metadata, 
+                                    feature_metadata = feature_metadata,
+                                    feature_table_valid = feature_table_valid,
+                                    sample_metadata_valid = sample_metadata_valid,
+                                    base_learner = base_learner,
+                                    base_screener = "All",
+                                    family = gaussian(),
+                                    print_learner = FALSE)
+      
+      # Do not compute ranks
+      joint.rank <- NA
+      indiv.rank <- rep(NA, q)
+      
+      # Save the prediction results --
+      
+      # If using stacked generalization: 
+      if (stacked) {
+        EY.fit.train <- mod.out$yhat.train$stacked
+        EY.fit.test <- mod.out$yhat.test$stacked
+      }
+      
+      # If use concatenation:
+      if (!stacked) {
+        EY.fit.train <- mod.out$yhat.train$concatenated
+        EY.fit.test <- mod.out$yhat.test$concatenated
+      }
+      
+      # Combine the fits
+      EY.fit <- matrix(c(EY.fit.train, EY.fit.test), ncol = 1)
+      
+      # Save the coverage results
+      if (base_learner == "SL.BART") {
+        weights <- mod.out$weights
+        post.samples.train <- post.samples.test <- vector("list", length(weights))
+        names(post.samples.train) <- names(post.samples.test) <- names(mod.out$X_test_layers)
+        
+        for(i in seq_along(post.samples.train)){
+          post.samples.train[[i]] <- bart_machine_get_posterior(mod.out$model_fits$model_layers[[i]], mod.out$X_train_layers[[i]])$y_hat_posterior_samples
+          post.samples.test[[i]] <- bart_machine_get_posterior(mod.out$model_fits$model_layers[[i]], mod.out$X_test_layers[[i]])$y_hat_posterior_samples
+        }
+        
+        weighted.post.samples.train <- Reduce('+', Map('*', post.samples.train, weights))
+        weighted.post.samples.test <- Reduce('+', Map('*', post.samples.test, weights))
+        
+        # Calculate the 95% credible intervals
+        ci_by_EY_train <- apply(weighted.post.samples.train, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
+        ci_by_EY_test <- apply(weighted.post.samples.test, 1, function(subj) c(quantile(subj, 0.025), quantile(subj, 0.975)))
+        ci_by_EY <- cbind(ci_by_EY_train, ci_by_EY_test)
+        
+        coverage_EY_train <- mean(sapply(1:n, function(i) {
+          (EY[[1,1]][i,] >= ci_by_EY[1,i]) & (EY[[1,1]][i,] <= ci_by_EY[2,i])
+        }))
+        
+        coverage_EY_test <- mean(sapply((n+1):(2*n), function(i) {
+          (EY[[1,1]][i,] >= ci_by_EY[1,i]) & (EY[[1,1]][i,] <= ci_by_EY[2,i])
+        }))
+      }
+      
+      # If not using a Bayesian method
+      if (base_learner != "SL.BART") {
+        coverage_EY_train <- coverage_EY_test <- NA
+      }
+      
+      coverage_Y_train <- coverage_Y_test <- NA
+      
     }
     
     # Combining the ranks
@@ -6808,11 +6920,11 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     # Assess recovery of underlying joint and individual structure
     # -------------------------------------------------------------------------
     
-    if (mod == "test" | mod == "multiview") {
+    if (mod == "test" | mod == "multiview" | mod == "IntegratedLearner") {
       joint.recovery.structure.train <- joint.recovery.structure.test <- indiv.recovery.structure.train <- indiv.recovery.structure.test <- NA
     }
     
-    if (!(mod %in% c("test", "multiview"))) {
+    if (!(mod %in% c("test", "multiview", "IntegratedLearner"))) {
       # Training data --
       
       # Joint structure
@@ -6826,7 +6938,7 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
       }))
       
       # Test data --
-
+      
       # Joint structure
       joint.recovery.structure.test <- mean(sapply(1:q, function(s) {
         frob(mod.joint[[s]][,(n+1):(2*n)] - joint.structure_test[[s,1]])/frob(joint.structure_test[[s,1]])
@@ -6847,12 +6959,18 @@ model_comparison <- function(mod, p.vec, n, ranks, response, true_params, model_
     mse_EY_test <- frob(EY.fit[(n+1):(2*n),] - EY_test[[1,1]])/frob(EY_test[[1,1]])
     
     # Save 
-    if (estim_ranks) {
-      file_name <- paste0("~/BayesianPMF/03Simulations/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda")
+    if (mod != "IntegratedLearner") {
+      if (estim_ranks) {
+        file_name <- paste0("~/BayesianPMF/03Simulations/", mod, "/", mod, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda")
+      }
+      
+      if (!estim_ranks) {
+        file_name <- paste0("~/BayesianPMF/03Simulations/", mod, "_Fixed_Ranks", "/", mod,"_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, "_fixed_ranks.rda")
+      }
     }
     
-    if (!estim_ranks) {
-      file_name <- paste0("~/BayesianPMF/03Simulations/", mod, "_Fixed_Ranks", "/", mod,"_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, "_fixed_ranks.rda")
+    if (mod == "IntegratedLearner") {
+      file_name <- paste0("/Users/sarahsamorodnitsky/Dropbox/BSFP/", mod, "/", mod, "_base_", base_learner, "_sim_", sim_iter, "_s2nX_", s2nX, "_s2nY_", s2nY, ".rda")
     }
     
     save(joint.recovery.structure.train, joint.recovery.structure.test,
@@ -6914,7 +7032,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
              "bidifac.plus.impute", "bidifac.plus.given", "bpmf_data_mode", "fill.matrix")
   packs <- c("Matrix", "MASS", "truncnorm", "missForest", "VIM")
   sim_results <- foreach (sim_iter = 1:nsim, .packages = packs, .export = funcs, .verbose = TRUE, .combine = rbind) %dopar% {
-  # for (sim_iter in 1:nsim) {
+    # for (sim_iter in 1:nsim) {
     # Set seed
     seed <- sim_iter + which(models %in% mod) * nsim
     set.seed(seed)
@@ -7099,7 +7217,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       # Save NAs for the other parameters
       imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
       mod.ranks <- sapply(1:(q+1), function(s) NA)
-  
+      
     }
     
     if (mod == "RF_Separate_Sources") {
@@ -7118,7 +7236,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       imputed_values_coverage <- imputed_values_ci_width <- sapply(1:q, function(s) NA)
       mod.ranks <- sapply(1:(q+1), function(s) NA)
     } 
-
+    
     if (mod == "BSFP") {
       
       # Fitting the model on the missing values
@@ -7163,7 +7281,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
       
       # Calculate the CI width
       imputed_values_ci_width <- sapply(1:q, function(s) mean(abs(imputed_values_cis[[s]][2,] - imputed_values_cis[[s]][1,])))
-       
+      
       # Save the estimated ranks
       mod.ranks <- mod.impute$ranks
     }
@@ -7176,7 +7294,7 @@ imputation_simulation <- function(mod, p.vec, n, ranks, response, true_params, m
     imputation_mse <- sapply(1:q, function(s) {
       frob(missing_obs[[s]] - imputed_values[[s]])/frob(missing_obs[[s]])
     })
-
+    
     # Save 
     file_name <- paste0("~/BayesianPMF/03Simulations/Imputation_Rank", sum(ranks), "/", mod, "/", mod,"_imputation_sim_", sim_iter, "_s2nX_", s2nX, "_seed_", seed, "_", missing_data_type, ".rda")
     
@@ -7274,7 +7392,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     true.Vs <- sim_data$Vs
     true.U <- sim_data$U
     true.W <- sim_data$W
-
+    
     # Save a burn-in
     burnin <- nsample/2
     thinned_iters <- seq(1, nsample, by = 10)
@@ -7297,7 +7415,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     if (init_at_truth) {
       res <- bpmf(data = true_data, Y = Y, nninit = FALSE, model_params = model_params, ranks = ranks, scores = NULL, sparsity = sparsity, nsample, progress = TRUE, starting_values = starting_values)
     }
-  
+    
     # Extract the posterior samples
     U.draw <- res$U.draw
     V.draw <- res$V.draw
@@ -7320,9 +7438,9 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     
     # Apply algorithm
     res.ls <- factor_switching(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
-                              gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
-                              nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
-                              nninit = FALSE, pivot = list(true.V, true.Vs))
+                               gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
+                               nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
+                               nninit = FALSE, pivot = list(true.V, true.Vs))
     
     # Save gammas
     gammas.draw.ls <- do.call(cbind, lapply(res.ls$swapped_gammas, function(iter) iter[[1,1]]))
@@ -7356,9 +7474,9 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     
     # Apply algorithm
     res.es <- erosheva_curtis_fs(U.draw, V.draw, W.draw, Vs.draw, betas = betas.draw, 
-                                   gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
-                                   n, p.vec, nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
-                                   BIDIFAC_solution = list(V = true.V, U = true.U, Vs = true.Vs, W = true.W))
+                                 gammas = gammas.draw, r = ranks[1], r.vec = ranks[-1],
+                                 n, p.vec, nsample = nsample, thinned_iters_burnin = thinned_iters_burnin,
+                                 BIDIFAC_solution = list(V = true.V, U = true.U, Vs = true.Vs, W = true.W))
     
     # Save gammas
     gammas.draw.es <- do.call(cbind, lapply(res.es$swapped_gammas, function(iter) iter[[1,1]]))
@@ -7504,7 +7622,7 @@ identifiability_sim <- function(p.vec, n, ranks, response, true_params, model_pa
     indiv.spike.mse <- mean(sapply(1:q, function(s) {
       (frob(true.indiv.structure.spike[[s,1]] - indiv.structure.spike.mean[[s,1]]))/frob(true.indiv.structure.spike[[s,1]])
     }))
-
+    
     # -------------------------------------------------------------------------
     # Return
     # -------------------------------------------------------------------------
@@ -7561,6 +7679,685 @@ SVDmiss <- function (X, niter = 25, ncomp = min(4, dim(X)[2]), conv.reldiff = 0.
   names(final.diff) <- c("diff", "rel.diff", "n.iter", "max.iter")
   return(list(svd = svd0, Xfill = XF, status = final.diff))
 }
+
+# The IntegratedLearner Function, modified to accommodate entirely 0 predictions
+# Original Author: Himel Mallick
+IntegratedLearner2 <-function(feature_table,
+                              sample_metadata, 
+                              feature_metadata,
+                              feature_table_valid = NULL, 
+                              sample_metadata_valid = NULL, 
+                              folds = 5, 
+                              seed = 1234, 
+                              base_learner = 'SL.BART',
+                              base_screener = 'All', 
+                              meta_learner = 'SL.nnls.auc',
+                              run_concat = TRUE, 
+                              run_stacked = TRUE, 
+                              verbose = FALSE, 
+                              print_learner = TRUE, 
+                              refit.stack = FALSE, 
+                              family=gaussian())
+{ 
+  
+  ##############
+  # Track time #
+  ##############
+  
+  start.time<-Sys.time()
+  
+  #######################
+  # Basic sanity checks #
+  #######################
+  
+  ######################################
+  # Check Y is appropriate with family #
+  ######################################
+  
+  if (family$family=='gaussian' && length(unique(sample_metadata$Y)) <= 5) {
+    warning("The response has five or fewer unique values.  Are you sure you want the family to be gaussian?")
+  }
+  if (family$family=='binomial' && (length(unique(sample_metadata$Y))< 2))
+    stop("Need at least two classes to do classification.")
+  
+  if (family$family=='binomial' && (length(unique(sample_metadata$Y))> 2))
+    stop("Classification with more than two classes currently not supported")
+  
+  ############################
+  # Check dimension mismatch #
+  ############################
+  
+  if(all(rownames(feature_table)==rownames(feature_metadata))==FALSE)
+    stop("Both feature_table and feature_metadata should have the same rownames.")
+  
+  if(all(colnames(feature_table)==rownames(sample_metadata))==FALSE)
+    stop("Row names of sample_metadata must match the column names of feature_table.")
+  
+  if (!is.null(feature_table_valid)){
+    if(all(rownames(feature_table)==rownames(feature_table_valid))==FALSE)
+      stop("Both feature_table and feature_table_valid should have the same rownames.")
+  }
+  
+  if (!is.null(sample_metadata_valid)){
+    if(all(colnames(feature_table_valid)==rownames(sample_metadata_valid))==FALSE)
+      stop("Row names of sample_metadata_valid must match the column names of feature_table_valid")
+  }
+  
+  #########################
+  # Check missing columns #
+  #########################
+  
+  if (!'subjectID' %in% colnames(sample_metadata)){
+    stop("sample_metadata must have a column named 'subjectID' describing per-subject unique identifiers.")
+  }
+  
+  if (!'Y' %in% colnames(sample_metadata)){
+    stop("sample_metadata must have a column named 'Y' describing the outcome of interest.")
+  }
+  
+  if (!'featureID' %in% colnames(feature_metadata)){
+    stop("feature_metadata must have a column named 'featureID' describing per-feature unique identifiers.")
+  }
+  
+  if (!'featureType' %in% colnames(feature_metadata)){
+    stop("feature_metadata must have a column named 'featureType' describing the corresponding source layers.")
+  }
+  
+  if (!is.null(sample_metadata_valid)){
+    if (!'subjectID' %in% colnames(sample_metadata_valid)){
+      stop("sample_metadata_valid must have a column named 'subjectID' describing per-subject unique identifiers.")
+    }
+    
+    if (!'Y' %in% colnames(sample_metadata_valid)){
+      stop("sample_metadata_valid must have a column named 'Y' describing the outcome of interest.")
+    }
+  }
+  
+  #############################################################################################
+  # Extract validation Y right away (will not be used anywhere during the validation process) #
+  #############################################################################################
+  
+  if (!is.null(sample_metadata_valid)){
+    validY<-sample_metadata_valid['Y']
+  }
+  
+  ###############################################################
+  # Set parameters and extract subject IDs for sample splitting #
+  ###############################################################
+  
+  set.seed(seed)
+  subjectID <- unique(sample_metadata$subjectID)
+  
+  ##################################
+  # Trigger V-fold CV (Outer Loop) #
+  ##################################
+  
+  subjectCvFoldsIN <- caret::createFolds(1:length(subjectID), k = folds, returnTrain=TRUE)
+  
+  ########################################
+  # Curate subject-level samples per fold #
+  ########################################
+  
+  obsIndexIn <- vector("list", folds) 
+  for(k in 1:length(obsIndexIn)){
+    x <- which(!sample_metadata$subjectID %in%  subjectID[subjectCvFoldsIN[[k]]])
+    obsIndexIn[[k]] <- x
+  }
+  names(obsIndexIn) <- sapply(1:folds, function(x) paste(c("fold", x), collapse=''))
+  
+  ###############################
+  # Set up data for SL training #
+  ###############################
+  
+  cvControl = list(V = folds, shuffle = FALSE, validRows = obsIndexIn)
+  
+  #################################################
+  # Stacked generalization input data preparation #
+  #################################################
+  
+  feature_metadata$featureType<-as.factor(feature_metadata$featureType)
+  name_layers<-with(droplevels(feature_metadata), list(levels = levels(featureType)), nlevels = nlevels(featureType))$levels
+  SL_fit_predictions<-vector("list", length(name_layers))
+  SL_fit_layers<-vector("list", length(name_layers)) 
+  names(SL_fit_layers)<-name_layers
+  names(SL_fit_predictions)<-name_layers
+  X_train_layers <- vector("list", length(name_layers)) 
+  names(X_train_layers) <- name_layers
+  X_test_layers <- vector("list", length(name_layers)) 
+  names(X_test_layers) <- name_layers
+  layer_wise_predictions_train<-vector("list", length(name_layers))
+  names(layer_wise_predictions_train)<-name_layers
+  
+  #####################################################################
+  # Stacked generalization input data preparation for validation data #
+  #####################################################################
+  
+  if (!is.null(feature_table_valid)){
+    layer_wise_prediction_valid<-vector("list", length(name_layers))
+    names(layer_wise_prediction_valid)<-name_layers
+  } 
+  
+  ##################################################################
+  # Carefully subset data per omics and run each individual layers #
+  ##################################################################
+  
+  for (i in seq_along(name_layers)){
+    #if (verbose){ 
+    cat('Running base model for layer ', i, "...", "\n")
+    #}
+    
+    ##################################
+    # Prepate single-omic input data #
+    ##################################
+    
+    include_list<-feature_metadata %>% dplyr::filter(featureType == name_layers[i]) 
+    t_dat_slice<-feature_table[rownames(feature_table) %in% include_list$featureID, ]
+    dat_slice<-as.data.frame(t(t_dat_slice))
+    Y = sample_metadata$Y
+    X = dat_slice
+    X_train_layers[[i]] <- X
+    
+    ###################################
+    # Run user-specified base learner #
+    ###################################
+    
+    SL_fit_layers[[i]] <- SuperLearner::SuperLearner(Y = Y, 
+                                                     X = X,
+                                                     cvControl = cvControl,    
+                                                     verbose = verbose, 
+                                                     SL.library = list(c(base_learner, base_screener)),
+                                                     family = family)
+    
+    ###################################################
+    # Append the corresponding y and X to the results #
+    ###################################################
+    
+    SL_fit_layers[[i]]$Y<-sample_metadata['Y']
+    SL_fit_layers[[i]]$X<-X
+    if (!is.null(sample_metadata_valid)) SL_fit_layers[[i]]$validY<-validY
+    
+    ##################################################################
+    # Remove redundant data frames and collect pre-stack predictions #
+    ##################################################################
+    
+    rm(t_dat_slice); rm(dat_slice); rm(X)
+    SL_fit_predictions[[i]]<-SL_fit_layers[[i]]$Z
+    
+    ##################################################
+    # Re-fit to entire dataset for final predictions #
+    ##################################################
+    
+    layer_wise_predictions_train[[i]]<-SL_fit_layers[[i]]$SL.predict
+    
+    ############################################################
+    # Prepate single-omic validation data and save predictions #
+    ############################################################
+    
+    if (!is.null(feature_table_valid)){
+      t_dat_slice_valid<-feature_table_valid[rownames(feature_table_valid) %in% include_list$featureID, ]
+      dat_slice_valid<-as.data.frame(t(t_dat_slice_valid))
+      X_test_layers[[i]] <- dat_slice_valid
+      layer_wise_prediction_valid[[i]]<-predict.SuperLearner(SL_fit_layers[[i]], newdata = dat_slice_valid)$pred
+      
+      if (is.null(dim(layer_wise_predictions_train[[i]]))) {
+        names(layer_wise_prediction_valid[[i]])<-rownames(dat_slice_valid)
+      }
+      
+      if (!is.null(dim(layer_wise_predictions_train[[i]]))) {
+        rownames(layer_wise_prediction_valid[[i]])<-rownames(dat_slice_valid)
+      }
+      
+      SL_fit_layers[[i]]$validX<-dat_slice_valid
+      SL_fit_layers[[i]]$validPrediction<-layer_wise_prediction_valid[[i]]
+      
+      if (is.null(dim(SL_fit_layers[[i]]$validPrediction))) {
+        names(SL_fit_layers[[i]]$validPrediction)<-'validPrediction'
+      }
+      
+      if (!is.null(dim(SL_fit_layers[[i]]$validPrediction))) {
+        colnames(SL_fit_layers[[i]]$validPrediction)<-'validPrediction'
+      }
+      
+      rm(dat_slice_valid); rm(include_list)
+    }
+  }
+  
+  ##############################
+  # Prepate stacked input data #
+  ##############################
+  
+  combo <- as.data.frame(do.call(cbind, SL_fit_predictions))
+  names(combo)<-name_layers
+  
+  ###############################
+  # Set aside final predictions #
+  ###############################
+  
+  combo_final <- as.data.frame(do.call(cbind, layer_wise_predictions_train))
+  names(combo_final)<-name_layers
+  
+  if (!is.null(feature_table_valid)){
+    combo_valid <- as.data.frame(do.call(cbind, layer_wise_prediction_valid))
+    names(combo_valid)<-name_layers
+  }
+  
+  ####################
+  # Stack all models #
+  ####################
+  
+  if (run_stacked){
+    
+    #if (verbose) {
+    cat('Running stacked model...\n')
+    #}
+    
+    ###################################
+    # Run user-specified meta learner #
+    ###################################
+    
+    SL_fit_stacked<-SuperLearner::SuperLearner(Y = Y, 
+                                               X = combo, 
+                                               cvControl = cvControl,    
+                                               verbose = verbose, 
+                                               SL.library = meta_learner,
+                                               family=family)
+    
+    
+    # Extract the fit object from SuperLearner
+    model_stacked <- SL_fit_stacked$fitLibrary[[1]]$object
+    stacked_prediction_train<-predict.SuperLearner(SL_fit_stacked, newdata = combo_final)$pred
+    
+    ###################################################
+    # Append the corresponding y and X to the results #
+    ###################################################
+    
+    SL_fit_stacked$Y<-sample_metadata['Y']
+    SL_fit_stacked$X<-combo
+    if (!is.null(sample_metadata_valid)) SL_fit_stacked$validY<-validY
+    
+    #################################################################
+    # Prepate stacked input data for validation and save prediction #
+    #################################################################
+    
+    if (!is.null(feature_table_valid)){
+      stacked_prediction_valid<-predict.SuperLearner(SL_fit_stacked, newdata = combo_valid)$pred
+      
+      if (!is.null(dim(stacked_prediction_valid))) {
+        rownames(stacked_prediction_valid)<-rownames(combo_valid)
+      }
+      
+      if (is.null(dim(stacked_prediction_valid))) {
+        names(stacked_prediction_valid)<-rownames(combo_valid)
+      }
+      
+      SL_fit_stacked$validX<-combo_valid
+      SL_fit_stacked$validPrediction<-stacked_prediction_valid
+      
+      if (!is.null(dim(SL_fit_stacked$validPrediction))) {
+        colnames(SL_fit_stacked$validPrediction)<-'validPrediction'
+      }
+      
+      if (is.null(dim(SL_fit_stacked$validPrediction))) {
+        names(SL_fit_stacked$validPrediction)<-'validPrediction'
+      }
+      
+    }
+  }
+  
+  #######################################
+  # Run concatenated model if specified #
+  #######################################
+  
+  if(run_concat){
+    #if (verbose) {
+    cat('Running concatenated model...\n')
+    #}
+    ###################################
+    # Prepate concatenated input data #
+    ###################################
+    
+    fulldat<-as.data.frame(t(feature_table))
+    
+    ###################################
+    # Run user-specified base learner #
+    ###################################
+    
+    SL_fit_concat<-SuperLearner::SuperLearner(Y = Y, 
+                                              X = fulldat, 
+                                              cvControl = cvControl,    
+                                              verbose = verbose, 
+                                              SL.library = list(c(base_learner,base_screener)),
+                                              family=family)
+    
+    # Extract the fit object from superlearner
+    model_concat <- SL_fit_concat$fitLibrary[[1]]$object
+    
+    ###################################################
+    # Append the corresponding y and X to the results #
+    ###################################################
+    
+    SL_fit_concat$Y<-sample_metadata['Y']
+    SL_fit_concat$X<-fulldat
+    if (!is.null(sample_metadata_valid)) SL_fit_concat$validY<-validY
+    
+    #########################################################################
+    # Prepate concatenated input data for validaton set and save prediction #
+    #########################################################################
+    
+    if (!is.null(feature_table_valid)){
+      fulldat_valid<-as.data.frame(t(feature_table_valid))
+      concat_prediction_valid<-predict.SuperLearner(SL_fit_concat, newdata = fulldat_valid)$pred
+      SL_fit_concat$validX<-fulldat_valid
+      
+      if (!is.null(dim(concat_prediction_valid))) {
+        rownames(concat_prediction_valid)<-rownames(fulldat_valid)
+      }
+      
+      if (is.null(dim(concat_prediction_valid))) {
+        names(concat_prediction_valid)<-rownames(fulldat_valid)
+      }
+      
+      SL_fit_concat$validPrediction<-concat_prediction_valid
+      
+      if (!is.null(dim(SL_fit_concat$validPrediction))) {
+        colnames(SL_fit_concat$validPrediction)<-'validPrediction'
+      }
+      
+      if (is.null(dim(SL_fit_concat$validPrediction))) {
+        names(SL_fit_concat$validPrediction)<-'validPrediction'
+      }
+      
+    }
+  }
+  
+  ######################
+  # Save model results #
+  ######################
+  
+  # Extract the fit object from superlearner
+  model_layers <- vector("list", length(name_layers))
+  names(model_layers) <- name_layers
+  for (i in seq_along(name_layers)) {
+    model_layers[[i]] <- SL_fit_layers[[i]]$fitLibrary[[1]]$object
+  }
+  
+  ##################
+  # CONCAT + STACK #
+  ##################
+  
+  if(run_concat & run_stacked){
+    
+    model_fits <- list(model_layers=model_layers,
+                       model_stacked=model_stacked,
+                       model_concat=model_concat)
+    
+    SL_fits<-list(SL_fit_layers = SL_fit_layers, 
+                  SL_fit_stacked = SL_fit_stacked,
+                  SL_fit_concat = SL_fit_concat)
+    
+    ###############################
+    # Prediction (Stack + Concat) #
+    ###############################
+    
+    if(refit.stack){
+      yhat.train <- cbind(combo, stacked_prediction_train, SL_fit_concat$Z)
+    } else{
+      yhat.train <- cbind(combo, SL_fit_stacked$Z, SL_fit_concat$Z)
+    }
+    colnames(yhat.train) <- c(colnames(combo), "stacked", "concatenated")
+    
+    ###############################
+    # Validation (Stack + Concat) #
+    ###############################
+    
+    if(!is.null(feature_table_valid)){
+      yhat.test <- cbind(combo_valid, SL_fit_stacked$validPrediction,SL_fit_concat$validPrediction)
+      colnames(yhat.test) <- c(colnames(combo_valid),"stacked","concatenated")
+      
+      ########
+      # Save #
+      ########
+      
+      res <- list(model_fits=model_fits, 
+                  SL_fits=SL_fits,
+                  X_train_layers=X_train_layers,
+                  Y_train=Y,
+                  yhat.train=yhat.train,
+                  X_test_layers=X_test_layers,
+                  yhat.test=yhat.test
+      )
+    }else{
+      res <- list(model_fits=model_fits, 
+                  SL_fits=SL_fits,
+                  X_train_layers=X_train_layers,
+                  Y_train=Y,
+                  yhat.train=yhat.train
+      )
+      
+    }
+    
+    ###############
+    # CONCAT ONLY #
+    ###############
+    
+  } else if (run_concat & !run_stacked){
+    
+    model_fits <- list(model_layers=model_layers,
+                       model_concat=model_concat)
+    
+    SL_fits<-list(SL_fit_layers = SL_fit_layers, 
+                  SL_fit_concat = SL_fit_concat)
+    
+    
+    ############################
+    # Prediction (Concat Only) #
+    ############################
+    
+    yhat.train <- cbind(combo, SL_fit_concat$Z)
+    colnames(yhat.train) <- c(colnames(combo), "concatenated")
+    
+    ############################
+    # Validation (Concat Only) #
+    ############################
+    
+    if(!is.null(feature_table_valid)){
+      yhat.test <- cbind(combo_valid,SL_fit_concat$validPrediction)
+      colnames(yhat.test) <- c(colnames(combo_valid),"concatenated")
+      
+      res <- list(model_fits=model_fits, 
+                  SL_fits=SL_fits,
+                  X_train_layers=X_train_layers,
+                  Y_train=Y,
+                  yhat.train=yhat.train,
+                  X_test_layers=X_test_layers,
+                  yhat.test=yhat.test
+      )
+    }else{
+      res <- list(model_fits=model_fits, 
+                  SL_fits=SL_fits,
+                  X_train_layers=X_train_layers,
+                  Y_train=Y,
+                  yhat.train=yhat.train
+      )
+      
+    }
+    
+    
+    ##############
+    # STACK ONLY #
+    ##############
+    
+  } else if (!run_concat & run_stacked){
+    
+    model_fits <- list(model_layers = model_layers,
+                       model_stacked = model_stacked)
+    
+    SL_fits<-list(SL_fit_layers = SL_fit_layers, 
+                  SL_fit_stacked = SL_fit_stacked)
+    
+    ###########################
+    # Prediction (Stack Only) #
+    ###########################
+    
+    if(refit.stack){
+      yhat.train <- cbind(combo, stacked_prediction_train)
+    } else{
+      yhat.train <- cbind(combo, SL_fit_stacked$Z)
+    }
+    colnames(yhat.train) <- c(colnames(combo), "stacked")
+    
+    ###########################
+    # Validation (Stack Only) #
+    ###########################
+    
+    if(!is.null(feature_table_valid)){
+      yhat.test <- cbind(combo_valid, SL_fit_stacked$validPrediction)
+      colnames(yhat.test) <- c(colnames(combo_valid),"stacked")
+      
+      ########
+      # Save #
+      ########
+      
+      res <- list(model_fits=model_fits, 
+                  SL_fits=SL_fits,
+                  X_train_layers=X_train_layers,
+                  Y_train=Y,
+                  yhat.train=yhat.train,
+                  X_test_layers=X_test_layers,
+                  yhat.test=yhat.test
+      )
+    }else{
+      res <- list(model_fits=model_fits, 
+                  SL_fits=SL_fits,
+                  X_train_layers=X_train_layers,
+                  Y_train=Y,
+                  yhat.train=yhat.train
+      )
+      
+    }
+    
+    
+    ############################
+    # NEITHER CONCAT NOR STACK #
+    ############################
+    
+  } else{ 
+    
+    model_fits <- list(model_layers=model_layers)
+    SL_fits<-list(SL_fit_layers = SL_fit_layers)
+    
+    #########################################
+    # Prediction (Neither Stack nor Concat) #
+    #########################################
+    
+    yhat.train <- combo
+    colnames(yhat.train) <- colnames(combo)
+    
+    #########################################
+    # Validation (Neither Stack nor Concat) #
+    #########################################
+    
+    if(!is.null(feature_table_valid)){
+      yhat.test <- combo_valid
+      colnames(yhat.test) <- colnames(combo_valid)
+      
+      #########
+      # Save #
+      ########
+      
+      res <- list(model_fits=model_fits, 
+                  SL_fits=SL_fits,
+                  X_train_layers=X_train_layers,
+                  Y_train=Y,
+                  yhat.train=yhat.train,
+                  X_test_layers=X_test_layers,
+                  yhat.test=yhat.test
+      )
+    }else{
+      res <- list(model_fits=model_fits, 
+                  SL_fits=SL_fits,
+                  X_train_layers=X_train_layers,
+                  Y_train=Y,
+                  yhat.train=yhat.train
+      )
+      
+    }
+    
+    
+  }
+  if(!is.null(sample_metadata_valid)){res$Y_test=validY$Y}
+  res$base_learner <- base_learner
+  res$meta_learner <- meta_learner
+  res$base_screener <- base_screener
+  res$run_concat <- run_concat
+  res$run_stacked <- run_stacked
+  res$family <- family$family
+  res$feature.names <- rownames(feature_table)
+  if(is.null(sample_metadata_valid)){
+    res$test=FALSE
+  }else{
+    res$test=TRUE
+  }
+  if(meta_learner=="SL.nnls.auc" & run_stacked){
+    res$weights <- res$model_fits$model_stacked$solution
+    names(res$weights) <- colnames(combo)
+  }
+  
+  if(res$family=="binomial"){
+    # Calculate AUC for each layer, stacked and concatenated 
+    pred=apply(res$yhat.train, 2, ROCR::prediction, labels=res$Y_train)
+    AUC=vector(length = length(pred))
+    names(AUC)=names(pred)
+    for(i in seq_along(pred)){
+      AUC[i] = round(ROCR::performance(pred[[i]], "auc")@y.values[[1]], 3)
+    }
+    res$AUC.train <- AUC
+    
+    if(res$test==TRUE){
+      
+      # Calculate AUC for each layer, stacked and concatenated 
+      pred=apply(res$yhat.test, 2, ROCR::prediction, labels=res$Y_test)
+      AUC=vector(length = length(pred))
+      names(AUC)=names(pred)
+      for(i in seq_along(pred)){
+        AUC[i] = round(ROCR::performance(pred[[i]], "auc")@y.values[[1]], 3)
+      }
+      res$AUC.test <- AUC  
+    }
+  }
+  if(res$family=="gaussian"){
+    
+    # Calculate R^2 for each layer, stacked and concatenated 
+    R2=vector(length = ncol(res$yhat.train))
+    names(R2)=names(res$yhat.train)
+    for(i in seq_along(R2)){
+      R2[i] = as.vector(cor(res$yhat.train[ ,i], res$Y_train)^2)
+    }
+    res$R2.train <- R2
+    if(res$test==TRUE){
+      # Calculate R^2 for each layer, stacked and concatenated 
+      R2=vector(length = ncol(res$yhat.test))
+      names(R2)=names(res$yhat.test)
+      for(i in seq_along(R2)){
+        R2[i] = as.vector(cor(res$yhat.test[ ,i], res$Y_test)^2)
+      }
+      res$R2.test <- R2
+    }
+    
+  }    
+  res$folds <- folds
+  res$cvControl <- cvControl
+  res$id <- id
+  stop.time<-Sys.time()
+  time <- as.numeric(round(difftime(stop.time, start.time, units="min"), 3), units = "mins")
+  res$time <- time
+  ##########
+  # Return #
+  ##########
+  
+  if(print_learner==TRUE){print.learner(res)}
+  return(res)
+}  
 
 # -----------------------------------------------------------------------------
 # Create tables for results
@@ -7651,8 +8448,8 @@ create_validation_table <- function(results_list, condition) {
       
       # Missing joint structure
       dt$EY_Mis <- c(mean(sapply(results_list$EY, function(source) source$missing$avg_coverage)),
-                        mean(sapply(results_list$EY, function(source) source$missing$avg_mse)),
-                        mean(sapply(results_list$EY, function(source) source$missing$avg_ci_width)))
+                     mean(sapply(results_list$EY, function(source) source$missing$avg_mse)),
+                     mean(sapply(results_list$EY, function(source) source$missing$avg_ci_width)))
     }
   }
   
@@ -7786,7 +8583,7 @@ check_all_sims <- function(path, s2nX, s2nY = NULL, nsim, split = "_", missing_d
   
   # Result
   length(files_for_s2nX_s2nY) == 100
-
+  
 }
 
 # -----------------------------------------------------------------------------
@@ -7794,7 +8591,7 @@ check_all_sims <- function(path, s2nX, s2nY = NULL, nsim, split = "_", missing_d
 # -----------------------------------------------------------------------------
 
 # Running each model with cross validation
-run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_pairs, model_params, nsample, results_wd = "~/BayesianPMF/04DataApplication/") {
+run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_pairs, model_params, nsample, results_wd = "~/BayesianPMF/04DataApplication/", base_learner = NULL) {
   
   # ---------------------------------------------------------------------------
   # For a given model, run cross validation in parallel
@@ -7807,6 +8604,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
   # ind_of_pairs (list): indices to cross validate over
   # model_params (list): model parameters for the Bayesian model
   # nsample (int): how many Gibbs samples to generate
+  # base_learner (string): which learner to use for IntegratedLearner
   # ---------------------------------------------------------------------------
   
   # Set the functions and packages for the parallel computation
@@ -7814,7 +8612,9 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "sup.r.jive", "glmnet", "multiview")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", 
+             "MOFA2", "sup.r.jive", "glmnet", "multiview", "IntegratedLearner",
+             "SuperLearner", "tidyverse", "rJava", "bartMachine")
   
   # Load in the full training data fit
   results_path <- paste0("~/BayesianPMF/04DataApplication/", mod, "/Training_Fit/", mod, "_training_data_fit.rda") 
@@ -8038,7 +8838,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       
       # Fit on the training data
       mod.out <- sJIVE(X = hiv_copd_data_list_training, Y = c(outcome_train[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, 
-                                  method = "permute", threshold = 0.001, center.scale = TRUE, reduce.dim = TRUE, max.iter = 3000)
+                       method = "permute", threshold = 0.001, center.scale = TRUE, reduce.dim = TRUE, max.iter = 3000)
       
       # Fitting the model on test data
       mod.test <- stats::predict(mod.out, newdata = hiv_copd_data_list_test)
@@ -8204,7 +9004,7 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
       
       # Save the optimal penalty
       lambda.min <- cvfit$lambda.min
-
+      
       # Make predictions based on the optimal penalty
       Ym.draw_pair <- predict(cvfit, newx = hiv_copd_data_list_test, s = "lambda.min", type = "response")
       
@@ -8214,10 +9014,74 @@ run_model_with_cv <- function(mod, hiv_copd_data, outcome, outcome_name, ind_of_
     stopCluster(cl)
   }
   
+  # For IntegratedLearner
+  if (mod == "IntegratedLearner") {
+    # Remove packages
+    packs <- packs[!(packs %in% c("r.jive", "sup.r.jive", "MOFA2"))]
+    
+    # Creating a list for the data
+    q <- nrow(hiv_copd_data)
+    hiv_copd_data_list <- lapply(1:q, function(s) hiv_copd_data[[s,1]])
+    
+    # Name the rows of the features
+    rownames(hiv_copd_data_list[[1]]) <- paste0("Metabolomics Feature ", 1:p.vec[1])
+    rownames(hiv_copd_data_list[[2]]) <- paste0("Proteomics Feature ", 1:p.vec[2])
+    
+    # Name the columns for the samples
+    colnames(hiv_copd_data_list[[1]]) <- colnames(hiv_copd_data[[1,1]])
+    
+    # Combine the data into a single data.frame
+    hiv_copd_data_df <- do.call(rbind, hiv_copd_data_list)
+    
+    # Create a sample metadata data.frame
+    sample_metadata <- data.frame(Y = fev1pp[[1,1]], subjectID = colnames(hiv_copd_data_df))
+    rownames(sample_metadata) <- colnames(hiv_copd_data_df)
+    
+    # Create a feature metadata data.frame
+    feature_metadata <- data.frame(featureID = rownames(hiv_copd_data_df),
+                                   featureType = c(rep("Metabolomics", p.vec[1]), rep("Proteomics", p.vec[2])))
+    rownames(feature_metadata) <- rownames(hiv_copd_data_df)
+    
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(pair = ind_of_pairs, .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Subset the training data to remove this pair
+      hiv_copd_data_df_train <- hiv_copd_data_df[,-c(pair:(pair+1))]
+      sample_metadata_train <- sample_metadata[-c(pair:(pair+1)),]
+      
+      # Add this pair to a test dataset
+      hiv_copd_data_df_test <- hiv_copd_data_df[,c(pair:(pair+1))]
+      sample_metadata_test <- sample_metadata[c(pair:(pair+1)),]
+      
+      
+      # Fit to training data with test data as a validation set
+      mod.out <- IntegratedLearner(feature_table = hiv_copd_data_df_train,
+                                   sample_metadata = sample_metadata_train, 
+                                   feature_metadata = feature_metadata,
+                                   feature_table_valid = hiv_copd_data_df_test,
+                                   sample_metadata_valid = sample_metadata_test,
+                                   base_learner = base_learner,
+                                   base_screener = "All",
+                                   family = gaussian(),
+                                   print_learner = FALSE)
+      
+      Ym.draw_pair <- mod.out$yhat.test$stacked
+      
+      # Remove the large objects
+      rm(mod.out); gc()
+      
+      # Save the results
+      save(Ym.draw_pair, file = paste0("/Users/sarahsamorodnitsky/Dropbox/BSFP/IntegratedLearner/HIV_COPD_Application/FEV1pp_CV_", mod, "_", base_learner, "_Pair_", pair, ".rda"))
+      
+    }
+    stopCluster(cl)
+  }
+  
 }
 
 # Running each model with cross validation
-run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds, model_params, nsample, results_wd = "~/BayesianPMF/04DataApplication/TCGA_BRCA/") {
+run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds, model_params, nsample, results_wd = "~/BayesianPMF/04DataApplication/TCGA_BRCA/", base_learner = NULL) {
   
   # ---------------------------------------------------------------------------
   # For a given model, run cross validation in parallel
@@ -8237,14 +9101,15 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
              "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
              "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum",
              "bidifac.plus.impute", "bidifac.plus.given")
-  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "glmnet", "multiview")
+  packs <- c("Matrix", "MASS", "truncnorm", "r.jive", "sup.r.jive", "natural", "RSpectra", "MOFA2", "glmnet", 
+             "multiview", "IntegratedLearner", "SuperLearner", "tidyverse", "rJava", "bartMachine")
   
   # Load in the full training data fit
   results_path <- paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/", mod, "/", mod, "_training_data_fit_no_missing.rda") 
   
   # Check if the full training data fit is available and load in if so (since we don't have full training fit for BIP)
   training_fit_avail <- paste0(mod, "_training_data_fit_no_missing.rda") %in% list.files(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/", mod))
-
+  
   if (training_fit_avail) {
     out <- load(results_path, verbose = TRUE)
   }
@@ -8428,60 +9293,6 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
     }
     stopCluster(cl)
   }
-
-  # # For sesJIVE
-  # if (mod == "sesJIVE") {
-  # 
-  #   # Creating a list for the data
-  #   q <- nrow(data)
-  #   data_list <- lapply(1:q, function(s) data[[s,1]])
-  # 
-  #   # In parallel, fit each model on n-2 samples, predict on the held-out pair
-  #   cl <- makeCluster(5)
-  #   registerDoParallel(cl)
-  #   fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
-  # 
-  #     # Save the sample indices in the test fold
-  #     test_fold <- test_folds[[fold]]
-  # 
-  #     # Create a new version of the data with just the training samples
-  #     data_list_training <- data_list
-  # 
-  #     # Remove the current pair of samples
-  #     data_list_training <- lapply(1:q, function(s) t(scale(t(data_list[[s]][,-test_fold]))))
-  # 
-  #     # Remove the pair from the outcome vector
-  #     outcome_train <- outcome
-  #     outcome_train[[1,1]] <- outcome[[1,1]][-test_fold,,drop=FALSE]
-  # 
-  #     # Create the test dataset
-  #     data_list_test <- data_list
-  #     data_list_test <- lapply(1:q, function(s) t(scale(t(data_list[[s]][,test_fold]))))
-  # 
-  #     outcome_test <- outcome
-  #     outcome_test[[1,1]] <- outcome[[1,1]][test_fold,,drop=FALSE]
-  # 
-  #     # Fit on the training data
-  #     mod.out <- sesJIVE(X = data_list_training,
-  #                        Y = c(outcome_train[[1,1]]),
-  #                        rankA = NULL, rankJ = NULL,
-  #                        threshold = 0.001,
-  #                        max.iter = 3000,
-  #                        family.y = "binomial")
-  # 
-  #     # Fitting the model on test data
-  #     mod.test <- stats::predict(mod.out, newdata = tcga_brca_data_list_test)
-  #     Ym.draw_pair <- mod.test$Ypred
-  # 
-  #     # Save the results
-  #     ranks <- c(mod.out$rankJ, mod.out$rankA)
-  #     save(Ym.draw_pair, ranks, file = paste0(results_wd,"/Cross_Validation/", "mod/", outcome_name, "_CV_", mod, "_Pair_", pair, ".rda"))
-  # 
-  #     # Remove large objects
-  #     rm(mod.out, tcga_brca_data_list_training, tcga_brca_data_list_test)
-  #   }
-  #   stopCluster(cl)
-  # }
   
   # For LASSO
   if (mod == "LASSO_Combined_Sources") {
@@ -8658,6 +9469,75 @@ run_model_with_cv_tcga <- function(mod, data, outcome, outcome_name, test_folds,
     }
     stopCluster(cl)
     
+  }
+  
+  if (mod == "IntegratedLearner") {
+    # For running BART
+    options(java.parameters = "-Xmx5g") # This is needed for running BART
+    
+    # Remove packages
+    packs <- packs[!(packs %in% c("r.jive", "sup.r.jive", "MOFA2"))]
+    
+    # Creating a list for the data
+    q <- nrow(data)
+    tcga_data_list <- lapply(1:q, function(s) data[[s,1]])
+    
+    # Name the rows of the features
+    rownames(tcga_data_list[[1]]) <- paste0("Expression Feature ", 1:p.vec[1])
+    rownames(tcga_data_list[[2]]) <- paste0("Methylation Feature ", 1:p.vec[2])
+    rownames(tcga_data_list[[3]]) <- paste0("miRNA Feature ", 1:p.vec[3])
+    
+    # Name the columns for the samples
+    colnames(tcga_data_list[[1]]) <- colnames(tcga_data_list[[1]])
+    
+    # Combine the data into a single data.frame
+    tcga_data_df <- do.call(rbind, tcga_data_list)
+    
+    # Create a sample metadata data.frame
+    sample_metadata <- data.frame(Y = outcome[[1,1]], subjectID = colnames(tcga_data_df))
+    rownames(sample_metadata) <- colnames(tcga_data_df)
+    
+    # Create a feature metadata data.frame
+    feature_metadata <- data.frame(featureID = rownames(tcga_data_df),
+                                   featureType = c(rep("Expression", p.vec[1]), rep("Methylation", p.vec[2]), rep("MiRNA", p.vec[3])))
+    rownames(feature_metadata) <- rownames(tcga_data_df)
+    
+    cl <- makeCluster(10)
+    registerDoParallel(cl)
+    fev1pp_cv <- foreach(fold = seq(length(test_folds)), .packages = packs, .export = funcs, .verbose = TRUE) %dopar% {
+      
+      # Save the sample indices in the test fold
+      test_fold <- test_folds[[fold]]
+      
+      # Subset the training data to remove this pair
+      tcga_data_df_train <- tcga_data_df[,-test_fold]
+      sample_metadata_train <- sample_metadata[-test_fold,]
+      
+      # Add this pair to a test dataset
+      tcga_data_df_test <- tcga_data_df[,test_fold]
+      sample_metadata_test <- sample_metadata[test_fold,]
+      
+      # Fit to training data with test data as a validation set
+      mod.out <- IntegratedLearner(feature_table = tcga_data_df_train,
+                                   sample_metadata = sample_metadata_train, 
+                                   feature_metadata = feature_metadata,
+                                   feature_table_valid = tcga_data_df_test,
+                                   sample_metadata_valid = sample_metadata_test,
+                                   base_learner = base_learner,
+                                   base_screener = "All",
+                                   family = binomial(),
+                                   print_learner = FALSE)
+      
+      Ym.draw_pair <- mod.out$yhat.test$stacked
+      
+      # Remove the large objects
+      rm(mod.out); gc()
+      
+      # Save the results
+      save(Ym.draw_pair, file = paste0("/Users/sarahsamorodnitsky/Dropbox/BSFP/IntegratedLearner/TCGA_Application/ER_Status_CV_", mod, "_", base_learner, "_Fold_", fold, ".rda"))
+      
+    }
+    stopCluster(cl)
   }
 }
 
@@ -8861,7 +9741,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
     }
     
     if (mod == "KNN_Combined_Sources") {
-
+      
       # Impute the missing data using KNN with default parameters
       mod.impute.list <- kNN(t(hiv_copd_data_missing_combined))
       mod.impute <- t(mod.impute.list[1:sum(p.vec)])
@@ -8914,7 +9794,7 @@ model_imputation <- function(mod, hiv_copd_data, outcome, outcome_name, model_pa
       
       # Save NAs for the other parameters
       metabolome_coverage <- proteome_coverage <- metabolome_ci_width <- proteome_ci_width <- NA
-
+      
     }
     
     # Calculate MSE with posterior mean and true observed values
@@ -9036,7 +9916,7 @@ var_explained <- function(BPMF.fit, iters_burnin, source.names) {
     })
   })
   names(indiv_var_exp) <- source.names
-
+  
   # Summarizing the results
   joint_summary <- lapply(1:q, function(s) {
     c(Mean = mean(joint_var_exp[[s]]), Lower = quantile(joint_var_exp[[s]], 0.025), Upper = quantile(joint_var_exp[[s]], 0.975))
@@ -9213,7 +10093,7 @@ factor_summaries <- function(joint.loadings.final, joint.scores.final, joint.bet
   # Save the results
   save(joint.betas.final.mat.summary, individual.betas.final.mat.summary,
        file = paste0(exploring_factors_wd, "/Betas_Aligned_Summary_NewPivot_Burnin.rda"))
-
+  
 }
 
 # -----------------------------------------------------------------------------
@@ -9553,7 +10433,7 @@ factor_switching <- function(U.draw, V.draw, W.draw, Vs.draw, betas = NULL, gamm
       swapped_gammas[[iter]][[1,1]]
     }))/length(thinned_iters_burnin)
   }
-
+  
   # ---------------------------------------------------------------------------
   # Ordering the results in the posterior mean to be ordered most-to-least
   # variance explained
@@ -9761,7 +10641,7 @@ jointRot_multi <- function(lambda, eta, piv = NULL, y = NULL, var_betas = NULL, 
   #   # Set the pivot to the data pivot
   #   piv <- pivot.data
   # }
-
+  
   # Match to the defined pivot
   matches = lapply(loads, msfOUT, piv)
   lamout = mapply(aplr, loads, matches, SIMPLIFY = FALSE)
@@ -9902,7 +10782,7 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iters_burn
   if (!is.null(y)) {
     individual.betas.final <- lapply(1:q, function(s) lapply(individual.results.rotate[[s]]$lambda, function(iter) t(iter[p.vec[s]+1,,drop=FALSE])))
   }
-
+  
   # Applying the permutation and sign switching to the scores
   individual.scores.final <- lapply(1:q, function(s) individual.results.rotate[[s]]$eta)
   
@@ -10056,7 +10936,7 @@ match_align_bpmf <- function(BPMF.fit, y = NULL, model_params, p.vec, iters_burn
   # 
   # # Check
   # all.equal(joint.structure.original, joint.structure.new)
-
+  
   # Calculate the original structure
   # individual.structure.original <- lapply(1:q, function(s) {
   #   lapply(1:burnin, function(iter) {
@@ -10177,7 +11057,7 @@ diff_in_cov <- function(U.draw, W.draw, joint.beta.draw, individual.beta.draw, U
   # Calculate the posterior mean of the covariance prior to alignment
   
   post.mean.covariance.unaligned <- lmean(lapply(1:nsample_after_burnin, function(iter) Tcrossprod(combined.loadings.unaligned[[iter]], combined.loadings.unaligned[[iter]])))
-
+  
 }
 
 
