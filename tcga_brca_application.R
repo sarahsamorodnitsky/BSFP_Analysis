@@ -385,14 +385,14 @@ load(paste0(results_wd, "/Cross_Validation/ER_Status_Test_Folds_09072023.rda"), 
 
 # Run cross validation
 for (test_fold in 1:length(test_folds)) {
-
+  
   # Save the indices for the test fold
   inds <- test_folds[[test_fold]]
-
+  
   # Create a new vector of the outcome with the current pair set to NA
   er_status_cv <- er_status_no_missing
   er_status_cv[[1,1]][inds,] <- NA
-
+  
   # Run the model with the above pair's continuous outcome missing
   er_status_cv_fit <- BSFP::bsfp(
     data = tcga_brca_data_no_missing,
@@ -409,19 +409,19 @@ for (test_fold in 1:length(test_folds)) {
     progress = TRUE,
     save_last_sample = TRUE
   )
-
+  
   # Save the imputed outcomes
   Ym.draw_pair <- er_status_cv_fit$Ym.draw
   
   # Save the last iteration
   last.iter <- er_status_cv_fit$last.iter
-
+  
   # Save just the relevant output
   save(Ym.draw_pair, last.iter, file = paste0(results_wd, "/Cross_Validation/ER_Status_CV_Fold", test_fold, "_V2.rda"))
-
+  
   # Remove large objects
   rm(er_status_cv_fit)
-
+  
   # Garbage collection
   gc()
 }
@@ -436,7 +436,7 @@ names(pred.out) <- rownames(er_status_no_missing[[1,1]])
 
 # Load in the results for each fold and calculate the posterior mean after burn-in
 for (test_fold in 1:length(test_folds)) {
- 
+  
   # Load in the results
   load(paste0("~/BayesianPMF/04DataApplication/TCGA_BRCA/Cross_Validation/ER_Status_CV_Fold", test_fold, "_V2.rda"), verbose = TRUE)
   
@@ -661,7 +661,7 @@ for (test_fold in 1:length(test_folds)) {
   
   # CHECK
   all(names(pred.out.lasso.combined[names(pred.out.lasso.combined) %in% current_fold]) == current_fold) # TRUE!
-
+  
   # Save these in the matrix
   pred.out.lasso.combined[names(pred.out.lasso.combined) %in% current_fold] <- Ym.draw_pair
 }
@@ -797,3 +797,32 @@ for (test_fold in 1:length(test_folds)) {
 # Compare to the truth
 # frob(er_status_no_missing[[1,1]] - pred.out.multiview)/frob(er_status_no_missing[[1,1]])
 frob(er_status_no_missing[[1,1]] - pred.out.multiview)/length(pred.out.multiview)
+
+# -------------------------------------
+# IntegratedLearner
+# -------------------------------------
+
+run_model_with_cv_tcga(mod = "IntegratedLearner", data = tcga_brca_data_no_missing,
+                       outcome = er_status_no_missing, outcome_name = "ER_Status",
+                       test_folds = test_folds, model_params = model_params,
+                       nsample = 5000, base_learner = "SL.glmnet")
+
+pred.out.integratedlearner <- rep(NA, nrow(er_status_no_missing[[1,1]]))
+names(pred.out.integratedlearner) <- rownames(er_status_no_missing[[1,1]])
+
+for (test_fold in 1:length(test_folds)) {
+  
+  # Load in the results
+  load(paste0("/Users/sarahsamorodnitsky/Dropbox/BSFP/IntegratedLearner/TCGA_Application/ER_Status_CV_IntegratedLearner_SL.glmnet_Fold_", test_fold, ".rda"), verbose = TRUE)
+  
+  # Save the patient IDs for this test fold
+  current_fold <- rownames(er_status_no_missing[[1,1]])[test_folds[[test_fold]]]
+  
+  # CHECK
+  all(names(pred.out.integratedlearner[names(pred.out.integratedlearner) %in% current_fold]) == current_fold) # TRUE!
+  
+  # Save these in the matrix
+  pred.out.integratedlearner[names(pred.out.integratedlearner) %in% current_fold] <- Ym.draw_pair
+}
+
+frob(er_status_no_missing[[1,1]] - pred.out.integratedlearner)/length(pred.out.integratedlearner)
