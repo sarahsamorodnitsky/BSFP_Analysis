@@ -54,6 +54,8 @@ somascan_normalized_clean_no_info_transpose_reorder <-
 
 # Check
 all(colnames(somascan_normalized_clean_no_info_transpose_reorder) == colnames(lavage_processed_no_info_log_scale))
+all(subject_processed$id == colnames(somascan_normalized_clean_no_info_transpose_reorder))
+all(subject_processed$id == colnames(lavage_processed_no_info_log_scale))
 dim(somascan_normalized_clean_no_info_transpose_reorder)
 dim(lavage_processed_no_info)
 
@@ -148,7 +150,7 @@ save(fev1pp_training_fit_nonsparse_V2, file = paste0(results_wd, "BPMF/Training_
 # Fitting BIDIFAC
 BIDIFAC_training_fit <- BIDIFAC(hiv_copd_data, rmt = TRUE, pbar = FALSE, scale_back = TRUE)
 save(BIDIFAC_training_fit, file = paste0(results_wd, "/BIDIFAC/BIDIFAC_training_data_fit.rda"))
-  
+
 # Fitting sJIVE
 eta <- c(0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99)
 sJIVE_training_fit <- sJIVE(X = hiv_copd_data_list, Y = c(fev1pp[[1,1]]), eta = eta, rankA = NULL, rankJ = NULL, method = "permute", threshold = 0.001, center.scale = FALSE, reduce.dim = TRUE)
@@ -491,8 +493,8 @@ post.mean.covariance <- lmean(lapply(1:burnin, function(iter) combined.loadings.
 # Calculate the estimated covariance using the posterior mean of the aligned loadings
 combined.loadings.final.mean <- lmean(combined.loadings.final)
 est.covariance.aligned.load <- 
-
-# -----------------------------------------------------------------------------
+  
+  # -----------------------------------------------------------------------------
 # Create PCA-like plots using ALIGNED factors
 # -----------------------------------------------------------------------------
 
@@ -522,23 +524,23 @@ joint.scores.final.mean <- Reduce("+", lapply(1:burnin, function(iter) joint.sco
 joint_rank <- fev1pp_training_fit_nonsparse_V2$ranks[1]
 pdf(paste0("~/BayesianPMF/04DataApplication/BPMF/Figures/Joint_Structure_Aligned_Ordered_PCA_Plot_V2_NewPivot_Burnin.pdf"), width = 15)
 for (rs1 in 1:joint_rank) {
- for (rs2 in 1:joint_rank) {
-   if (rs2 > rs1) {
-     par(mfrow = c(1,2), mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
-     # Plot with case-control label as colors
-     plot(joint.scores.final.mean[,rs1], joint.scores.final.mean[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
-          ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
-          col = ccstat_colors, lwd = 3)
-     
-     # Plot with stand-out subjects as colors
-     plot(joint.scores.final.mean[,rs1], joint.scores.final.mean[,rs2], xlab = paste0("Joint Factor ", rs1),
-          ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
-          col = cluster_colors, pch = cluster_shapes, lwd = 3)
-     legend("topleft", col = c("#440154FF", "#21908CFF"), pch = c(3,4),
-            legend = c("Cluster 1", "Cluster 2"))
-     par(mfrow = c(1,1))
-   }
- } 
+  for (rs2 in 1:joint_rank) {
+    if (rs2 > rs1) {
+      par(mfrow = c(1,2), mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
+      # Plot with case-control label as colors
+      plot(joint.scores.final.mean[,rs1], joint.scores.final.mean[,rs2], pch = 16, xlab = paste0("Joint Factor ", rs1),
+           ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
+           col = ccstat_colors, lwd = 3)
+      
+      # Plot with stand-out subjects as colors
+      plot(joint.scores.final.mean[,rs1], joint.scores.final.mean[,rs2], xlab = paste0("Joint Factor ", rs1),
+           ylab = paste0("Joint Factor ", rs2), main = paste0("Joint Factors ", rs1, " vs ", rs2),
+           col = cluster_colors, pch = cluster_shapes, lwd = 3)
+      legend("topleft", col = c("#440154FF", "#21908CFF"), pch = c(3,4),
+             legend = c("Cluster 1", "Cluster 2"))
+      par(mfrow = c(1,1))
+    }
+  } 
 }
 dev.off()
 
@@ -893,7 +895,7 @@ individual_contribution_to_fev1pp_by_sample <- lapply(1:q, function(s) {
 
 # Calculate the overall contribution of the factors in explaining FEV1pp
 overall_contribution_to_fev1pp <- sapply(1:nsample_after_burnin, function(iter) {
-    fev1pp_training_fit_nonsparse_V2$beta.draw[iters_burnin][[iter]][[1,1]][1,] +  # Intercept
+  fev1pp_training_fit_nonsparse_V2$beta.draw[iters_burnin][[iter]][[1,1]][1,] +  # Intercept
     joint.scores.final[[iter]] %*% joint.betas.final[[iter]] +                     # Joint
     individual.scores.final[[1]][[iter]] %*% individual.betas.final[[1]][[iter]] + # Metabolome
     individual.scores.final[[2]][[iter]] %*% individual.betas.final[[2]][[iter]]   # Proteome
@@ -985,7 +987,7 @@ n_pair <- length(ind_of_pairs)
 funcs <- c("bpmf_data", "center_data", "bpmf_data_mode", "get_results", "BIDIFAC",
            "check_coverage", "mse", "ci_width", "data.rearrange", "return_missing",
            "sigma.rmt", "estim_sigma", "softSVD", "frob", "sample2", "logSum")
-packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix")
+packs <- c("MASS", "truncnorm", "EnvStats", "svMisc", "Matrix", "IntegratedLearner")
 
 # -------------------------------------
 # Running BPMF with cross validation
@@ -1147,6 +1149,22 @@ run_model_with_cv(mod = "multiview", hiv_copd_data = hiv_copd_data, outcome = fe
                   model_params = model_params, nsample = nsample)
 
 # -------------------------------------
+# Running IntegratedLearner (SL.BART) with cross validation
+# -------------------------------------
+
+run_model_with_cv(mod = "IntegratedLearner", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = nsample, base_learner = "SL.BART")
+
+# -------------------------------------
+# Running IntegratedLearner (SL.glmnet) with cross validation
+# -------------------------------------
+
+run_model_with_cv(mod = "IntegratedLearner", hiv_copd_data = hiv_copd_data, outcome = fev1pp,
+                  outcome_name = "FEV1pp", ind_of_pairs = ind_of_pairs, 
+                  model_params = model_params, nsample = nsample, base_learner = "SL.glmnet")
+
+# -------------------------------------
 # Cross-Validated Model Fit Results
 # -------------------------------------
 
@@ -1213,6 +1231,25 @@ for (mod in models) {
   }
 }
 
+# For IntegratedLearner
+IntegratedLearner_SL.BART_FEV1pp <- rep(NA, n)
+for (pair in ind_of_pairs) { 
+  # Load in the result
+  load(paste0("/Users/sarahsamorodnitsky/Dropbox/BSFP/IntegratedLearner/HIV_COPD_Application/FEV1pp_CV_IntegratedLearner_SL.BART_Pair_", pair, ".rda"), verbose = TRUE)
+  
+  # Add to vector
+  IntegratedLearner_SL.BART_FEV1pp[pair:(pair+1)] <- Ym.draw_pair
+}
+
+IntegratedLearner_SL.glmnet_FEV1pp <- rep(NA, n)
+for (pair in ind_of_pairs) { 
+  # Load in the result
+  load(paste0("/Users/sarahsamorodnitsky/Dropbox/BSFP/IntegratedLearner/HIV_COPD_Application/FEV1pp_CV_IntegratedLearner_SL.glmnet_Pair_", pair, ".rda"), verbose = TRUE)
+  
+  # Add to vector
+  IntegratedLearner_SL.glmnet_FEV1pp[pair:(pair+1)] <- Ym.draw_pair
+}
+
 # Plotting the results from each model against the truth
 plot(fev1pp_cv$BPMF, c(fev1pp[[1,1]]), xlab = "Predicted FEV1pp", ylab = "Observed FEV1pp", main = "Cross-Validated FEV1pp vs. True FEV1pp", pch = 16)
 points(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]]), col = 2, pch = 16) # BIDIFAC
@@ -1227,7 +1264,9 @@ legend("bottomright", legend = c("BPMF", "BIDIFAC", "JIVE", "MOFA", "sJIVE", "mu
 cor.test(fev1pp_cv$BPMF, c(fev1pp[[1,1]])) # BPMF
 cor.test(fev1pp_cv$BIDIFAC, c(fev1pp[[1,1]])) # BIDIFAC
 cor.test(fev1pp_cv$sJIVE, c(fev1pp[[1,1]])) # sJIVE
+cor.test(IntegratedLearner_SL.BART_FEV1pp, c(fev1pp[[1,1]])) # IntegratedLearner (SL.BART)
 cor.test(fev1pp_cv$JIVE, c(fev1pp[[1,1]])) # JIVE
+cor.test(IntegratedLearner_SL.glmnet_FEV1pp, c(fev1pp[[1,1]])) # IntegratedLearner (SL.glmnet)
 cor.test(fev1pp_cv$MOFA, c(fev1pp[[1,1]])) # MOFA
 cor.test(fev1pp_cv$LASSO_Combined_Sources, c(fev1pp[[1,1]])) # LASSO Combined Sources
 cor.test(fev1pp_cv$LASSO_Metabolite_Only, c(fev1pp[[1,1]])) # LASSO Combined Sources
@@ -1255,7 +1294,7 @@ for (mod in models) {
 
 cv_results[order(cv_results$Correlation, decreasing = TRUE),] %>%
   xtable(digits = 4) %>%
-    print.xtable(include.rownames=FALSE)
+  print.xtable(include.rownames=FALSE)
 
 # -----------------------------------------------------------------------------
 # Missing data imputation comparing several methods
@@ -1289,13 +1328,13 @@ hiv_copd_bpmf_imputation <- model_imputation(mod = "BPMF", hiv_copd_data = hiv_c
 
 # Running BIDIFAC with entrywise missing data
 hiv_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
-                                                 outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                                 nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+                                                outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                                nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
 
 # Running BIDIFAC with columnwise missing data
 hiv_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data = hiv_copd_data,
-                                                 outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                                 nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+                                                outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                                nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
 # -------------------------------------
 # Missing data imputation using SVD
@@ -1303,23 +1342,23 @@ hiv_copd_bidifac_imputation <- model_imputation(mod = "BIDIFAC", hiv_copd_data =
 
 # Running SVDmiss with entrywise missing data, combined sources
 hiv_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
-                                              outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                              nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+                                            outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                            nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
 
 # Running SVDmiss with entrywise missing data, separate sources
 hiv_copd_svdmiss_imputation <- model_imputation(mod = "SVD_Separate_Sources", hiv_copd_data = hiv_copd_data,
-                                              outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                              nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
+                                                outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                                nsim = nsim, prop_missing = prop_missing, entrywise = TRUE)
 
 # Running SVDmiss with columnwise missing data, combined sources
 hiv_copd_svd_imputation <- model_imputation(mod = "SVD_Combined_Sources", hiv_copd_data = hiv_copd_data,
-                                             outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                             nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+                                            outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                            nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
 # Running SVDmiss with columnwise missing data, separate sources - Unable to complete matrix, too much missing data
 hiv_copd_svdmiss_imputation <- model_imputation(mod = "SVD_Separate_Sources", hiv_copd_data = hiv_copd_data,
-                                                 outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
-                                                 nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
+                                                outcome = fev1pp, outcome_name = "fev1pp", p.vec = p.vec,
+                                                nsim = nsim, prop_missing = prop_missing, entrywise = FALSE)
 
 # -------------------------------------
 # Missing data imputation using mean imputation
@@ -1369,27 +1408,27 @@ hiv_copd_knn_combined <- model_imputation(mod = "KNN_Separate_Sources", hiv_copd
 
 # Entrywise
 hiv_copd_rf_combined <- model_imputation(mod = "RF_Combined_Sources", hiv_copd_data = hiv_copd_data,
-                                          outcome = fev1pp, outcome_name = "fev1pp", 
-                                          nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
-                                          nclust = 10)
+                                         outcome = fev1pp, outcome_name = "fev1pp", 
+                                         nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
+                                         nclust = 10)
 
 # Columnwise
 hiv_copd_rf_combined <- model_imputation(mod = "RF_Combined_Sources", hiv_copd_data = hiv_copd_data,
-                                          outcome = fev1pp, outcome_name = "fev1pp",
-                                          nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
-                                          nclust = 10)
+                                         outcome = fev1pp, outcome_name = "fev1pp",
+                                         nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
+                                         nclust = 10)
 
 # Entrywise
 hiv_copd_rf_separate <- model_imputation(mod = "RF_Separate_Sources", hiv_copd_data = hiv_copd_data,
-                                          outcome = fev1pp, outcome_name = "fev1pp",
-                                          nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
-                                          nclust = 10)
+                                         outcome = fev1pp, outcome_name = "fev1pp",
+                                         nsim = nsim, prop_missing = prop_missing, entrywise = TRUE,
+                                         nclust = 10)
 
 # Columnwise
 hiv_copd_rf_separate <- model_imputation(mod = "RF_Separate_Sources", hiv_copd_data = hiv_copd_data,
-                                          outcome = fev1pp, outcome_name = "fev1pp", 
-                                          nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
-                                          nclust = 10)
+                                         outcome = fev1pp, outcome_name = "fev1pp", 
+                                         nsim = nsim, prop_missing = prop_missing, entrywise = FALSE,
+                                         nclust = 10)
 
 
 # -------------------------------------
