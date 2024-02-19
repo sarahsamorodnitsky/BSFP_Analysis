@@ -29,7 +29,7 @@ true_params <- list(error_vars = c(X1 = 1, X2 = 1, Y = 1), # Error variance for 
                     joint_var = 1, # Prior variance for joint structure
                     indiv_vars = c(1,1), #  Prior variance for each individual structure
                     beta_vars = c(intercept = 10, joint_effect = 1, indiv_effects = rep(1, q)) # Variance on the effect of each factor on y including the intercept
-                    )
+)
 
 # Parameters for the simulation
 nsample <- 2000
@@ -69,7 +69,7 @@ model_params_bpmf_test <- list(error_vars = c(X1 = 1, X2 = 1), # Error variance 
 
 s2nX <- s2nY <- 99
 test.res <- model_comparison(mod = "test", p.vec, n, ranks, response = "continuous", true_params, model_params,
-                         s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+                             s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
 
 # -----------------------------------------------------------------------------
 # sJIVE (Estimated Ranks)
@@ -81,7 +81,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     sJIVE.res[[ind]] <- model_comparison(mod = "sJIVE", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
-                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+                                         s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
   }
 }
@@ -177,7 +177,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     JIVE.res[[ind]] <- model_comparison(mod = "JIVE", p.vec = p.vec, n = n, ranks = ranks, response = "continuous", true_params = true_params, model_params = model_params_bpmf_data,
-                                       s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+                                        s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
   }
 }
@@ -242,7 +242,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     MOFA.res[[ind]] <- model_comparison(mod = "MOFA", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
-                                    s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+                                        s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
   }
 }
@@ -400,7 +400,7 @@ ind <- 1
 for (s2nX in s2nX.list) {
   for (s2nY in s2nY.list) {
     BIP.res[[ind]] <- model_comparison(mod = "BIP", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_test,
-                                        s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
+                                       s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10)
     ind <- ind + 1
   }
 }
@@ -486,6 +486,36 @@ for (s2nX in s2nX.list) {
 }
 names(all_s2n) <- combos
 
+
+# -----------------------------------------------------------------------------
+# IntegratedLearner (SL.BART) 
+# -----------------------------------------------------------------------------
+
+integratedlearner.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list[-1]) {
+  for (s2nY in s2nY.list) {
+    integratedlearner.res[[ind]] <- model_comparison(mod = "IntegratedLearner", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
+                                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10, base_learner = "SL.BART", stacked = TRUE)
+    ind <- ind + 1
+  }
+}
+
+# -----------------------------------------------------------------------------
+# IntegratedLearner (SL.glmnet) 
+# -----------------------------------------------------------------------------
+
+integratedlearner.res <- lapply(1:(length(s2nX.list) * length(s2nY.list)), function(rep) list())
+ind <- 1
+
+for (s2nX in s2nX.list) {
+  for (s2nY in s2nY.list) {
+    integratedlearner.res[[ind]] <- model_comparison(mod = "IntegratedLearner", p.vec, n, ranks, response = "continuous", true_params, model_params_bpmf_data,
+                                                     s2nX = s2nX, s2nY = s2nY, sparsity = FALSE, nsim = nsim, nsample = nsample, n_clust = 10, base_learner = "SL.glmnet", stacked = TRUE)
+    ind <- ind + 1
+  }
+}
 
 # -----------------------------------------------------------------------------
 # Results
